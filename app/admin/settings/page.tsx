@@ -7,7 +7,7 @@ import { getMenuConfig } from "@/lib/data/repo-business";
 import { PERMISSION_MATRIX, ROLE_LABELS } from "@/lib/rbac/roles";
 import { Badge } from "@/components/ui/badge";
 import { Table, THead, TBody } from "@/components/ui/table";
-import { UserAdminPanel } from "@/components/admin/user-admin-panel";
+import { UserAdminPanel, AddUserForm } from "@/components/admin/user-admin-panel";
 import { MenuConfigPanel } from "@/components/admin/menu-config-panel";
 import { Check, Minus } from "lucide-react";
 
@@ -54,7 +54,7 @@ export default async function SettingsPage() {
             ))}
           </TBody>
         </Table>
-        <UserAdminPanel.AddForm />
+        <AddUserForm />
       </section>
 
       {/* ── Menu configuration (per role) ─────────────────────────────── */}

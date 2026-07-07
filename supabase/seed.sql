@@ -160,7 +160,20 @@ begin
     -- Last week (Price → Ramírez): completed, claim-ready
     ('00000000-0000-4000-d000-000000000010', ramirez, price, 'SCC',
       ((monday - 3)::text || ' 10:00')::timestamp at time zone tz, ((monday - 3)::text || ' 11:15')::timestamp at time zone tz,
-      '00000000-0000-4000-c000-000000000004', 'Completed')
+      '00000000-0000-4000-c000-000000000004', 'Completed'),
+    -- Tuesday + Friday coverage so the Today screen demos well on any weekday
+    ('00000000-0000-4000-d000-000000000011', ramirez, vega, 'SCC',
+      ((monday + 1)::text || ' 13:00')::timestamp at time zone tz, ((monday + 1)::text || ' 14:30')::timestamp at time zone tz,
+      '00000000-0000-4000-c000-000000000004', 'Scheduled'),
+    ('00000000-0000-4000-d000-000000000012', okafor, vega, 'Job_Coaching',
+      ((monday + 1)::text || ' 09:30')::timestamp at time zone tz, ((monday + 1)::text || ' 11:30')::timestamp at time zone tz,
+      '00000000-0000-4000-c000-000000000002', 'Scheduled'),
+    ('00000000-0000-4000-d000-000000000013', whitfield, price, 'SCC',
+      ((monday + 4)::text || ' 10:00')::timestamp at time zone tz, ((monday + 4)::text || ' 11:30')::timestamp at time zone tz,
+      '00000000-0000-4000-c000-000000000003', 'Scheduled'),
+    ('00000000-0000-4000-d000-000000000014', reyes, vega, 'SCC',
+      ((monday + 4)::text || ' 14:00')::timestamp at time zone tz, ((monday + 4)::text || ' 16:00')::timestamp at time zone tz,
+      '00000000-0000-4000-c000-000000000001', 'Scheduled')
   on conflict (id) do nothing;
 
   -- ── EVV logs for completed visits ──────────────────────────────────────

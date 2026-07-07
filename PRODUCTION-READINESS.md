@@ -36,10 +36,10 @@ storage + short session idle timeout**. The remaining items are **required
 before any real-PHI pilot** — this is the explicit "put in place before we
 continue" list:
 
-- [x] Encrypted IndexedDB at rest (AES-GCM via WebCrypto; non-extractable key) — shipped Phase 1.
+- [x] Encrypted IndexedDB at rest (XSalsa20-Poly1305 via tweetnacl — synchronous by design so Dexie transactions/liveQuery stay intact; data key in a separate IDB database) — shipped Phase 1.
 - [x] Session idle timeout (default 20 min, `NEXT_PUBLIC_SESSION_IDLE_MINUTES`) — shipped Phase 1.
 - [x] Local drafts purged after successful submit; synced queue items purged — shipped Phase 1.
-- [ ] 🔴 **App PIN or biometric (WebAuthn) lock** wrapping the local encryption key, so a stolen unlocked device still challenges. The current non-extractable key protects against disk extraction, **not** against someone holding the unlocked phone.
+- [ ] 🔴 **App PIN or biometric (WebAuthn) lock** wrapping the local data key (KEK over DEK), so a stolen device — locked or unlocked — still challenges. Today the raw data key sits in its own IndexedDB database: encryption protects exported/backed-up data blobs, **not** an attacker with full same-origin device access. The PIN wrap closes exactly that gap.
 - [ ] 🔴 **Remote sign-out / remote wipe**: server-side session revocation (Supabase `auth.admin.signOut`) plus the client wipe hook (`lib/offline/wipe.ts` — triggered today on 401; must also be triggerable per-device by an Admin).
 - [ ] 🟡 MDM or device policy for agency-owned devices (screen lock enforced, OS updates).
 - [ ] 🟡 Document the lost-device runbook: who suspends, who wipes, notification timelines under the breach rule.

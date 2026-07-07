@@ -2,13 +2,15 @@
 // for the field app, hydrated from /api/field/bootstrap for offline reads.
 //
 // ENCRYPTION AT REST: a DBCore middleware folds every non-indexed property
-// into an AES-GCM box (`box`), so PHI (narratives, signatures, GPS, med
-// details) is never stored in cleartext. Indexed keys (uuids, dates, flags)
-// stay plaintext — they're lookup keys, not PHI payloads.
+// into an authenticated secretbox (`box`), so PHI (narratives, signatures,
+// GPS, med details) is never stored in cleartext. Indexed keys (uuids,
+// dates, flags) stay plaintext — lookup keys, not PHI payloads. The crypto
+// is SYNCHRONOUS (tweetnacl) because async work inside IndexedDB
+// transactions/liveQuery zones aborts them; the key loads once at DB open.
 // CAVEAT: cursor-based APIs (.modify/.each/Table.update) bypass decryption —
 // use get/put/toArray/first in app code (enforced by convention here).
 import Dexie, { type Table } from "dexie";
-import { encryptJson, decryptJson, isEncryptedBox, type EncryptedBox } from "./crypto";
+import { ensurePhiKey, sealJson, openJson, isEncryptedBox, type EncryptedBox } from "./crypto";
 import type { Client, EvvLog, MedicationLog, NmtTrip, ProgressNote, Visit } from "@/lib/supabase/types";
 
 export interface SyncQueueItem {
@@ -41,7 +43,7 @@ const PLAINTEXT_FIELDS: Record<string, string[]> = {
   drafts: ["key", "updated_at"]
 };
 
-async function encryptRow(tableName: string, row: Record<string, unknown>): Promise<Record<string, unknown>> {
+function encryptRow(tableName: string, row: Record<string, unknown>): Record<string, unknown> {
   const plainKeys = PLAINTEXT_FIELDS[tableName];
   if (!plainKeys || typeof window === "undefined") return row;
   if (isEncryptedBox(row.box)) return row; // already encrypted
@@ -51,15 +53,15 @@ async function encryptRow(tableName: string, row: Record<string, unknown>): Prom
     if (plainKeys.includes(k)) out[k] = v;
     else secret[k] = v;
   }
-  out.box = await encryptJson(secret);
+  out.box = sealJson(secret);
   return out;
 }
 
-async function decryptRow<T>(tableName: string, row: unknown): Promise<T> {
+function decryptRow<T>(tableName: string, row: unknown): T {
   if (!row || typeof row !== "object") return row as T;
   const r = row as Record<string, unknown>;
   if (!isEncryptedBox(r.box)) return row as T;
-  const secret = await decryptJson<Record<string, unknown>>(r.box as EncryptedBox);
+  const secret = openJson<Record<string, unknown>>(r.box as EncryptedBox);
   const { box, ...plain } = r;
   void box;
   return { ...plain, ...secret } as T;
@@ -94,6 +96,9 @@ export class DlsDb extends Dexie {
       nmt_trips: "id, client_id, trip_date"
     });
 
+    // Load the PHI key before any encrypted operation runs.
+    this.on("ready", () => (typeof window === "undefined" ? undefined : ensurePhiKey()));
+
     // Encryption middleware — see file header.
     this.use({
       stack: "dbcore",
@@ -105,11 +110,9 @@ export class DlsDb extends Dexie {
           if (!PLAINTEXT_FIELDS[name]) return t;
           return {
             ...t,
-            mutate: async (req) => {
+            mutate: (req) => {
               if (req.type === "add" || req.type === "put") {
-                const values = await Promise.all(
-                  req.values.map((v) => encryptRow(name, v as Record<string, unknown>))
-                );
+                const values = req.values.map((v) => encryptRow(name, v as Record<string, unknown>));
                 return t.mutate({ ...req, values } as typeof req);
               }
               return t.mutate(req);
@@ -117,13 +120,12 @@ export class DlsDb extends Dexie {
             get: async (req) => decryptRow(name, await t.get(req)),
             getMany: async (req) => {
               const rows = await t.getMany(req);
-              return Promise.all(rows.map((r) => decryptRow(name, r)));
+              return rows.map((r) => decryptRow(name, r));
             },
             query: async (req) => {
               const res = await t.query(req);
               if (req.values && Array.isArray(res.result)) {
-                const result = await Promise.all(res.result.map((r) => decryptRow(name, r)));
-                return { ...res, result };
+                return { ...res, result: res.result.map((r) => decryptRow(name, r)) };
               }
               return res;
             }

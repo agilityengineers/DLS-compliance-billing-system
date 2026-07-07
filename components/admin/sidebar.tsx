@@ -140,7 +140,9 @@ export function AdminSidebar({
               <div className="truncate text-sm font-medium text-white">{userName}</div>
               <div className="flex items-center gap-2 text-xs text-plum-text">
                 {userRole}
-                <Link href="/logout" className="underline hover:text-white">Sign out</Link>
+                {/* plain <a>: Link would PREFETCH the logout route handler,
+                    executing it and silently killing the session */}
+                <a href="/logout" className="underline hover:text-white">Sign out</a>
               </div>
             </div>
           )}

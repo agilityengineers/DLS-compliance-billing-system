@@ -218,7 +218,12 @@ export function buildDemoDataset(): DemoDataset {
     { id: VIS(7), client_id: CID.whitfield, staff_id: UID.martinez, visit_type: "SCC", scheduled_start: ts(monday, -6, "10:00"), scheduled_end: ts(monday, -6, "12:30"), physician_order_id: PO.whitfield, status: "Completed" },
     { id: VIS(8), client_id: CID.okafor, staff_id: UID.vega, visit_type: "Job_Coaching", scheduled_start: ts(monday, -5, "13:00"), scheduled_end: ts(monday, -5, "14:30"), physician_order_id: PO.okafor, status: "Completed" },
     { id: VIS(9), client_id: CID.reyes, staff_id: UID.vega, visit_type: "SCC", scheduled_start: ts(monday, -4, "09:00"), scheduled_end: ts(monday, -4, "11:00"), physician_order_id: PO.reyes, status: "Completed" },
-    { id: VIS(10), client_id: CID.ramirez, staff_id: UID.price, visit_type: "SCC", scheduled_start: ts(monday, -3, "10:00"), scheduled_end: ts(monday, -3, "11:15"), physician_order_id: PO.ramirez, status: "Completed" }
+    { id: VIS(10), client_id: CID.ramirez, staff_id: UID.price, visit_type: "SCC", scheduled_start: ts(monday, -3, "10:00"), scheduled_end: ts(monday, -3, "11:15"), physician_order_id: PO.ramirez, status: "Completed" },
+    // Tuesday + Friday coverage so the Today screen demos well on any weekday
+    { id: VIS(11), client_id: CID.ramirez, staff_id: UID.vega, visit_type: "SCC", scheduled_start: ts(monday, 1, "13:00"), scheduled_end: ts(monday, 1, "14:30"), physician_order_id: PO.ramirez, status: "Scheduled" },
+    { id: VIS(12), client_id: CID.okafor, staff_id: UID.vega, visit_type: "Job_Coaching", scheduled_start: ts(monday, 1, "09:30"), scheduled_end: ts(monday, 1, "11:30"), physician_order_id: PO.okafor, status: "Scheduled" },
+    { id: VIS(13), client_id: CID.whitfield, staff_id: UID.price, visit_type: "SCC", scheduled_start: ts(monday, 4, "10:00"), scheduled_end: ts(monday, 4, "11:30"), physician_order_id: PO.whitfield, status: "Scheduled" },
+    { id: VIS(14), client_id: CID.reyes, staff_id: UID.vega, visit_type: "SCC", scheduled_start: ts(monday, 4, "14:00"), scheduled_end: ts(monday, 4, "16:00"), physician_order_id: PO.reyes, status: "Scheduled" }
   ];
 
   const EVV = (n: number) => `00000000-0000-4000-e000-${String(n).padStart(12, "0")}`;

@@ -59,7 +59,7 @@ export function UserAdminPanel({
   );
 }
 
-function AddForm() {
+export function AddUserForm() {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [fullName, setFullName] = useState("");
@@ -122,5 +122,3 @@ function AddForm() {
     </details>
   );
 }
-
-UserAdminPanel.AddForm = AddForm;
