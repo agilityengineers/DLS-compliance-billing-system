@@ -68,6 +68,11 @@ export async function POST(req: Request) {
         result = await upsertEvvLog(log, ctx.auditCtx, { isAdmin });
         if (result.ok && log.clock_out_time && log.clock_in_time) {
           await appendRouteRow(log, ctx.auditCtx);
+          // Submit the completed, verified visit to the EVV aggregator
+          // (Sandata in Colorado). Fire-and-forget: aggregator hiccups must
+          // never fail the field sync; failures land in server logs for the
+          // EVV review queue.
+          void submitToAggregator(log);
         }
         break;
       }
@@ -165,6 +170,18 @@ async function appendRouteRow(log: EvvLog, auditCtx: { performedBy: string | nul
     },
     auditCtx
   );
+}
+
+async function submitToAggregator(log: EvvLog) {
+  try {
+    const visit = await getVisit(log.visit_id);
+    if (!visit) return;
+    const { getEvvAggregator } = await import("@/lib/integrations/evv-aggregator");
+    const res = await getEvvAggregator().submitVisit(log, visit);
+    if (!res.accepted) console.error("[evv-aggregator] rejected:", res.error);
+  } catch (e) {
+    console.error("[evv-aggregator]", e instanceof Error ? e.message : e);
+  }
 }
 
 function mondayOf(dateIso: string): string {

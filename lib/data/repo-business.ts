@@ -41,7 +41,7 @@ export async function recordClaimExport(
     fileContent: string; payer?: string;
   },
   ctx: AuditContext
-): Promise<{ ok: boolean; controlNumber?: number; error?: string }> {
+): Promise<{ ok: boolean; id?: string; controlNumber?: number; error?: string }> {
   const exportedAt = new Date().toISOString();
   if (isDemoMode()) {
     const store = getDemoStore();
@@ -65,7 +65,7 @@ export async function recordClaimExport(
     }
     store.audit("claim_exports", "INSERT", exp.id, null,
       { control_number: exp.control_number, notes: input.noteIds.length, total_charge: input.totalCharge }, ctx);
-    return { ok: true, controlNumber: exp.control_number };
+    return { ok: true, id: exp.id, controlNumber: exp.control_number };
   }
 
   // Service-role by necessity (ledger insert + cross-note billed flags in one
@@ -87,7 +87,18 @@ export async function recordClaimExport(
     .update({ billed_at: exportedAt, claim_export_id: data.id })
     .in("id", input.noteIds);
   if (markErr) return { ok: false, error: markErr.message };
-  return { ok: true, controlNumber: data.control_number as number };
+  return { ok: true, id: data.id as string, controlNumber: data.control_number as number };
+}
+
+/** Attach the final wire file to a persisted export (control number known). */
+export async function attachClaimExportFile(exportId: string, fileContent: string): Promise<void> {
+  if (isDemoMode()) {
+    const bag = getDemoStore().data as unknown as { claimExports?: ClaimExport[] };
+    const exp = bag.claimExports?.find((e) => e.id === exportId);
+    if (exp) exp.file_content = fileContent;
+    return;
+  }
+  await createServiceClient().from("claim_exports").update({ file_content: fileContent }).eq("id", exportId);
 }
 
 // ═══ payroll ══════════════════════════════════════════════════════════════

@@ -79,14 +79,35 @@ export async function clockOut(
 }
 
 /**
- * Telephony fallback — STUB.
- * TODO: integrate an IVR/telephony EVV provider (e.g. Sandata, HHAeXchange
- * telephony). The contract: staff dials from the client's registered landline;
- * the provider webhook posts a verification token which we exchange for an
- * evv_logs row with verification_method='Telephony'.
+ * Telephony fallback. Records a verification_method='Telephony' EVV log
+ * (skips the GPS geofence by design — the registered landline is the
+ * location evidence) and returns dial instructions. A real IVR provider
+ * (Sandata telephony) must post verification tokens before this counts as
+ * certified EVV — PRODUCTION-READINESS.md §4.8.
  */
-export async function requestTelephonyFallback(visitId: string): Promise<{ instructions: string }> {
+export async function requestTelephonyFallback(visitId: string): Promise<{ instructions: string; recorded: boolean }> {
+  const code = visitId.slice(0, 8).toUpperCase();
+  const existing = await db.evv_logs.where("visit_id").equals(visitId).first();
+  if (existing?.clock_in_time) {
+    return {
+      instructions: `A clock record already exists for this visit. Call the EVV line from the client's registered phone and enter visit code ${code} to verify.`,
+      recorded: false
+    };
+  }
+  const log: EvvLog = {
+    id: newLocalId(),
+    visit_id: visitId,
+    clock_in_time: new Date().toISOString(),
+    clock_out_time: null,
+    clock_in_gps: null,
+    clock_out_gps: null,
+    verification_method: "Telephony",
+    offline_locked: false,
+    manual_adjustment_reason: null
+  };
+  await writeLocal("evv_logs", "insert", log as unknown as Record<string, unknown> & { id: string });
   return {
-    instructions: `Call the EVV line from the client's registered phone and enter visit code ${visitId.slice(0, 8).toUpperCase()}.`
+    instructions: `Telephony clock-in recorded (pending IVR verification). Call the EVV line from the client's registered phone and enter visit code ${code}.`,
+    recorded: true
   };
 }

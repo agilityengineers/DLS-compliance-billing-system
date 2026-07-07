@@ -1,71 +1,85 @@
-// app/admin/billing/actions.ts — bulk 837P export (Admin only)
+// app/admin/billing/actions.ts — bulk 837P export (ADMIN-ONLY).
+// Flow: re-evaluate readiness server-side (never trust the checkbox) →
+// payer adapter builds the batch (fee-schedule gated) → export persisted to
+// the claim ledger with a real control number → notes marked billed → the
+// export itself is audit-logged. Blocked notes come back with their reasons.
 "use server";
 
-import { requireRole } from "@/lib/rbac/roles";
-import { createServiceClient } from "@/lib/supabase/server";
-import { canGenerateClaim } from "@/lib/billing/guardrails";
-import { exportClaim837P, submitterFromEnv, type ClaimInput } from "@/lib/billing/x12-837p";
+import { revalidatePath } from "next/cache";
+import { requireRole } from "@/lib/auth/session";
+import { evaluateUnbilledNotes } from "@/lib/billing/readiness";
+import { getPayerAdapter } from "@/lib/billing/payers";
+import { getClient } from "@/lib/data/repo-core";
+import { attachClaimExportFile, recordClaimExport } from "@/lib/data/repo-business";
+import type { Client } from "@/lib/supabase/types";
 
-// TODO: pull rate + procedure code from a fee schedule table per visit_type.
-const PLACEHOLDER_RATE_PER_UNIT = 15.5;
-const PROCEDURE_BY_TYPE: Record<string, string> = {
-  SCC: "T2021", Job_Coaching: "H2023", Day_Habilitation: "T2021", Early_Intervention: "T1027"
-};
+export async function bulkExport837P(noteIds: string[]): Promise<{
+  ok: boolean;
+  file?: string;
+  fileName?: string;
+  controlNumber?: number;
+  exported?: number;
+  error?: string;
+  blocked?: Record<string, string[]>;
+}> {
+  const ctx = await requireRole("Admin");
 
-export async function checkClaim(progressNoteId: string) {
-  await requireRole("Admin");
-  return canGenerateClaim(progressNoteId);
-}
-
-export async function bulkExport837P(noteIds: string[]): Promise<{ ok: boolean; file?: string; error?: string; blocked?: Record<string, string[]> }> {
-  await requireRole("Admin");
-  const supabase = createServiceClient();
+  const readiness = await evaluateUnbilledNotes();
+  const byId = new Map(readiness.map((r) => [r.note.id, r]));
 
   const blocked: Record<string, string[]> = {};
-  const claims: ClaimInput[] = [];
-
+  const ready = [];
   for (const id of noteIds) {
-    const check = await canGenerateClaim(id);
-    if (!check.ok) { blocked[id] = check.blockers; continue; }
-
-    const { data: note } = await supabase
-      .from("progress_notes")
-      .select("*, visits(visit_type), clients:client_id(first_name,last_name,medicaid_id,date_of_birth,active_diagnoses)")
-      .eq("id", id).single();
-    if (!note) { blocked[id] = ["Note not found"]; continue; }
-
-    const client = note.clients as { first_name: string; last_name: string; medicaid_id: string; date_of_birth: string; active_diagnoses: { code: string }[] };
-    const visitType = (note.visits as { visit_type: string }).visit_type;
-    const units = note.calculated_billing_units ?? 0;
-
-    claims.push({
-      claimId: `PN-${id.slice(0, 8).toUpperCase()}`,
-      client: {
-        lastName: client.last_name.toUpperCase(),
-        firstName: client.first_name.toUpperCase(),
-        medicaidId: client.medicaid_id,
-        dob: client.date_of_birth.replace(/-/g, "")
-      },
-      diagnosisCodes: (client.active_diagnoses ?? []).map((d) => d.code.replace(".", "")),
-      lines: [{
-        procedureCode: PROCEDURE_BY_TYPE[visitType] ?? "T2021",
-        units,
-        chargeAmount: units * PLACEHOLDER_RATE_PER_UNIT,
-        serviceDate: (note.date as string).replace(/-/g, "")
-      }]
-    });
+    const r = byId.get(id);
+    if (!r) blocked[id] = ["Note not found or already billed."];
+    else if (!r.ok) blocked[id] = r.blockers;
+    else ready.push(r);
+  }
+  if (ready.length === 0) {
+    return { ok: false, error: "No claim-ready notes in selection.", blocked };
   }
 
-  if (claims.length === 0) return { ok: false, error: "No claim-ready notes in selection.", blocked };
-
-  const file = exportClaim837P(claims, submitterFromEnv(), Date.now() % 1_000_000_000);
-
-  // Mark exported visits as Billed
-  const exportedIds = noteIds.filter((id) => !blocked[id]);
-  const { data: exportedNotes } = await supabase.from("progress_notes").select("visit_id").in("id", exportedIds);
-  if (exportedNotes?.length) {
-    await supabase.from("visits").update({ status: "Billed" }).in("id", exportedNotes.map((n) => n.visit_id));
+  const clientIds = Array.from(new Set(ready.map((r) => r.note.client_id)));
+  const clients = new Map<string, Client>();
+  for (const id of clientIds) {
+    const c = await getClient(id);
+    if (c) clients.set(id, c);
   }
 
-  return { ok: true, file, blocked };
+  // Provisional control number; the ledger assigns the real one — rebuild
+  // with it so the ISA/GS control numbers match the persisted record.
+  const adapter = getPayerAdapter("COLORADO_MEDICAID");
+  const probe = adapter.buildBatch(ready, clients, 0);
+  if (!probe.ok) return { ok: false, error: probe.error, blocked };
+
+  const ledger = await recordClaimExport(
+    {
+      noteIds: ready.map((r) => r.note.id),
+      totalUnits: probe.totalUnits,
+      totalCharge: probe.totalCharge,
+      fileContent: "", // replaced below
+      payer: adapter.key
+    },
+    ctx.auditCtx
+  );
+  if (!ledger.ok || !ledger.controlNumber) {
+    return { ok: false, error: ledger.error ?? "Failed to persist the export ledger.", blocked };
+  }
+
+  const finalBatch = adapter.buildBatch(ready, clients, ledger.controlNumber);
+  if (!finalBatch.ok || !finalBatch.fileContent) {
+    return { ok: false, error: finalBatch.error ?? "Batch build failed.", blocked };
+  }
+  if (ledger.id) await attachClaimExportFile(ledger.id, finalBatch.fileContent);
+
+  revalidatePath("/admin/billing");
+  revalidatePath("/admin");
+  return {
+    ok: true,
+    file: finalBatch.fileContent,
+    fileName: finalBatch.fileName,
+    controlNumber: ledger.controlNumber,
+    exported: ready.length,
+    blocked
+  };
 }
