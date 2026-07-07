@@ -1,27 +1,51 @@
-// app/field/visits/[id]/note/page.tsx — server shell for the progress note
-import { notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+// app/field/visits/[id]/note/page.tsx — offline-capable wrapper for the
+// progress note (visit + client resolved from Dexie).
+"use client";
+
+import { useParams } from "next/navigation";
+import { useLiveQuery } from "dexie-react-hooks";
+import { db } from "@/lib/offline/db";
 import { NoteForm } from "@/components/field/note-form";
 
-export default async function NotePage({ params }: { params: { id: string } }) {
-  const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  const { data: visit } = await supabase
-    .from("visits")
-    .select("id, visit_type, client_id, clients(first_name,last_name)")
-    .eq("id", params.id)
-    .single();
-  if (!visit) notFound();
+export default function NotePage() {
+  const params = useParams<{ id: string }>();
+  const visitId = params.id;
 
-  const client = visit.clients as unknown as { first_name: string; last_name: string };
+  const data = useLiveQuery(async () => {
+    const visit = await db.visits.get(visitId);
+    const client = visit ? await db.clients.get(visit.client_id) : undefined;
+    const existing = await db.progress_notes.where("visit_id").equals(visitId).first();
+    return { visit, client, existing };
+  }, [visitId]);
+
+  if (!data) return <p className="p-4 text-sm text-muted-foreground">Loading…</p>;
+  const { visit, client, existing } = data;
+  if (!visit) {
+    return (
+      <p className="rounded-card-m border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+        Visit not found on this device yet — connect once to sync your schedule.
+      </p>
+    );
+  }
+
+  if (existing && existing.synced !== 0) {
+    return (
+      <div className="space-y-3">
+        <h1 className="page-title">Progress note</h1>
+        <p className="rounded-card-m bg-pill-success p-4 text-sm text-pill-success-fg">
+          A note for this visit was already submitted and synced.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <NoteForm
       visitId={visit.id}
       clientId={visit.client_id}
-      staffId={user!.id}
+      staffId={visit.staff_id}
       visitType={visit.visit_type}
-      clientName={`${client.first_name} ${client.last_name}`}
+      clientName={client ? `${client.first_name} ${client.last_name}` : "Client"}
     />
   );
 }
