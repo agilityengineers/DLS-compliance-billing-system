@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "DLS-CMS"
+version = "1.0.0"
+id = "artifacts/dls-cms"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 24496
+
+[services.development]
+run = "pnpm --filter @workspace/dls-cms run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/dls-cms", "run", "build" ]
+publicDir = "artifacts/dls-cms/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24496"
+BASE_PATH = "/"
