@@ -40,6 +40,7 @@ export const ADMIN_NAV: NavSection[] = [
       { href: "/admin/qa", label: "QA", icon: "ShieldCheck" },
       { href: "/admin/evv", label: "EVV review", icon: "MapPin" },
       { href: "/admin/emar", label: "eMAR oversight", icon: "Pill" },
+      { href: "/admin/incidents", label: "Incidents", icon: "AlertTriangle", adminOnly: true },
       { href: "/admin/audit", label: "Audit trail", icon: "ScrollText", adminOnly: true }
     ]
   },

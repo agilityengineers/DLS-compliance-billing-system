@@ -267,6 +267,48 @@ begin
     ('00000000-0000-4000-f600-000000000001',
       (monday - 21)::date, (monday - 8)::date, (monday + 5)::date, 'open')
   on conflict (period_start) do nothing;
+
+  -- ── Prior-period route records (payroll transmittal demo). Torres stays
+  --    unsubmitted → payroll "all notes in?" = No, submission blocked. ─────
+  declare
+    payroll_row record;
+    week_idx int;
+    week_hours numeric;
+    remaining numeric;
+    day_offset int;
+    ts_id uuid;
+  begin
+    for payroll_row in
+      select * from (values
+        ('00000000-0000-4000-a000-000000000003'::uuid, 40.25, 37.25, true),  -- Vega
+        ('00000000-0000-4000-a000-000000000004'::uuid, 36.5,  44.25, true),  -- Price
+        ('00000000-0000-4000-a000-000000000005'::uuid, 42.5,  45.5,  true),  -- Martinez
+        ('00000000-0000-4000-a000-000000000006'::uuid, 4.25,  14,    false), -- Torres (notes NOT in)
+        ('00000000-0000-4000-a000-000000000007'::uuid, 36.5,  19.5,  true)   -- Romero
+      ) as t(staff_id, wk1, wk2, submitted)
+    loop
+      for week_idx in 0..1 loop
+        week_hours := case when week_idx = 0 then payroll_row.wk1 else payroll_row.wk2 end;
+        ts_id := uuid_generate_v4();
+        insert into timesheets (id, staff_id, period_start, period_end, status, submitted_at)
+        values (ts_id, payroll_row.staff_id,
+                (monday - 21 + week_idx * 7)::date, (monday - 15 + week_idx * 7)::date,
+                case when payroll_row.submitted then 'submitted' else 'open' end,
+                case when payroll_row.submitted then (monday - 15 + week_idx * 7)::timestamptz else null end)
+        on conflict (staff_id, period_start) do nothing;
+
+        remaining := week_hours;
+        day_offset := 0;
+        while remaining > 0 and day_offset < 7 loop
+          insert into timesheet_entries (timesheet_id, work_date, service_code, hours, source, notes)
+          values (ts_id, (monday - 21 + week_idx * 7 + day_offset)::date, 'SCC',
+                  least(8, remaining), 'manual', 'seeded aggregate');
+          remaining := remaining - least(8, remaining);
+          day_offset := day_offset + 1;
+        end loop;
+      end loop;
+    end loop;
+  end;
 end $$;
 
 -- ── Fee schedule (SYNTHETIC placeholder rates — replace with the client's

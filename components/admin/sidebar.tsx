@@ -8,15 +8,15 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import {
-  Banknote, BarChart3, CalendarDays, ChevronsLeft, ChevronsRight, FolderOpen,
-  GraduationCap, LayoutDashboard, Lock, MapPin, Pill, Receipt, ScrollText,
-  Settings, ShieldCheck, UserCog, Users, type LucideIcon
+  AlertTriangle, Banknote, BarChart3, CalendarDays, ChevronsLeft, ChevronsRight,
+  FolderOpen, GraduationCap, LayoutDashboard, Lock, MapPin, Pill, Receipt,
+  ScrollText, Settings, ShieldCheck, UserCog, Users, type LucideIcon
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { NavSection } from "./nav-config";
 
 const ICONS: Record<string, LucideIcon> = {
-  LayoutDashboard, Users, CalendarDays, UserCog, ShieldCheck, MapPin, Pill,
+  AlertTriangle, LayoutDashboard, Users, CalendarDays, UserCog, ShieldCheck, MapPin, Pill,
   ScrollText, Receipt, Banknote, BarChart3, FolderOpen, GraduationCap, Settings
 };
 

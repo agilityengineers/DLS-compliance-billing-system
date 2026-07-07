@@ -323,6 +323,44 @@ export function buildDemoDataset(): DemoDataset {
     { id: "00000000-0000-4000-f500-000000000002", timesheet_id: "00000000-0000-4000-f400-000000000001", work_date: dateStr(monday, 0), service_code: "T", client_id: CID.reyes, start_time: null, end_time: null, hours: 0.5, source: "nmt", source_id: "00000000-0000-4000-f200-000000000001", notes: "NMT: Goodwill, Michaels" }
   ];
 
+  // ── Prior payroll period (weeks starting monday-21 and monday-14):
+  //    submitted route records for everyone except Torres (payroll "No").
+  //    Hours mirror the design prototype's transmittal screen.
+  const PAYROLL_HOURS: { uid: string; wk1: number; wk2: number; submitted: boolean }[] = [
+    { uid: UID.vega, wk1: 40.25, wk2: 37.25, submitted: true },
+    { uid: UID.price, wk1: 36.5, wk2: 44.25, submitted: true },
+    { uid: UID.martinez, wk1: 42.5, wk2: 45.5, submitted: true },
+    { uid: UID.torres, wk1: 4.25, wk2: 14, submitted: false }, // notes NOT in
+    { uid: UID.romero, wk1: 36.5, wk2: 19.5, submitted: true }
+  ];
+  let tsSeq = 10;
+  for (const row of PAYROLL_HOURS) {
+    for (const [weekIdx, hours] of [row.wk1, row.wk2].entries()) {
+      const start = -21 + weekIdx * 7;
+      const tsId = `00000000-0000-4000-f400-${String(tsSeq++).padStart(12, "0")}`;
+      timesheets.push({
+        id: tsId, staff_id: row.uid,
+        period_start: dateStr(monday, start), period_end: dateStr(monday, start + 6),
+        status: row.submitted ? "submitted" : "open",
+        submitted_at: row.submitted ? ts(monday, start + 6, "17:00") : null
+      });
+      // Split the week into ≤8h daily aggregate rows (route-record shape).
+      let remaining = hours;
+      let day = 0;
+      while (remaining > 0 && day < 7) {
+        const h = Math.min(8, remaining);
+        timesheetEntries.push({
+          id: `00000000-0000-4000-f500-${String(tsSeq * 100 + day).padStart(12, "0")}`,
+          timesheet_id: tsId, work_date: dateStr(monday, start + day),
+          service_code: "SCC", client_id: null, start_time: null, end_time: null,
+          hours: h, source: "manual", source_id: null, notes: "seeded aggregate"
+        });
+        remaining = Math.round((remaining - h) * 100) / 100;
+        day++;
+      }
+    }
+  }
+
   const payrollPeriods: PayrollPeriod[] = [
     {
       id: "00000000-0000-4000-f600-000000000001",
