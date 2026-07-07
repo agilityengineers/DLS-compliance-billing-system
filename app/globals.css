@@ -1,27 +1,52 @@
-/* app/globals.css */
+/* app/globals.css — "Duet" theme base */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --background: 0 0% 100%;
-  --foreground: 222 47% 11%;
-  --card: 0 0% 100%;
-  --card-foreground: 222 47% 11%;
-  --primary: 217 91% 40%;
-  --primary-foreground: 0 0% 100%;
-  --muted: 210 40% 96%;
-  --muted-foreground: 215 16% 47%;
-  --destructive: 0 72% 51%;
-  --destructive-foreground: 0 0% 100%;
-  --border: 214 32% 91%;
+  /* Duet tokens (also defined in tailwind.config.ts; kept here for raw CSS use) */
+  --plum: #4a3d63;
+  --plum-accent: #6b5a86;
+  --plum-soft: #efeaf5;
+  --sage: #5f7161;
+  --cream: #f7f5f1;
+  --ink: #2b2438;
+  --muted-fg: #716b80;
+  --border: #e7e3db;
+  --clock-out-red: #a94438;
+}
+
+/* Global text scale: 108% — the client approved "+1 pt" for legibility.
+   Baked into the base font size (rem root), NOT CSS zoom. */
+html {
+  font-size: 108%;
 }
 
 body {
-  @apply bg-background text-foreground antialiased;
+  @apply bg-background font-sans text-foreground antialiased;
 }
 
-/* Field app: no hover-only affordances; generous tap targets */
+@layer components {
+  /* Small-caps section labels: 10.5px, 700, letter-spacing .1em */
+  .label-caps {
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  /* Serif page title in plum — the standard screen heading */
+  .page-title {
+    @apply font-serif text-2xl font-semibold text-plum;
+  }
+
+  /* Serif stat number (dashboard stat cards) */
+  .stat-number {
+    @apply font-serif text-3xl font-semibold text-foreground;
+  }
+}
+
+/* Field app: no hover-only affordances; generous tap targets (min 44px) */
 .field-surface button,
 .field-surface a,
 .field-surface input,

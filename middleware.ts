@@ -1,6 +1,6 @@
 // middleware.ts — refreshes the Supabase session cookie on every request
 // (required for @supabase/ssr server components).
-import { createServerClient } from "@supabase/ssr";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function middleware(request: NextRequest) {
@@ -12,7 +12,7 @@ export async function middleware(request: NextRequest) {
     {
       cookies: {
         getAll: () => request.cookies.getAll(),
-        setAll: (all) => {
+        setAll: (all: { name: string; value: string; options?: CookieOptions }[]) => {
           all.forEach(({ name, value }) => request.cookies.set(name, value));
           response = NextResponse.next({ request });
           all.forEach(({ name, value, options }) => response.cookies.set(name, value, options));

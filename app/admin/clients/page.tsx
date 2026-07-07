@@ -1,7 +1,6 @@
 // app/admin/clients/page.tsx — client data table with server-side search
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, THead, TBody } from "@/components/ui/table";
 import { createClient } from "@/lib/supabase/server";
@@ -18,9 +17,12 @@ export default async function ClientsPage({ searchParams }: { searchParams: { q?
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-xl font-semibold">Clients</h1>
-        <Button asChild={false}>
-          <Link href="/admin/clients/new">New client</Link>
-        </Button>
+        <Link
+          href="/admin/clients/new"
+          className="inline-flex h-10 items-center justify-center rounded-btn bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+        >
+          New client
+        </Link>
       </div>
 
       <form className="max-w-sm">

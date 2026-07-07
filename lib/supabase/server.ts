@@ -1,5 +1,5 @@
 // lib/supabase/server.ts — server clients for RSC / server actions / routes
-import { createServerClient } from "@supabase/ssr";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 
@@ -12,7 +12,7 @@ export function createClient() {
     {
       cookies: {
         getAll: () => cookieStore.getAll(),
-        setAll: (all) => {
+        setAll: (all: { name: string; value: string; options?: CookieOptions }[]) => {
           try {
             all.forEach(({ name, value, options }) => cookieStore.set(name, value, options));
           } catch {

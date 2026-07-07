@@ -23,3 +23,42 @@ Product requirements to keep in mind across all work:
 - Demo/fake data only until HIPAA paperwork (BAAs) is in place.
 - **Impersonation requirements must be in the handoff doc**: Admin-only; every action taken while impersonating is audit-logged under the admin's real identity.
 - MVP order: field app (clock-in → note → sync) → admin review/QA → billing → payroll/Relias.
+
+## Build decisions (implementation, 2026-07-07 — approved by client)
+
+- **Repo layout**: the Next.js app lives at the repository ROOT (not `dls-cms/`)
+  so Replit imports and runs it directly. The design package is preserved at
+  `docs/design/` (handoff README, screenshots, interactive prototype).
+- **Server-side rule enforcement = DATABASE-LEVEL** (client's accepted
+  recommendation): geofence, NMT weekly cap, physician-order requirement, and
+  manual-EVV restrictions are Postgres triggers/constraints/RLS, because
+  offline-authored writes sync straight into the DB and would bypass
+  app-layer checks. The UI pre-checks the same rules for good UX; the DB is
+  the authority. What remains before production: PRODUCTION-READINESS.md §5.
+- **Lost-device protocol (client's accepted recommendation)**: first release
+  ships encrypted IndexedDB + idle session timeout + purge-on-submit; app
+  PIN/biometric lock and admin-triggered remote wipe are 🔴 REQUIRED before
+  any real-PHI pilot (PRODUCTION-READINESS.md §3).
+- **Demo mode is explicit and self-describing**: with no Supabase env (or
+  `NEXT_PUBLIC_DEMO_MODE=true`) the app runs on a deterministic in-memory
+  synthetic dataset, shows a persistent "DEMO — synthetic data, no PHI"
+  banner, and offers a role-picker sign-in. Every demo-only compromise is
+  tracked in PRODUCTION-READINESS.md §4 and labeled `DEMO:` in code.
+- **Impersonation mechanism**: admin identity is PRESERVED — the impersonation
+  token keeps `sub = admin` and adds an `impersonating` claim (signed with
+  `SUPABASE_JWT_SECRET`, httpOnly cookie, 1 h expiry). `auth.uid()` therefore
+  stays the admin for RLS and the audit trigger; the trigger also records the
+  `impersonating` claim (migration 0002). Banner + one-tap exit in both shells.
+- **Audit redaction**: signature images are logged as `[signature captured]`
+  markers, not base64 bytes (audit table held full PHI blobs otherwise).
+- **Fonts self-hosted** via @fontsource (no runtime Google Fonts request —
+  offline-safe and no third-party PHI-adjacent traffic).
+- **Physician orders are a real table** (`physician_orders`) with an active-
+  window trigger on visits; the scaffold's free-text order column is
+  deprecated in place.
+- **Week basis for authorizations**: Sunday–Saturday in the agency timezone
+  (`app_settings.agency_timezone`, default America/Denver), used consistently
+  by the NMT cap, weekly-units guardrail, and payroll math.
+- **Monthly report exports**: print-optimized HTML + Word-compatible `.doc`
+  download (no heavyweight docx dependency); exact state-format fidelity is
+  gated on the client supplying the current templates (open question Q6).

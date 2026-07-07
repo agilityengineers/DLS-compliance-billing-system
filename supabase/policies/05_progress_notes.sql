@@ -23,7 +23,10 @@ create policy jcl_field_select on job_coaching_logs for select
 create policy jcl_field_insert on job_coaching_logs for insert
   with check (fn_is_field_staff() and exists (
     select 1 from progress_notes n where n.id = progress_note_id and n.staff_id = auth.uid()));
+-- WITH CHECK re-asserts note ownership (previously a field user could repoint
+-- progress_note_id at another staff member's note).
 create policy jcl_field_update on job_coaching_logs for update
   using (fn_is_field_staff() and exists (
     select 1 from progress_notes n where n.id = progress_note_id and n.staff_id = auth.uid()))
-  with check (fn_is_field_staff());
+  with check (fn_is_field_staff() and exists (
+    select 1 from progress_notes n where n.id = progress_note_id and n.staff_id = auth.uid()));
