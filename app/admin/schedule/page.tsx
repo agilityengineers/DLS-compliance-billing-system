@@ -1,36 +1,63 @@
-// app/admin/schedule/page.tsx — master calendar (week view)
+// app/admin/schedule/page.tsx — staff × weekday grid.
+// Visits without an active physician order are flagged red and cannot be
+// saved (DB-enforced). Recurring templates generate this week's instances.
+import { redirect } from "next/navigation";
+import { requireRole } from "@/lib/auth/session";
+import { listClients, listFieldStaff, listPhysicianOrders, listVisits } from "@/lib/data/repo-core";
 import { ScheduleBoard } from "@/components/admin/schedule-board";
-import { createClient } from "@/lib/supabase/server";
+import { GenerateRecurringButton } from "@/components/admin/generate-recurring-button";
+import { DesktopWorkspace } from "@/components/admin/desktop-workspace";
+
+function mondayOf(dateIso?: string): string {
+  const d = dateIso ? new Date(`${dateIso}T12:00:00`) : new Date();
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
 export default async function SchedulePage({ searchParams }: { searchParams: { week?: string } }) {
-  const supabase = createClient();
+  try {
+    await requireRole("Admin", "Scheduler");
+  } catch {
+    redirect("/admin");
+  }
 
-  // Week start (Sunday)
-  const base = searchParams.week ? new Date(`${searchParams.week}T00:00:00`) : new Date();
-  const weekStart = new Date(base);
-  weekStart.setDate(base.getDate() - base.getDay());
-  const weekEnd = new Date(weekStart);
-  weekEnd.setDate(weekStart.getDate() + 7);
-  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  const weekMonday = mondayOf(searchParams.week);
+  const weekEnd = (() => {
+    const d = new Date(`${weekMonday}T12:00:00`);
+    d.setDate(d.getDate() + 6);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  })();
 
-  const [{ data: visits }, { data: staff }] = await Promise.all([
-    supabase
-      .from("visits")
-      .select("*, clients(first_name,last_name)")
-      .gte("scheduled_start", `${iso(weekStart)}T00:00:00Z`)
-      .lt("scheduled_start", `${iso(weekEnd)}T00:00:00Z`)
-      .neq("status", "Cancelled")
-      .order("scheduled_start"),
-    supabase.from("users").select("id,full_name").eq("role", "Field_Staff").eq("status", "Active").order("full_name")
+  const [visits, staff, clients, orders] = await Promise.all([
+    listVisits({ from: weekMonday, to: weekEnd, excludeCancelled: true }),
+    listFieldStaff(),
+    listClients(),
+    listPhysicianOrders()
   ]);
 
   return (
     <div className="space-y-4">
-      <div className="flex items-baseline justify-between">
-        <h1 className="text-xl font-semibold">Schedule — week of {iso(weekStart)}</h1>
-        <p className="text-sm text-muted-foreground">Drag a visit to reassign staff or day. Visits without a physician order are flagged and cannot be saved.</p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="page-title">Schedule</h1>
+          <p className="text-sm text-muted-foreground">
+            Week of {new Date(`${weekMonday}T12:00:00`).toLocaleDateString([], { month: "long", day: "numeric" })}.
+            Select a visit, then reassign. Visits without a physician order are flagged and{" "}
+            <strong className="text-foreground">cannot be saved</strong>.
+          </p>
+        </div>
+        <GenerateRecurringButton weekMonday={weekMonday} />
       </div>
-      <ScheduleBoard visits={visits ?? []} staff={staff ?? []} weekStart={iso(weekStart)} />
+
+      <DesktopWorkspace title="Schedule">
+        <ScheduleBoard
+          visits={visits}
+          staff={staff.map((s) => ({ id: s.id, full_name: s.full_name }))}
+          clients={clients.map((c) => ({ id: c.id, name: `${c.first_name} ${c.last_name}` }))}
+          orders={orders}
+          weekMonday={weekMonday}
+        />
+      </DesktopWorkspace>
     </div>
   );
 }

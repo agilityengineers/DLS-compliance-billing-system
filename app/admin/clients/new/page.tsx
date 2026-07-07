@@ -16,7 +16,8 @@ export default function NewClientPage() {
   const [form, setForm] = useState({
     first_name: "", last_name: "", medicaid_id: "", date_of_birth: "",
     insurance_provider: "", service_plan_start: "", service_plan_end: "",
-    authorized_scc_hours_per_week: 0, authorized_nmt_trips_per_week: 0
+    authorized_scc_hours_per_week: 0, authorized_nmt_trips_per_week: 0,
+    case_manager_name: "", ccb_name: ""
   });
   const [diagnoses, setDiagnoses] = useState<Dx[]>([]);
   const [dx, setDx] = useState<Dx>({ code: "", description: "" });
@@ -64,6 +65,8 @@ export default function NewClientPage() {
           <div className="space-y-1.5"><Label>Service plan end</Label><Input type="date" value={form.service_plan_end} onChange={set("service_plan_end")} /></div>
           <div className="space-y-1.5"><Label>Authorized SCC hrs/week</Label><Input type="number" min={0} step={0.25} value={form.authorized_scc_hours_per_week} onChange={set("authorized_scc_hours_per_week")} /></div>
           <div className="space-y-1.5"><Label>Authorized NMT trips/week</Label><Input type="number" min={0} value={form.authorized_nmt_trips_per_week} onChange={set("authorized_nmt_trips_per_week")} /></div>
+          <div className="space-y-1.5"><Label>Case manager</Label><Input value={form.case_manager_name} onChange={set("case_manager_name")} /></div>
+          <div className="space-y-1.5"><Label>CCB</Label><Input value={form.ccb_name} onChange={set("ccb_name")} /></div>
         </div>
 
         <fieldset className="space-y-3 rounded-lg border border-border p-4">
