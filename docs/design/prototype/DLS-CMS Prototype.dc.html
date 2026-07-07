@@ -1,0 +1,2149 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F7F5F1;font-family:'IBM Plex Sans',system-ui,sans-serif;color:#2B2438;
+--acc:#6B5A86;--accSoft:#EFEAF5;--side:#4A3D63;--sideFg:#CFC7E0;--page:#F7F5F1;--bd:#E7E3DB;--ink:#2B2438;--mut:#716B80;--head:#4A3D63;--btn:#5F7161;--btnFg:#fff;}
+a{color:#5F7161;text-decoration:none}a:hover{color:#4A3D63}
+input,textarea,select,button{font-family:inherit}
+</style>
+</helmet>
+
+<div style="min-height:100vh;background:var(--page);padding-bottom:60px">
+
+  <!-- ── Top bar ── -->
+  <div style="max-width:1280px;margin:0 auto;display:flex;align-items:center;gap:14px;padding:16px 24px 14px;flex-wrap:wrap">
+    <div style="display:flex;align-items:center;gap:10px;margin-right:8px">
+      <img src="assets/dls-mascot.png" alt="Durable Life Skills mascot" style="width:51px;height:51px;border-radius:99px;object-fit:cover">
+      <div>
+        <div style="font-family:'Source Serif 4',Georgia,serif;font-size:15px;font-weight:600;color:var(--head);line-height:1.1">Durable Life Skills</div>
+        <div style="font-size:10.5px;color:var(--mut);letter-spacing:.08em;font-weight:600">CARE MANAGEMENT</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:4px;background:#fff;border:1px solid var(--bd);border-radius:10px;padding:4px">
+      <button onClick="{{ showDesk }}" style="{{ deskBtnStyle }}">Desktop</button>
+      <button onClick="{{ showMobile }}" style="{{ mobileBtnStyle }}">Mobile</button>
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--bd);border-radius:10px;padding:7px 12px;font-size:10.5px;letter-spacing:.06em;color:var(--mut);font-weight:700">
+      IMPERSONATE <span style="background:var(--accSoft);color:var(--head);border-radius:99px;padding:2px 8px;font-size:9.5px">ADMIN ONLY</span>
+      <select value="{{ actor }}" onChange="{{ setActor }}" style="border:none;background:none;font-size:12.5px;font-weight:600;color:var(--head);cursor:pointer;letter-spacing:0">
+        <option value="admin">K. Sandoval — Admin</option>
+        <option value="scheduler">T. Alvarez — Scheduler</option>
+        <option value="field">M. Vega — Field Staff</option>
+      </select>
+    </label>
+    <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+      <button onClick="{{ toggleOnline }}" style="{{ onlineBtnStyle }}">{{ onlineBtnLabel }}</button>
+      <button onClick="{{ resetDemo }}" style="border:none;background:none;color:var(--mut);font-size:11.5px;cursor:pointer;text-decoration:underline">Reset demo</button>
+    </div>
+  </div>
+
+  <!-- ══ ADMIN / SCHEDULER SHELL ══ -->
+  <sc-if value="{{ isDesk }}" hint-placeholder-val="{{ false }}">
+    <div style="max-width:1280px;margin:0 auto;display:flex;background:#fff;border:1px solid var(--bd);border-radius:16px;overflow:hidden;box-shadow:0 1px 3px rgba(43,36,56,.05)">
+
+      <!-- sidebar (collapsible rail + collapsible sections; default fully expanded) -->
+      <div style="{{ sideStyle }}">
+        <div style="{{ sideToggleRowStyle }}">
+          <button onClick="{{ toggleSide }}" title="Collapse / expand menu" style="border:none;background:rgba(255,255,255,.12);color:#fff;border-radius:8px;width:30px;height:30px;cursor:pointer;font-size:13px" style-hover="background:rgba(255,255,255,.2)">{{ sideToggleIcon }}</button>
+        </div>
+        <div style="flex:1;overflow-y:auto;overflow-x:hidden">
+          <sc-for list="{{ navGroups }}" as="grp" hint-placeholder-count="3">
+            <sc-if value="{{ grp.showHeader }}" hint-placeholder-val="{{ true }}">
+              <button onClick="{{ grp.toggle }}" style="display:flex;align-items:center;gap:6px;width:100%;box-sizing:border-box;border:none;background:none;cursor:pointer;padding:12px 18px 6px;font-size:10px;font-weight:700;letter-spacing:.14em;color:var(--sideFg);opacity:.85;text-align:left" style-hover="opacity:1">
+                <span style="font-size:8px">{{ grp.caret }}</span>{{ grp.label }}
+              </button>
+            </sc-if>
+            <sc-if value="{{ grp.divider }}" hint-placeholder-val="{{ false }}">
+              <div style="height:1px;background:rgba(255,255,255,.14);margin:8px 12px"></div>
+            </sc-if>
+            <sc-if value="{{ grp.open }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;flex-direction:column;gap:2px;padding:0 10px">
+                <sc-for list="{{ grp.items }}" as="nav" hint-placeholder-count="4">
+                  <button onClick="{{ nav.go }}" title="{{ nav.title }}" style="{{ nav.style }}" style-hover="background:rgba(255,255,255,.08)">
+                    <span style="flex:none">{{ nav.icon }}</span><span style="white-space:nowrap">{{ nav.text }}</span><span style="{{ nav.suffixStyle }}">{{ nav.suffix }}</span>
+                  </button>
+                </sc-for>
+              </div>
+            </sc-if>
+          </sc-for>
+        </div>
+        <div style="{{ sideFooterStyle }}">
+          <div style="width:30px;height:30px;flex:none;border-radius:99px;background:rgba(255,255,255,.16);color:#fff;display:grid;place-items:center;font-size:11px;font-weight:600">{{ userInitials }}</div>
+          <sc-if value="{{ sideExpanded }}" hint-placeholder-val="{{ true }}">
+            <div>
+              <div style="font-size:12.5px;font-weight:600;color:#fff">{{ userName }}</div>
+              <div style="font-size:11px;color:var(--sideFg)">{{ userRole }}</div>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+
+      <!-- content -->
+      <div style="flex:1;min-width:0;background:var(--page);padding:28px 32px">
+
+        <!-- ── DASHBOARD ── -->
+        <sc-if value="{{ tabDashboard }}" hint-placeholder-val="{{ true }}">
+          <div style="font-family:'Source Serif 4',Georgia,serif;font-size:24px;font-weight:600;color:var(--head)">Agency overview</div>
+          <div style="font-size:13px;color:var(--mut);margin:4px 0 22px">Visits, documentation, and claim readiness at a glance.</div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px">
+            <sc-for list="{{ statCards }}" as="stat" hint-placeholder-count="4">
+              <button onClick="{{ stat.go }}" style="text-align:left;background:#fff;border:1px solid var(--bd);border-radius:12px;padding:16px;cursor:pointer" style-hover="border-color:var(--acc)">
+                <div style="font-size:10.5px;font-weight:700;letter-spacing:.1em;color:var(--mut);margin-bottom:10px">{{ stat.label }}</div>
+                <div style="font-family:'Source Serif 4',Georgia,serif;font-size:30px;font-weight:600;color:var(--ink);line-height:1">{{ stat.value }}</div>
+                <div style="font-size:12px;color:var(--mut);margin-top:8px">{{ stat.sub }}</div>
+              </button>
+            </sc-for>
+          </div>
+          <div style="background:#fff;border:1px solid var(--bd);border-radius:12px;padding:18px 20px">
+            <div style="font-size:14px;font-weight:600;margin-bottom:12px;color:var(--ink)">Today&rsquo;s visits — Monday, July 6</div>
+            <div style="display:flex;flex-direction:column">
+              <sc-for list="{{ todayVisits }}" as="v" hint-placeholder-count="3">
+                <div style="display:flex;align-items:center;gap:14px;padding:11px 2px;border-top:1px solid #F0EDE7">
+                  <div style="width:70px;font-size:12.5px;color:var(--mut);font-variant-numeric:tabular-nums">{{ v.time }}</div>
+                  <div style="flex:1;font-size:13.5px;font-weight:500;color:var(--ink)">{{ v.client }}</div>
+                  <div style="font-size:12px;color:var(--mut)">{{ v.typeLabel }} · {{ v.staff }}</div>
+                  <div style="{{ v.badgeStyle }}">{{ v.statusLabel }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ── CLIENTS ── -->
+        <sc-if value="{{ tabClients }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px">
+            <div>
+              <div style="font-family:'Source Serif 4',Georgia,serif;font-size:24px;font-weight:600;color:var(--head)">Clients</div>
+              <div style="font-size:13px;color:var(--mut);margin-top:4px">4 active · service plans current</div>
+            </div>
+            <button style="background:var(--btn);color:var(--btnFg);border:none;border-radius:9px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer" style-hover="opacity:.9">New client</button>
+          </div>
+          <input value="{{ clientSearch }}" onChange="{{ setClientSearch }}" placeholder="Search name or Medicaid ID…" style="width:290px;border:1px solid var(--bd);border-radius:9px;padding:10px 13px;font-size:13px;margin-bottom:14px;outline:none;background:#fff" style-focus="border-color:var(--acc)">
+          <div style="background:#fff;border:1px solid var(--bd);border-radius:12px;overflow:hidden">
+            <div style="display:grid;grid-template-columns:1.4fr 1fr .5fr .7fr .9fr 1.2fr;gap:8px;padding:11px 16px;font-size:10.5px;font-weight:700;letter-spacing:.1em;color:var(--mut);border-bottom:1px solid var(--bd)">
+              <div>NAME</div><div>MEDICAID ID</div><div>AGE</div><div>DIAGNOSES</div><div>AUTHORIZATION</div><div>CASE MANAGER · CCB</div>
+            </div>
+            <sc-for list="{{ filteredClients }}" as="c" hint-placeholder-count="4">
+              <div style="display:grid;grid-template-columns:1.4fr 1fr .5fr .7fr .9fr 1.2fr;gap:8px;padding:12px 16px;border-top:1px solid #F0EDE7;font-size:13px;align-items:center" style-hover="background:var(--page)">
+                <div style="font-weight:600;color:var(--ink)">{{ c.name }}</div>
+                <div style="font-variant-numeric:tabular-nums;color:var(--mut)">{{ c.medicaid }}</div>
+                <div style="font-variant-numeric:tabular-nums">{{ c.age }}</div>
+                <div><span style="background:var(--accSoft);color:var(--head);border-radius:99px;padding:2px 10px;font-size:11.5px;font-weight:600">{{ c.dx }}</span></div>
+                <div style="font-size:12px;color:var(--mut)">{{ c.auth }}</div>
+                <div style="color:var(--mut);font-size:12px">{{ c.cm }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <!-- ── SCHEDULE ── -->
+        <sc-if value="{{ tabSchedule }}" hint-placeholder-val="{{ false }}">
+          <div style="font-family:'Source Serif 4',Georgia,serif;font-size:24px;font-weight:600;color:var(--head)">Schedule</div>
+          <div style="font-size:13px;color:var(--mut);margin:4px 0 16px">Week of July 6. Select a visit, then reassign. Visits without a physician order are flagged and <strong style="color:var(--ink)">cannot be saved</strong>.</div>
+          <div style="display:flex;gap:10px;margin-bottom:12px;align-items:center">
+            <button onClick="{{ moveSelected }}" style="background:var(--btn);color:var(--btnFg);border:none;border-radius:9px;padding:10px 16px;font-size:13px;font-weight:600;cursor:pointer" style-hover="opacity:.9">Move selected → next day</button>
+            <sc-if value="{{ scheduleMsg }}" hint-placeholder-val="{{ false }}">
+              <div style="{{ scheduleMsgStyle }}">{{ scheduleMsg }}</div>
+            </sc-if>
+          </div>
+          <div style="background:#fff;border:1px solid var(--bd);border-radius:12px;overflow:hidden">
+            <div style="display:grid;grid-template-columns:130px repeat(5,1fr);font-size:10.5px;font-weight:700;letter-spacing:.1em;color:var(--mut);border-bottom:1px solid var(--bd)">
+              <div style="padding:11px 16px">STAFF</div>
+              <sc-for list="{{ weekDays }}" as="d" hint-placeholder-count="5">
+                <div style="padding:11px 8px">{{ d }}</div>
+              </sc-for>
+            </div>
+            <sc-for list="{{ scheduleRows }}" as="row" hint-placeholder-count="2">
+              <div style="display:grid;grid-template-columns:130px repeat(5,1fr);border-top:1px solid #F0EDE7">
+                <div style="padding:12px 16px;font-size:13px;font-weight:600;color:var(--ink)">{{ row.name }}</div>
+                <sc-for list="{{ row.days }}" as="day" hint-placeholder-count="5">
+                  <div style="padding:8px 6px;display:flex;flex-direction:column;gap:6px;border-left:1px solid #F5F2EC;min-height:64px">
+                    <sc-for list="{{ day.chips }}" as="chip" hint-placeholder-count="1">
+                      <button onClick="{{ chip.select }}" style="{{ chip.style }}">
+                        <span style="font-weight:600;font-size:12px;display:block">{{ chip.label }}</span>
+                        <span style="font-size:11px;opacity:.8">{{ chip.sub }}</span>
+                      </button>
+                    </sc-for>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <!-- ── STAFF & CREDENTIALS ── -->
+        <sc-if value="{{ tabStaff }}" hint-placeholder-val="{{ false }}">
+          <div style="font-family:'Source Serif 4',Georgia,serif;font-size:24px;font-weight:600;color:var(--head)">Staff &amp; credentials</div>
+          <div style="font-size:13px;color:var(--mut);margin:4px 0 18px">Licenses and required trainings. Expired credentials block claim generation.</div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <sc-for list="{{ staffRows }}" as="s" hint-placeholder-count="4">
+              <div style="background:#fff;border:1px solid var(--bd);border-radius:12px;padding:15px 18px;display:flex;flex-direction:column;gap:10px">
+                <div style="display:flex;align-items:center;gap:12px">
+                  <div style="flex:1">
+                    <span style="font-size:14px;font-weight:600;color:var(--ink)">{{ s.name }}</span>
+                    <span style="font-size:12px;color:var(--mut);margin-left:8px">{{ s.role }}</span>
+                  </div>
+                  <div style="{{ s.licBadge }}">{{ s.license }}</div>
+                  <sc-if value="{{ s.hasExpired }}" hint-placeholder-val="{{ false }}">
+                    <button onClick="{{ s.renew }}" style="background:var(--btn);color:var(--btnFg);border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer">Record renewal</button>
+                  </sc-if>
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:6px">
+                  <sc-for list="{{ s.trainings }}" as="t" hint-placeholder-count="3">
+                    <span style="{{ t.style }}">{{ t.label }}</span>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <!-- ── QA ── -->
+        <sc-if value="{{ tabQa }}" hint-placeholder-val="{{ false }}">
+          <div style="font-family:'Source Serif 4',Georgia,serif;font-size:24px;font-weight:600;color:var(--head)">Quality assurance</div>
+          <div style="font-size:13px;color:var(--mut);margin:4px 0 18px">{{ qaCount }} open flags. Resolve before billing export.</div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <sc-for list="{{ qaFlags }}" as="f" hint-placeholder-count="3">
+              <div style="display:flex;gap:14px;align-items:flex-start;background:#fff;border:1px solid var(--bd);border-radius:12px;padding:15px 18px">
+                <div style="{{ f.badgeStyle }}">{{ f.kind }}</div>
+                <div style="flex:1">
+                  <div style="font-size:13.5px;font-weight:600;color:var(--ink)">{{ f.client }} · <span style="color:var(--mut);font-weight:400">{{ f.date }}</span></div>
+                  <div style="font-size:12.5px;color:var(--mut);margin-top:3px">{{ f.detail }}</div>
+                </div>
+                <button onClick="{{ f.resolve }}" style="border:1px solid var(--bd);background:#fff;border-radius:8px;padding:7px 13px;font-size:12px;font-weight:600;cursor:pointer;color:var(--ink)" style-hover="background:var(--accSoft)">Mark resolved</button>
+              </div>
+            </sc-for>
+            <sc-if value="{{ qaEmpty }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#fff;border:1px dashed var(--bd);border-radius:12px;padding:28px;text-align:center;font-size:13px;color:var(--mut)">No open flags. All documentation is consistent.</div>
+            </sc-if>
+          </div>
+        </sc-if>
+
+        <!-- ── EVV REVIEW ── -->
+        <sc-if value="{{ tabEvv }}" hint-placeholder-val="{{ false }}">
+          <div style="font-family:'Source Serif 4',Georgia,serif;font-size:24px;font-weight:600;color:var(--head)">EVV review</div>
+          <div style="font-size:13px;color:var(--mut);margin:4px 0 18px">Electronic visit verification logs. Manual adjustments require a documented reason and are audit-logged.</div>
+          <div style="background:#fff;border:1px solid var(--bd);border-radius:12px;overflow:hidden;margin-bottom:18px">
+            <div style="display:grid;grid-template-columns:1.2fr .7fr .7fr .7fr .6fr 1.6fr;gap:8px;padding:11px 16px;font-size:10.5px;font-weight:700;letter-spacing:.1em;color:var(--mut);border-bottom:1px solid var(--bd)">
+              <div>VISIT</div><div>METHOD</div><div>CLOCK IN</div><div>CLOCK OUT</div><div>GPS DIST</div><div>ADJUSTMENT REASON</div>
+            </div>
+            <sc-for list="{{ evvRows }}" as="e" hint-placeholder-count="4">
+              <div style="display:grid;grid-template-columns:1.2fr .7fr .7fr .7fr .6fr 1.6fr;gap:8px;padding:12px 16px;border-top:1px solid #F0EDE7;font-size:13px;align-items:center">
+                <div style="font-weight:600;color:var(--ink)">{{ e.visit }}</div>
+                <div><span style="{{ e.methodBadge }}">{{ e.method }}</span></div>
+                <div style="font-variant-numeric:tabular-nums">{{ e.in }}</div>
+                <div style="font-variant-numeric:tabular-nums">{{ e.out }}</div>
+                <div style="color:var(--mut)">{{ e.dist }}</div>
+                <div style="font-size:12px;color:var(--mut)">{{ e.reason }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <sc-if value="{{ canManualAdjust }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#fff;border:1px solid var(--bd);border-radius:12px;padding:18px 20px">
+              <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:4px">Manual adjustment (Admin only)</div>
+              <div style="font-size:12px;color:var(--mut);margin-bottom:14px">A non-empty reason is required — the system rejects manual entries without one.</div>
+              <div style="display:grid;grid-template-columns:1.4fr .8fr .8fr;gap:10px;margin-bottom:10px">
+                <select value="{{ adjVisit }}" onChange="{{ setAdjVisit }}" style="border:1px solid var(--bd);border-radius:9px;padding:10px;font-size:13px;background:#fff">
+                  <option value="">Select visit…</option>
+                  <option value="Reyes · 07/06 SCC">Reyes · 07/06 SCC</option>
+                  <option value="Okafor · 07/06 Job Coaching">Okafor · 07/06 Job Coaching</option>
+                  <option value="Whitfield · 07/06 SCC">Whitfield · 07/06 SCC</option>
+                  <option value="Ramírez · 07/03 SCC">Ramírez · 07/03 SCC</option>
+                </select>
+                <input type="time" value="{{ adjIn }}" onChange="{{ setAdjIn }}" style="border:1px solid var(--bd);border-radius:9px;padding:10px;font-size:13px">
+                <input type="time" value="{{ adjOut }}" onChange="{{ setAdjOut }}" style="border:1px solid var(--bd);border-radius:9px;padding:10px;font-size:13px">
+              </div>
+              <textarea value="{{ adjReason }}" onChange="{{ setAdjReason }}" rows="2" placeholder="Reason for manual adjustment (required)…" style="width:100%;box-sizing:border-box;border:1px solid var(--bd);border-radius:9px;padding:10px;font-size:13px;resize:vertical;margin-bottom:10px"></textarea>
+              <div style="display:flex;gap:12px;align-items:center">
+                <button onClick="{{ submitAdj }}" style="background:var(--btn);color:var(--btnFg);border:none;border-radius:9px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer">Save manual entry</button>
+                <sc-if value="{{ evvMsg }}" hint-placeholder-val="{{ false }}">
+                  <div style="{{ evvMsgStyle }}">{{ evvMsg }}</div>
+                </sc-if>
+              </div>
+            </div>
+          </sc-if>
+        </sc-if>
+
+        <!-- ── eMAR OVERSIGHT ── -->
+        <sc-if value="{{ tabEmarAdmin }}" hint-placeholder-val="{{ false }}">
+          <div style="font-family:'Source Serif 4',Georgia,serif;font-size:24px;font-weight:600;color:var(--head)">eMAR oversight</div>
+          <div style="font-size:13px;color:var(--mut);margin:4px 0 16px">Agency-wide medication administration record.</div>
+          <div style="display:flex;gap:6px;margin-bottom:14px">
+            <sc-for list="{{ emarFilters }}" as="f" hint-placeholder-count="4">
+              <button onClick="{{ f.go }}" style="{{ f.style }}">{{ f.label }}</button>
+            </sc-for>
+          </div>
+          <div style="background:#fff;border:1px solid var(--bd);border-radius:12px;overflow:hidden">
+            <div style="display:grid;grid-template-columns:1.1fr 1.3fr .7fr .7fr .8fr .9fr;gap:8px;padding:11px 16px;font-size:10.5px;font-weight:700;letter-spacing:.1em;color:var(--mut);border-bottom:1px solid var(--bd)">
+              <div>CLIENT</div><div>MEDICATION</div><div>DUE</div><div>GIVEN</div><div>STATUS</div><div>BY</div>
+            </div>
+            <sc-for list="{{ emarRows }}" as="m" hint-placeholder-count="6">
+              <div style="display:grid;grid-template-columns:1.1fr 1.3fr .7fr .7fr .8fr .9fr;gap:8px;padding:12px 16px;border-top:1px solid #F0EDE7;font-size:13px;align-items:center">
+                <div style="font-weight:600;color:var(--ink)">{{ m.client }}</div>
+                <div>{{ m.med }}</div>
+                <div style="font-variant-numeric:tabular-nums;color:var(--mut)">{{ m.due }}</div>
+                <div style="font-variant-numeric:tabular-nums;color:var(--mut)">{{ m.given }}</div>
+                <div><span style="{{ m.badgeStyle }}">{{ m.status }}</span></div>
+                <div style="color:var(--mut);font-size:12px">{{ m.by }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <!-- ── AUDIT TRAIL ── -->
+        <sc-if value="{{ tabAudit }}" hint-placeholder-val="{{ false }}">
+          <div style="font-family:'Source Serif 4',Georgia,serif;font-size:24px;font-weight:600;color:var(--head)">Audit trail</div>
+          <div style="font-size:13px;color:var(--mut);margin:4px 0 16px">Every mutation on PHI-bearing records, written automatically. Read-only.</div>
+          <div style="background:#fff;border:1px solid var(--bd);border-radius:12px;overflow:hidden">
+            <div style="display:grid;grid-template-columns:.8fr .8fr .9fr .9fr 2.2fr;gap:8px;padding:11px 16px;font-size:10.5px;font-weight:700;letter-spacing:.1em;color:var(--mut);border-bottom:1px solid var(--bd)">
+              <div>TIME</div><div>ACTION</div><div>TABLE</div><div>PERFORMED BY</div><div>DETAIL</div>
+            </div>
+            <sc-for list="{{ auditRows }}" as="a" hint-placeholder-count="6">
+              <div style="display:grid;grid-template-columns:.8fr .8fr .9fr .9fr 2.2fr;gap:8px;padding:11px 16px;border-top:1px solid #F0EDE7;font-size:12.5px;align-items:center">
+                <div style="font-variant-numeric:tabular-nums;color:var(--mut)">{{ a.ts }}</div>
+                <div><span style="{{ a.badgeStyle }}">{{ a.action }}</span></div>
+                <div style="font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:var(--ink)">{{ a.table }}</div>
+                <div>{{ a.by }}</div>
+                <div style="color:var(--mut)">{{ a.detail }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <!-- ── BILLING (locked for Scheduler) ── -->
+        <sc-if value="{{ tabBillingLocked }}" hint-placeholder-val="{{ false }}">
+          <div style="font-family:'Source Serif 4',Georgia,serif;font-size:24px;font-weight:600;color:var(--head)">Billing</div>
+          <div style="max-width:460px;margin-top:24px;background:#fff;border:1px solid var(--bd);border-radius:12px;padding:28px;text-align:center">
+            <div style="font-size:28px;margin-bottom:10px">🔒</div>
+            <div style="font-size:14.5px;font-weight:600;color:var(--ink);margin-bottom:6px">Billing is restricted to Admins</div>
+            <div style="font-size:12.5px;color:var(--mut)">The Scheduler role can manage clients and visits but has no access to claim generation or billing exports. This mirrors the row-level security policy.</div>
+          </div>
+        </sc-if>
+        <sc-if value="{{ tabBillingOpen }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px">
+            <div>
+              <div style="font-family:'Source Serif 4',Georgia,serif;font-size:24px;font-weight:600;color:var(--head)">Billing</div>
+              <div style="font-size:13px;color:var(--mut);margin-top:4px">Claim readiness · unbilled progress notes</div>
+            </div>
+            <button onClick="{{ exportClaims }}" style="{{ exportBtnStyle }}">{{ exportBtnLabel }}</button>
+          </div>
+          <div style="background:#fff;border:1px solid var(--bd);border-radius:12px;overflow:hidden">
+            <div style="display:grid;grid-template-columns:36px 1.3fr .9fr .7fr .9fr .5fr 1.6fr;gap:8px;padding:11px 16px;font-size:10.5px;font-weight:700;letter-spacing:.1em;color:var(--mut);border-bottom:1px solid var(--bd)">
+              <div></div><div>CLIENT</div><div>MEDICAID ID</div><div>DATE</div><div>TYPE</div><div>UNITS</div><div>CLAIM STATUS</div>
+            </div>
+            <sc-for list="{{ billingRows }}" as="r" hint-placeholder-count="5">
+              <div style="{{ r.rowStyle }}">
+                <div><input type="checkbox" checked="{{ r.sel }}" disabled="{{ r.blocked }}" onChange="{{ r.toggle }}" style="width:16px;height:16px;accent-color:var(--btn)"></div>
+                <div style="font-weight:600;color:var(--ink)">{{ r.client }}</div>
+                <div style="font-variant-numeric:tabular-nums;color:var(--mut)">{{ r.medicaid }}</div>
+                <div style="font-variant-numeric:tabular-nums">{{ r.date }}</div>
+                <div>{{ r.type }}</div>
+                <div style="font-variant-numeric:tabular-nums">{{ r.units }}</div>
+                <div style="display:flex;flex-wrap:wrap;gap:4px"><span style="{{ r.badgeStyle }}">{{ r.status }}</span></div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <!-- ── PAYROLL ── -->
+        <sc-if value="{{ tabPayroll }}" hint-placeholder-val="{{ false }}">
+          <div style="font-family:'Source Serif 4',Georgia,serif;font-size:24px;font-weight:600;color:var(--head)">Payroll transmittal</div>
+          <div style="font-size:13px;color:var(--mut);margin:4px 0 18px">Pay period May 31 – Jun 13, 2026 · Paydate June 26, 2026. Hours flow from EVV-verified timesheets.</div>
+          <div style="background:#fff;border:1px solid var(--bd);border-radius:12px;overflow:hidden;margin-bottom:16px">
+            <div style="display:grid;grid-template-columns:1.4fr .9fr .6fr .6fr .6fr .6fr .7fr .6fr;gap:8px;padding:11px 16px;font-size:10.5px;font-weight:700;letter-spacing:.1em;color:var(--mut);border-bottom:1px solid var(--bd)">
+              <div>EMPLOYEE</div><div>ALL NOTES IN?</div><div>WK1 HRS</div><div>WK1 OT</div><div>WK2 HRS</div><div>WK2 OT</div><div>TOTAL REG</div><div>TOTAL OT</div>
+            </div>
+            <sc-for list="{{ payrollRows }}" as="p" hint-placeholder-count="6">
+              <div style="display:grid;grid-template-columns:1.4fr .9fr .6fr .6fr .6fr .6fr .7fr .6fr;gap:8px;padding:11px 16px;border-top:1px solid #F0EDE7;font-size:13px;align-items:center">
+                <div style="font-weight:600;color:var(--ink)">{{ p.name }}</div>
+                <div><button onClick="{{ p.toggleNotes }}" style="{{ p.notesStyle }}">{{ p.notesLabel }}</button></div>
+                <div style="font-variant-numeric:tabular-nums">{{ p.wk1 }}</div>
+                <div style="font-variant-numeric:tabular-nums;color:var(--mut)">{{ p.ot1 }}</div>
+                <div style="font-variant-numeric:tabular-nums">{{ p.wk2 }}</div>
+                <div style="font-variant-numeric:tabular-nums;color:var(--mut)">{{ p.ot2 }}</div>
+                <div style="font-variant-numeric:tabular-nums;font-weight:600">{{ p.totReg }}</div>
+                <div style="font-variant-numeric:tabular-nums;font-weight:600">{{ p.totOt }}</div>
+              </div>
+            </sc-for>
+            <div style="display:grid;grid-template-columns:1.4fr .9fr .6fr .6fr .6fr .6fr .7fr .6fr;gap:8px;padding:12px 16px;border-top:2px solid var(--bd);font-size:13px;font-weight:700;background:var(--page)">
+              <div>TOTALS</div><div></div><div></div><div></div><div></div><div></div>
+              <div style="font-variant-numeric:tabular-nums">{{ payrollTotReg }}</div>
+              <div style="font-variant-numeric:tabular-nums">{{ payrollTotOt }}</div>
+            </div>
+          </div>
+          <div style="background:#fff;border:1px solid var(--bd);border-radius:12px;padding:16px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--ink);cursor:pointer;flex:1;min-width:320px">
+              <input type="checkbox" checked="{{ payrollCertified }}" onChange="{{ toggleCertify }}" style="width:18px;height:18px;accent-color:var(--btn)">
+              I certify every note has been turned in and quality-checked to match the timesheets.
+            </label>
+            <button onClick="{{ submitPayroll }}" style="{{ payrollBtnStyle }}">Submit transmittal</button>
+            <sc-if value="{{ payrollMsg }}" hint-placeholder-val="{{ false }}">
+              <div style="{{ payrollMsgStyle }}">{{ payrollMsg }}</div>
+            </sc-if>
+          </div>
+        </sc-if>
+
+        <!-- ── REPORTS ── -->
+        <sc-if value="{{ tabReports }}" hint-placeholder-val="{{ false }}">
+          <div style="font-family:'Source Serif 4',Georgia,serif;font-size:24px;font-weight:600;color:var(--head)">Reports</div>
+          <div style="font-size:13px;color:var(--mut);margin:4px 0 18px">Units delivered vs. authorized — week of June 29.</div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px">
+            <sc-for list="{{ reportCards }}" as="rc" hint-placeholder-count="3">
+              <div style="background:#fff;border:1px solid var(--bd);border-radius:12px;padding:16px">
+                <div style="font-size:10.5px;font-weight:700;letter-spacing:.1em;color:var(--mut);margin-bottom:10px">{{ rc.label }}</div>
+                <div style="font-family:'Source Serif 4',Georgia,serif;font-size:30px;font-weight:600;color:var(--ink);line-height:1">{{ rc.value }}</div>
+                <div style="font-size:12px;color:var(--mut);margin-top:8px">{{ rc.sub }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="background:#fff;border:1px solid var(--bd);border-radius:12px;padding:18px 20px;display:flex;flex-direction:column;gap:14px">
+            <sc-for list="{{ reportRows }}" as="r" hint-placeholder-count="4">
+              <div>
+                <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
+                  <span style="font-size:13.5px;font-weight:600;color:var(--ink)">{{ r.name }}</span>
+                  <span style="font-size:12px;color:var(--mut)">{{ r.summary }}</span>
+                </div>
+                <div style="height:10px;border-radius:99px;background:var(--accSoft);overflow:hidden">
+                  <div style="{{ r.barStyle }}"></div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <!-- ── DOCUMENTS & NOTICES ── -->
+        <sc-if value="{{ tabDocuments }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px">
+            <div>
+              <div style="font-family:'Source Serif 4',Georgia,serif;font-size:24px;font-weight:600;color:var(--head)">Documents &amp; notices</div>
+              <div style="font-size:13px;color:var(--mut);margin-top:4px">Monthly billing notes, DVR reports, and employment notices.</div>
+            </div>
+            <button onClick="{{ toggleNoticeForm }}" style="background:var(--btn);color:var(--btnFg);border:none;border-radius:9px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer">{{ noticeFormBtnLabel }}</button>
+          </div>
+          <sc-if value="{{ showNoticeForm }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#fff;border:1px solid var(--bd);border-radius:12px;padding:18px 20px;margin-bottom:16px">
+              <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:12px">New DVR employment notice</div>
+              <div style="display:flex;gap:6px;margin-bottom:12px">
+                <sc-for list="{{ noticeTypes }}" as="nt" hint-placeholder-count="3">
+                  <button onClick="{{ nt.go }}" style="{{ nt.style }}">{{ nt.label }}</button>
+                </sc-for>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">
+                <select value="{{ nClient }}" onChange="{{ setNClient }}" style="border:1px solid var(--bd);border-radius:9px;padding:10px;font-size:13px;background:#fff">
+                  <option value="">Client…</option>
+                  <option value="Alma Reyes">Alma Reyes</option>
+                  <option value="Ben Okafor">Ben Okafor</option>
+                  <option value="Cora Whitfield">Cora Whitfield</option>
+                  <option value="Dev Ramírez">Dev Ramírez</option>
+                </select>
+                <input value="{{ nEmployer }}" onChange="{{ setNEmployer }}" placeholder="Employer (DBA)" style="border:1px solid var(--bd);border-radius:9px;padding:10px;font-size:13px">
+                <input value="{{ nJobTitle }}" onChange="{{ setNJobTitle }}" placeholder="Job title" style="border:1px solid var(--bd);border-radius:9px;padding:10px;font-size:13px">
+                <input value="{{ nSupervisor }}" onChange="{{ setNSupervisor }}" placeholder="Supervisor" style="border:1px solid var(--bd);border-radius:9px;padding:10px;font-size:13px">
+                <input value="{{ nPhone }}" onChange="{{ setNPhone }}" placeholder="Supervisor phone" style="border:1px solid var(--bd);border-radius:9px;padding:10px;font-size:13px">
+                <input value="{{ nWage }}" onChange="{{ setNWage }}" placeholder="Hourly wage (e.g. $15.00)" style="border:1px solid var(--bd);border-radius:9px;padding:10px;font-size:13px">
+                <input value="{{ nHours }}" onChange="{{ setNHours }}" placeholder="Hours worked / week" style="border:1px solid var(--bd);border-radius:9px;padding:10px;font-size:13px">
+                <input type="date" value="{{ nStart }}" onChange="{{ setNStart }}" style="border:1px solid var(--bd);border-radius:9px;padding:10px;font-size:13px">
+              </div>
+              <div style="display:flex;gap:12px;align-items:center">
+                <button onClick="{{ saveNotice }}" style="background:var(--btn);color:var(--btnFg);border:none;border-radius:9px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer">Save notice</button>
+                <sc-if value="{{ docMsg }}" hint-placeholder-val="{{ false }}">
+                  <div style="{{ docMsgStyle }}">{{ docMsg }}</div>
+                </sc-if>
+              </div>
+            </div>
+          </sc-if>
+          <div style="background:#fff;border:1px solid var(--bd);border-radius:12px;overflow:hidden">
+            <sc-for list="{{ documents }}" as="d" hint-placeholder-count="4">
+              <div style="display:flex;align-items:center;gap:14px;padding:13px 18px;border-top:1px solid #F0EDE7" style-hover="background:var(--page)">
+                <div style="{{ d.iconStyle }}">{{ d.icon }}</div>
+                <div style="flex:1">
+                  <div style="font-size:13.5px;font-weight:600;color:var(--ink)">{{ d.name }}</div>
+                  <div style="font-size:12px;color:var(--mut);margin-top:2px">{{ d.detail }}</div>
+                </div>
+                <div style="font-size:12px;color:var(--mut);font-variant-numeric:tabular-nums">{{ d.date }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <!-- ── MY VISITS (field-staff desktop) ── -->
+        <sc-if value="{{ tabMyVisits }}" hint-placeholder-val="{{ false }}">
+          <div style="font-family:'Source Serif 4',Georgia,serif;font-size:24px;font-weight:600;color:var(--head)">My visits</div>
+          <div style="font-size:13px;color:var(--mut);margin:4px 0 18px">Week of July 6 · Maria Vega</div>
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <sc-for list="{{ weekSchedule }}" as="d" hint-placeholder-count="5">
+              <div>
+                <div style="font-size:10.5px;font-weight:700;letter-spacing:.1em;color:var(--mut);margin-bottom:8px">{{ d.day }}</div>
+                <div style="display:flex;flex-direction:column;gap:8px">
+                  <sc-for list="{{ d.visits }}" as="v" hint-placeholder-count="2">
+                    <div style="background:#fff;border:1px solid var(--bd);border-radius:12px;padding:13px 16px;display:flex;justify-content:space-between;align-items:center">
+                      <div>
+                        <div style="font-size:13.5px;font-weight:600;color:var(--ink)">{{ v.client }}</div>
+                        <div style="font-size:12px;color:var(--mut)">{{ v.time }} · {{ v.type }}</div>
+                      </div>
+                      <span style="{{ v.badgeStyle }}">{{ v.tag }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="font-size:12px;color:var(--mut);margin-top:14px">Clock-in, notes, and eMAR actions happen in the mobile app — this desktop view is for review and documentation.</div>
+        </sc-if>
+
+        <!-- ── MY TIMESHEET (field-staff desktop) ── -->
+        <sc-if value="{{ tabMyTimesheet }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px">
+            <div>
+              <div style="font-family:'Source Serif 4',Georgia,serif;font-size:24px;font-weight:600;color:var(--head)">My timesheet</div>
+              <div style="font-size:13px;color:var(--mut);margin-top:4px">Route record · Jul 5 – Jul 11 · Codes: SCC · JC · DH · T</div>
+            </div>
+            <sc-if value="{{ tsNotSubmitted }}" hint-placeholder-val="{{ true }}">
+              <button onClick="{{ submitTimesheet }}" style="background:var(--btn);color:var(--btnFg);border:none;border-radius:9px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer">Submit to office</button>
+            </sc-if>
+            <sc-if value="{{ tsSubmitted }}" hint-placeholder-val="{{ false }}">
+              <span style="background:#E7F0E4;color:#39543A;border-radius:99px;padding:6px 14px;font-size:12px;font-weight:600">Submitted</span>
+            </sc-if>
+          </div>
+          <div style="background:#fff;border:1px solid var(--bd);border-radius:12px;overflow:hidden">
+            <div style="display:grid;grid-template-columns:.6fr .6fr .8fr .9fr .9fr .6fr;gap:8px;padding:11px 16px;font-size:10.5px;font-weight:700;letter-spacing:.1em;color:var(--mut);border-bottom:1px solid var(--bd)">
+              <div>CODE</div><div>PRS</div><div>DATE</div><div>START</div><div>END</div><div>HRS</div>
+            </div>
+            <sc-for list="{{ tsRows }}" as="r" hint-placeholder-count="6">
+              <div style="display:grid;grid-template-columns:.6fr .6fr .8fr .9fr .9fr .6fr;gap:8px;padding:11px 16px;border-top:1px solid #F0EDE7;font-size:12.5px;align-items:center">
+                <div><span style="{{ r.codeStyle }}">{{ r.code }}</span></div>
+                <div style="font-weight:600;color:var(--ink)">{{ r.client }}</div>
+                <div style="color:var(--mut);font-variant-numeric:tabular-nums">{{ r.date }}</div>
+                <div style="font-variant-numeric:tabular-nums">{{ r.start }}</div>
+                <div style="font-variant-numeric:tabular-nums">{{ r.end }}</div>
+                <div style="font-variant-numeric:tabular-nums;font-weight:600">{{ r.hrs }}</div>
+              </div>
+            </sc-for>
+            <div style="display:flex;justify-content:space-between;padding:12px 16px;border-top:2px solid var(--bd);font-size:13px;font-weight:700;background:var(--page)">
+              <span>Total hours</span><span style="font-variant-numeric:tabular-nums">{{ tsTotal }}</span>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ── TRAINING & LEARNING · RELIAS ── -->
+        <sc-if value="{{ tabRelias }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px">
+            <div>
+              <div style="font-family:'Source Serif 4',Georgia,serif;font-size:24px;font-weight:600;color:var(--head)">Training &amp; Learning</div>
+              <div style="font-size:13px;color:var(--mut);margin-top:4px">Relias LMS integration · roster synced nightly · last sync 07/06 2:00 AM</div>
+            </div>
+            <button onClick="{{ launchRelias }}" style="background:var(--btn);color:var(--btnFg);border:none;border-radius:9px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer">Launch Relias ↗</button>
+          </div>
+          <sc-if value="{{ reliasMsg }}" hint-placeholder-val="{{ false }}">
+            <div style="{{ reliasMsgStyle }};margin-bottom:14px">{{ reliasMsg }}</div>
+          </sc-if>
+          <div style="background:#fff;border:1px solid var(--bd);border-radius:12px;overflow:hidden">
+            <div style="display:grid;grid-template-columns:1.2fr 1.6fr .7fr .9fr .6fr;gap:8px;padding:11px 16px;font-size:10.5px;font-weight:700;letter-spacing:.1em;color:var(--mut);border-bottom:1px solid var(--bd)">
+              <div>EMPLOYEE</div><div>COURSE</div><div>DUE</div><div>STATUS</div><div>PROGRESS</div>
+            </div>
+            <sc-for list="{{ reliasRows }}" as="r" hint-placeholder-count="6">
+              <div style="display:grid;grid-template-columns:1.2fr 1.6fr .7fr .9fr .6fr;gap:8px;padding:12px 16px;border-top:1px solid #F0EDE7;font-size:13px;align-items:center">
+                <div style="font-weight:600;color:var(--ink)">{{ r.name }}</div>
+                <div>{{ r.course }}</div>
+                <div style="font-variant-numeric:tabular-nums;color:var(--mut)">{{ r.due }}</div>
+                <div><span style="{{ r.badgeStyle }}">{{ r.status }}</span></div>
+                <div style="font-variant-numeric:tabular-nums;color:var(--mut)">{{ r.pct }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="font-size:12px;color:var(--mut);margin-top:12px">Completions sync back to Staff &amp; credentials automatically; overdue required courses block claim generation.</div>
+        </sc-if>
+
+        <!-- ── SETTINGS & USERS ── -->
+        <sc-if value="{{ tabSettings }}" hint-placeholder-val="{{ false }}">
+          <div style="font-family:'Source Serif 4',Georgia,serif;font-size:24px;font-weight:600;color:var(--head)">Settings &amp; users</div>
+          <div style="font-size:13px;color:var(--mut);margin:4px 0 18px">Accounts, roles, and the permission matrix enforced by row-level security.</div>
+          <div style="background:#fff;border:1px solid var(--bd);border-radius:12px;overflow:hidden;margin-bottom:16px">
+            <div style="display:grid;grid-template-columns:1.4fr 1.4fr .9fr .8fr .9fr;gap:8px;padding:11px 16px;font-size:10.5px;font-weight:700;letter-spacing:.1em;color:var(--mut);border-bottom:1px solid var(--bd)">
+              <div>NAME</div><div>EMAIL</div><div>ROLE</div><div>STATUS</div><div></div>
+            </div>
+            <sc-for list="{{ userRows }}" as="u" hint-placeholder-count="5">
+              <div style="display:grid;grid-template-columns:1.4fr 1.4fr .9fr .8fr .9fr;gap:8px;padding:11px 16px;border-top:1px solid #F0EDE7;font-size:13px;align-items:center">
+                <div style="font-weight:600;color:var(--ink)">{{ u.name }}</div>
+                <div style="color:var(--mut);font-size:12.5px">{{ u.email }}</div>
+                <div>{{ u.role }}</div>
+                <div><span style="{{ u.badgeStyle }}">{{ u.status }}</span></div>
+                <div><button onClick="{{ u.toggle }}" style="border:1px solid var(--bd);background:#fff;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;color:var(--ink)">{{ u.action }}</button></div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="background:#fff;border:1px solid var(--bd);border-radius:12px;padding:16px 20px;margin-bottom:16px">
+            <div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:12px">Add user</div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+              <input value="{{ uName }}" onChange="{{ setUName }}" placeholder="Full name" style="border:1px solid var(--bd);border-radius:9px;padding:10px;font-size:13px;width:180px">
+              <input value="{{ uEmail }}" onChange="{{ setUEmail }}" placeholder="Email" style="border:1px solid var(--bd);border-radius:9px;padding:10px;font-size:13px;width:200px">
+              <select value="{{ uRole }}" onChange="{{ setURole }}" style="border:1px solid var(--bd);border-radius:9px;padding:10px;font-size:13px;background:#fff">
+                <option value="Field Staff">Field Staff</option>
+                <option value="Scheduler">Scheduler</option>
+                <option value="Admin">Admin</option>
+              </select>
+              <button onClick="{{ addUser }}" style="background:var(--btn);color:var(--btnFg);border:none;border-radius:9px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer">Add</button>
+              <sc-if value="{{ settingsMsg }}" hint-placeholder-val="{{ false }}">
+                <div style="{{ settingsMsgStyle }}">{{ settingsMsg }}</div>
+              </sc-if>
+            </div>
+          </div>
+          <div style="background:#fff;border:1px solid var(--bd);border-radius:12px;overflow:hidden;margin-bottom:16px">
+            <div style="padding:14px 18px;border-bottom:1px solid var(--bd)">
+              <div style="font-size:14px;font-weight:600;color:var(--ink)">Menu configuration (per role)</div>
+              <div style="font-size:12px;color:var(--mut);margin-top:2px">Choose which sections each role sees — applies to both desktop and mobile menus. Admin always sees everything; Billing, Payroll, Staff, and Settings stay Admin-only.</div>
+            </div>
+            <div style="display:grid;grid-template-columns:1.6fr 1fr 1fr;gap:8px;padding:10px 18px;font-size:10.5px;font-weight:700;letter-spacing:.1em;color:var(--mut)">
+              <div>SECTION</div><div>SCHEDULER</div><div>FIELD STAFF</div>
+            </div>
+            <sc-for list="{{ configRows }}" as="c" hint-placeholder-count="9">
+              <div style="display:grid;grid-template-columns:1.6fr 1fr 1fr;gap:8px;padding:9px 18px;border-top:1px solid #F0EDE7;font-size:12.5px;align-items:center">
+                <div style="font-weight:600;color:var(--ink)">{{ c.label }}</div>
+                <div><input type="checkbox" checked="{{ c.schedOn }}" onChange="{{ c.schedToggle }}" style="width:16px;height:16px;accent-color:var(--btn)"></div>
+                <div><input type="checkbox" checked="{{ c.fieldOn }}" onChange="{{ c.fieldToggle }}" style="width:16px;height:16px;accent-color:var(--btn)"></div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="background:#fff;border:1px solid var(--bd);border-radius:12px;overflow:hidden">
+            <div style="padding:14px 18px;font-size:14px;font-weight:600;color:var(--ink);border-bottom:1px solid var(--bd)">Permission matrix (enforced by RLS)</div>
+            <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:8px;padding:10px 18px;font-size:10.5px;font-weight:700;letter-spacing:.1em;color:var(--mut)">
+              <div>DATA</div><div>ADMIN</div><div>SCHEDULER</div><div>FIELD STAFF</div>
+            </div>
+            <sc-for list="{{ permRows }}" as="p" hint-placeholder-count="6">
+              <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:8px;padding:10px 18px;border-top:1px solid #F0EDE7;font-size:12.5px;align-items:center">
+                <div style="font-weight:600;color:var(--ink)">{{ p.data }}</div>
+                <div style="color:var(--mut)">{{ p.admin }}</div>
+                <div style="color:var(--mut)">{{ p.scheduler }}</div>
+                <div style="color:var(--mut)">{{ p.field }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+      </div>
+    </div>
+
+    <!-- 837P export modal -->
+    <sc-if value="{{ showExport }}" hint-placeholder-val="{{ false }}">
+      <div style="position:fixed;inset:0;background:rgba(43,36,56,.5);display:grid;place-items:center;z-index:50" onClick="{{ closeExport }}">
+        <div style="background:#fff;border-radius:16px;width:640px;max-width:90vw;max-height:80vh;display:flex;flex-direction:column;overflow:hidden" onClick="{{ stopClick }}">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--bd)">
+            <div style="font-family:'Source Serif 4',Georgia,serif;font-size:17px;font-weight:600;color:var(--head)">837P export — {{ exportCount }} claim(s)</div>
+            <button onClick="{{ closeExport }}" style="border:none;background:var(--page);border-radius:8px;width:28px;height:28px;cursor:pointer;font-size:14px;color:var(--mut)">✕</button>
+          </div>
+          <pre style="margin:0;padding:18px 20px;overflow:auto;font-size:11.5px;line-height:1.55;font-family:ui-monospace,Menlo,monospace;background:var(--page);flex:1;color:var(--ink)">{{ exportText }}</pre>
+          <div style="padding:14px 20px;border-top:1px solid var(--bd);display:flex;justify-content:flex-end">
+            <button onClick="{{ closeExport }}" style="background:var(--btn);color:var(--btnFg);border:none;border-radius:9px;padding:10px 20px;font-size:13px;font-weight:600;cursor:pointer">Download file</button>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+  </sc-if>
+
+  <!-- ══ FIELD (mobile) ══ -->
+  <sc-if value="{{ isField }}" hint-placeholder-val="{{ true }}">
+    <div style="display:flex;justify-content:center;padding-top:6px">
+      <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="390px,844px">
+        <div style="height:100%;display:flex;flex-direction:column;background:var(--page);font-family:'IBM Plex Sans',system-ui,sans-serif;position:relative">
+
+          <!-- hamburger drawer — mirrors the role's desktop menu -->
+          <sc-if value="{{ drawerOpen }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute;inset:0;z-index:40;display:flex">
+              <div style="width:272px;background:var(--side);height:100%;display:flex;flex-direction:column;overflow-y:auto;padding:58px 0 12px;box-sizing:border-box">
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:0 14px 8px">
+                  <div style="font-family:'Source Serif 4',Georgia,serif;font-size:15px;font-weight:600;color:#fff">Menu</div>
+                  <button onClick="{{ closeDrawer }}" style="border:none;background:rgba(255,255,255,.12);color:#fff;border-radius:8px;min-width:34px;min-height:34px;cursor:pointer;font-size:13px">✕</button>
+                </div>
+                <sc-for list="{{ drawerGroups }}" as="grp" hint-placeholder-count="3">
+                  <button onClick="{{ grp.toggle }}" style="display:flex;align-items:center;gap:6px;width:100%;box-sizing:border-box;border:none;background:none;cursor:pointer;padding:12px 16px 6px;font-size:10px;font-weight:700;letter-spacing:.14em;color:var(--sideFg);opacity:.85;text-align:left;min-height:32px">
+                    <span style="font-size:8px">{{ grp.caret }}</span>{{ grp.label }}
+                  </button>
+                  <sc-if value="{{ grp.open }}" hint-placeholder-val="{{ true }}">
+                    <div style="display:flex;flex-direction:column;gap:2px;padding:0 10px">
+                      <sc-for list="{{ grp.items }}" as="nav" hint-placeholder-count="4">
+                        <button onClick="{{ nav.go }}" style="{{ nav.style }}">
+                          <span style="flex:none">{{ nav.icon }}</span><span>{{ nav.text }}</span><span style="{{ nav.suffixStyle }}">{{ nav.suffix }}</span>
+                        </button>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+                </sc-for>
+                <div style="margin-top:auto;padding:14px 16px 56px;border-top:1px solid rgba(255,255,255,.12);font-size:11.5px;color:var(--sideFg)">Signed in as <strong style="color:#fff">{{ userName }}</strong> · {{ userRole }}</div>
+              </div>
+              <div style="flex:1;background:rgba(20,14,30,.45)" onClick="{{ closeDrawer }}"></div>
+            </div>
+          </sc-if>
+
+          <div style="flex:none;display:flex;align-items:center;justify-content:space-between;padding:62px 16px 12px;background:#fff;border-bottom:1px solid var(--bd)">
+            <div style="display:flex;align-items:center;gap:8px">
+              <button onClick="{{ openDrawer }}" title="Menu" style="border:none;background:var(--accSoft);color:var(--head);border-radius:8px;min-width:34px;min-height:34px;cursor:pointer;font-size:15px">☰</button>
+              <sc-if value="{{ fieldBack }}" hint-placeholder-val="{{ false }}">
+                <button onClick="{{ goFieldBack }}" style="border:none;background:var(--accSoft);color:var(--head);border-radius:8px;min-width:34px;min-height:34px;cursor:pointer;font-size:16px">‹</button>
+              </sc-if>
+              <div style="font-family:'Source Serif 4',Georgia,serif;font-size:17px;font-weight:600;color:var(--head)">{{ fieldTitle }}</div>
+            </div>
+            <div style="{{ syncPillStyle }}">{{ syncPillLabel }}</div>
+          </div>
+
+          <div style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px">
+
+            <!-- TODAY / HOME (user-selectable style, default Visits) -->
+            <sc-if value="{{ fieldHome }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+                <div style="font-size:12.5px;color:var(--mut)">Monday, July 6 · 3 visits</div>
+                <div style="display:flex;gap:3px;background:#fff;border:1px solid var(--bd);border-radius:9px;padding:3px">
+                  <button onClick="{{ homeVisitsGo }}" style="{{ homeVisitsBtn }}">Visits</button>
+                  <button onClick="{{ homeDashGo }}" style="{{ homeDashBtn }}">Dashboard</button>
+                </div>
+              </div>
+              <sc-if value="{{ homeIsDash }}" hint-placeholder-val="{{ false }}">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                  <sc-for list="{{ myStatCards }}" as="st" hint-placeholder-count="4">
+                    <div style="background:#fff;border:1px solid var(--bd);border-radius:14px;padding:14px">
+                      <div style="font-size:10px;font-weight:700;letter-spacing:.09em;color:var(--mut);margin-bottom:8px">{{ st.label }}</div>
+                      <div style="font-family:'Source Serif 4',Georgia,serif;font-size:24px;font-weight:600;color:var(--ink);line-height:1">{{ st.value }}</div>
+                      <div style="font-size:11px;color:var(--mut);margin-top:6px">{{ st.sub }}</div>
+                    </div>
+                  </sc-for>
+                </div>
+                <div style="font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--mut);margin-top:4px">TODAY&rsquo;S VISITS</div>
+              </sc-if>
+              <sc-for list="{{ fieldVisits }}" as="v" hint-placeholder-count="3">
+                <button onClick="{{ v.open }}" style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:#fff;border:1px solid var(--bd);border-radius:14px;padding:15px 16px;min-height:44px;cursor:pointer;text-align:left" style-active="background:var(--accSoft)">
+                  <div>
+                    <div style="font-size:15px;font-weight:600;color:var(--ink)">{{ v.client }}</div>
+                    <div style="font-size:12.5px;color:var(--mut);margin-top:2px">{{ v.time }} · {{ v.typeLabel }}</div>
+                  </div>
+                  <div style="{{ v.badgeStyle }}">{{ v.statusLabel }}</div>
+                </button>
+              </sc-for>
+              <button onClick="{{ openEmar }}" style="background:#fff;border:1px solid var(--bd);border-radius:14px;padding:15px;min-height:44px;font-size:14px;font-weight:600;cursor:pointer;color:var(--head)" style-active="background:var(--accSoft)">eMAR — medication list</button>
+            </sc-if>
+
+            <!-- MY WEEK -->
+            <sc-if value="{{ fieldWeekOpen }}" hint-placeholder-val="{{ false }}">
+              <sc-for list="{{ weekSchedule }}" as="d" hint-placeholder-count="5">
+                <div>
+                  <div style="font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--mut);margin-bottom:6px">{{ d.day }}</div>
+                  <div style="display:flex;flex-direction:column;gap:8px">
+                    <sc-for list="{{ d.visits }}" as="v" hint-placeholder-count="2">
+                      <div style="background:#fff;border:1px solid var(--bd);border-radius:12px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center">
+                        <div>
+                          <div style="font-size:13.5px;font-weight:600;color:var(--ink)">{{ v.client }}</div>
+                          <div style="font-size:12px;color:var(--mut)">{{ v.time }} · {{ v.type }}</div>
+                        </div>
+                        <span style="{{ v.badgeStyle }}">{{ v.tag }}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+              </sc-for>
+            </sc-if>
+
+            <!-- VISIT DETAIL -->
+            <sc-if value="{{ fieldVisitOpen }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#fff;border:1px solid var(--bd);border-radius:14px;padding:16px">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start">
+                  <div>
+                    <div style="font-family:'Source Serif 4',Georgia,serif;font-size:19px;font-weight:600;color:var(--head)">{{ avClient }}</div>
+                    <div style="font-size:12.5px;color:var(--mut);margin-top:3px">{{ avTime }} · {{ avType }}</div>
+                  </div>
+                  <button onClick="{{ openClientInfo }}" style="border:1px solid var(--bd);background:#fff;border-radius:9px;padding:8px 12px;font-size:12px;font-weight:600;color:var(--head);cursor:pointer;min-height:36px">Client info</button>
+                </div>
+              </div>
+
+              <sc-if value="{{ avShowClockIn }}" hint-placeholder-val="{{ true }}">
+                <button onClick="{{ doClockIn }}" style="background:var(--btn);color:var(--btnFg);border:none;border-radius:14px;min-height:60px;font-size:17px;font-weight:600;cursor:pointer" style-active="opacity:.85">{{ clockInLabel }}</button>
+              </sc-if>
+              <sc-if value="{{ avShowClockOut }}" hint-placeholder-val="{{ false }}">
+                <button onClick="{{ doClockOut }}" style="background:#A94438;color:#fff;border:none;border-radius:14px;min-height:60px;font-size:17px;font-weight:600;cursor:pointer" style-active="opacity:.85">{{ clockOutLabel }}</button>
+              </sc-if>
+              <sc-if value="{{ avDone }}" hint-placeholder-val="{{ false }}">
+                <div style="background:#E7F0E4;color:#39543A;border-radius:12px;padding:14px;text-align:center;font-size:13.5px;font-weight:500">Visit clocked: {{ avClockSummary }}</div>
+              </sc-if>
+              <sc-if value="{{ clockMsg }}" hint-placeholder-val="{{ false }}">
+                <div style="{{ clockMsgStyle }}">{{ clockMsg }}</div>
+              </sc-if>
+
+              <sc-if value="{{ avIsScc }}" hint-placeholder-val="{{ false }}">
+                <div style="background:#fff;border:1px solid var(--bd);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px">
+                  <div style="display:flex;justify-content:space-between;align-items:baseline">
+                    <div style="font-size:10.5px;font-weight:700;letter-spacing:.1em;color:var(--mut)">NMT TRIPS</div>
+                    <span style="{{ tripCountBadge }}">{{ tripCountLabel }}</span>
+                  </div>
+                  <input value="{{ tripDest }}" onChange="{{ setTripDest }}" placeholder="Destination (e.g. Goodwill, Michaels)" style="border:1px solid var(--bd);border-radius:9px;padding:10px;font-size:13.5px;min-height:44px;box-sizing:border-box">
+                  <input value="{{ tripPurpose }}" onChange="{{ setTripPurpose }}" placeholder="Purpose (e.g. community shopping outing)" style="border:1px solid var(--bd);border-radius:9px;padding:10px;font-size:13.5px;min-height:44px;box-sizing:border-box">
+                  <button onClick="{{ logTrip }}" style="background:#fff;border:2px solid var(--btn);color:var(--btn);border-radius:12px;min-height:46px;font-size:14px;font-weight:600;cursor:pointer" style-active="background:var(--accSoft)">Log NMT trip</button>
+                  <sc-if value="{{ tripMsg }}" hint-placeholder-val="{{ false }}">
+                    <div style="{{ tripMsgStyle }}">{{ tripMsg }}</div>
+                  </sc-if>
+                </div>
+              </sc-if>
+
+              <div style="background:#fff;border:1px solid var(--bd);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px">
+                <div style="font-size:10.5px;font-weight:700;letter-spacing:.1em;color:var(--mut)">PHOTOS &amp; DOCUMENTS</div>
+                <sc-for list="{{ avAttachments }}" as="a" hint-placeholder-count="1">
+                  <div style="display:flex;align-items:center;gap:10px">
+                    <div style="{{ a.iconStyle }}">{{ a.kind }}</div>
+                    <div style="flex:1;font-size:13px;font-weight:500;color:var(--ink)">{{ a.name }}</div>
+                    <span style="{{ a.badgeStyle }}">{{ a.status }}</span>
+                  </div>
+                </sc-for>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                  <button onClick="{{ addPhoto }}" style="background:#fff;border:2px solid var(--btn);color:var(--btn);border-radius:12px;min-height:46px;font-size:13.5px;font-weight:600;cursor:pointer" style-active="background:var(--accSoft)">📷 Add photo</button>
+                  <button onClick="{{ addDoc }}" style="background:#fff;border:1px solid var(--bd);color:var(--ink);border-radius:12px;min-height:46px;font-size:13.5px;font-weight:500;cursor:pointer" style-active="background:var(--accSoft)">Add document</button>
+                </div>
+                <div style="font-size:11px;color:var(--mut)">Uploads sync to secure S3 storage and appear in Documents on desktop.</div>
+              </div>
+
+              <sc-if value="{{ avCanNote }}" hint-placeholder-val="{{ false }}">
+                <sc-if value="{{ avNoteSubmitted }}" hint-placeholder-val="{{ false }}">
+                  <div style="background:#E7F0E4;color:#39543A;border-radius:12px;padding:14px;text-align:center;font-size:13.5px;font-weight:500">✓ Progress note submitted{{ avQueuedSuffix }}</div>
+                </sc-if>
+                <sc-if value="{{ avNoteNotSubmitted }}" hint-placeholder-val="{{ false }}">
+                  <button onClick="{{ openNote }}" style="background:#fff;border:2px solid var(--btn);color:var(--btn);border-radius:14px;min-height:52px;font-size:15px;font-weight:600;cursor:pointer" style-active="background:var(--accSoft)">Progress note</button>
+                </sc-if>
+              </sc-if>
+            </sc-if>
+
+            <!-- CLIENT INFO -->
+            <sc-if value="{{ fieldClientOpen }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#fff;border:1px solid var(--bd);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:4px">
+                <div style="font-family:'Source Serif 4',Georgia,serif;font-size:19px;font-weight:600;color:var(--head)">{{ ciName }}</div>
+                <div style="font-size:12.5px;color:var(--mut)">Medicaid ID {{ ciMedicaid }} · Age {{ ciAge }}</div>
+              </div>
+              <sc-for list="{{ ciSections }}" as="sec" hint-placeholder-count="4">
+                <div style="background:#fff;border:1px solid var(--bd);border-radius:14px;padding:16px">
+                  <div style="font-size:10.5px;font-weight:700;letter-spacing:.1em;color:var(--mut);margin-bottom:8px">{{ sec.label }}</div>
+                  <div style="font-size:13.5px;color:var(--ink);line-height:1.55;white-space:pre-line">{{ sec.body }}</div>
+                </div>
+              </sc-for>
+            </sc-if>
+
+            <!-- PROGRESS NOTE -->
+            <sc-if value="{{ fieldNoteOpen }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;align-items:baseline;justify-content:space-between">
+                <div style="font-size:12.5px;color:var(--mut)">{{ avClient }} · {{ avType }}</div>
+                <div style="font-size:11.5px;color:var(--mut)">{{ autosaveLabel }}</div>
+              </div>
+
+              <div style="background:#fff;border:1px solid var(--bd);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px">
+                <div style="font-size:10.5px;font-weight:700;letter-spacing:.1em;color:var(--mut)">SERVICE TIME</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                  <label style="font-size:12px;color:var(--mut)">Start<input type="time" value="{{ noteStart }}" onChange="{{ setNoteStart }}" style="display:block;width:100%;box-sizing:border-box;margin-top:4px;border:1px solid var(--bd);border-radius:9px;padding:10px;font-size:14px;min-height:44px"></label>
+                  <label style="font-size:12px;color:var(--mut)">End<input type="time" value="{{ noteEnd }}" onChange="{{ setNoteEnd }}" style="display:block;width:100%;box-sizing:border-box;margin-top:4px;border:1px solid var(--bd);border-radius:9px;padding:10px;font-size:14px;min-height:44px"></label>
+                </div>
+                <div style="font-size:13px;color:var(--mut)">Billable: <strong style="color:var(--ink);font-family:'Source Serif 4',Georgia,serif;font-size:16px">{{ noteHours }} hrs ({{ noteUnits }} units)</strong> <span style="font-size:11.5px">(15 min = 1 unit)</span></div>
+              </div>
+
+              <div style="background:#fff;border:1px solid var(--bd);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:6px">
+                <div style="font-size:10.5px;font-weight:700;letter-spacing:.1em;color:var(--mut);margin-bottom:6px">GOALS ADDRESSED</div>
+                <sc-for list="{{ noteGoals }}" as="g" hint-placeholder-count="4">
+                  <div style="display:flex;flex-direction:column;gap:6px">
+                    <label style="display:flex;align-items:center;gap:12px;min-height:44px;cursor:pointer">
+                      <input type="checkbox" checked="{{ g.checked }}" onChange="{{ g.toggle }}" style="width:20px;height:20px;accent-color:var(--btn)">
+                      <span style="font-size:14px;font-weight:500;color:var(--ink)">{{ g.label }}</span>
+                    </label>
+                    <sc-if value="{{ g.checked }}" hint-placeholder-val="{{ false }}">
+                      <input value="{{ g.progress }}" onChange="{{ g.setProgress }}" placeholder="Progress observed…" style="border:1px solid var(--bd);border-radius:9px;padding:10px;font-size:13px;min-height:44px;box-sizing:border-box">
+                    </sc-if>
+                  </div>
+                </sc-for>
+              </div>
+
+              <div style="background:#fff;border:1px solid var(--bd);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px">
+                <div style="font-size:10.5px;font-weight:700;letter-spacing:.1em;color:var(--mut)">MEETING NOTES (NARRATIVE)</div>
+                <textarea value="{{ noteNarrative }}" onChange="{{ setNarrative }}" rows="5" placeholder="Describe specific services provided, client response, redirection, observations…" style="border:1px solid var(--bd);border-radius:9px;padding:10px;font-size:13.5px;resize:vertical;box-sizing:border-box"></textarea>
+                <label style="display:flex;align-items:center;gap:12px;min-height:44px;cursor:pointer">
+                  <input type="checkbox" checked="{{ noteRedirection }}" onChange="{{ toggleRedirection }}" style="width:20px;height:20px;accent-color:var(--btn)">
+                  <span style="font-size:13px;color:var(--ink)">Client redirection was required and is documented above</span>
+                </label>
+                <label style="display:flex;align-items:center;gap:12px;min-height:44px;cursor:pointer">
+                  <input type="checkbox" checked="{{ noteCancelled }}" onChange="{{ toggleCancelled }}" style="width:20px;height:20px;accent-color:var(--btn)">
+                  <span style="font-size:13px;color:var(--ink)">A meeting was cancelled this period</span>
+                </label>
+                <sc-if value="{{ noteCancelled }}" hint-placeholder-val="{{ false }}">
+                  <input value="{{ cancelReason }}" onChange="{{ setCancelReason }}" placeholder="Date(s) cancelled &amp; reason why…" style="border:1px solid var(--bd);border-radius:9px;padding:10px;font-size:13px;min-height:44px;box-sizing:border-box">
+                </sc-if>
+              </div>
+
+              <sc-if value="{{ noteIsJc }}" hint-placeholder-val="{{ false }}">
+                <div style="background:#fff;border:1px solid var(--bd);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px">
+                  <div style="font-size:10.5px;font-weight:700;letter-spacing:.1em;color:var(--mut)">DVR SUPPORTED EMPLOYMENT</div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                    <input value="{{ seAuth }}" onChange="{{ setSeAuth }}" placeholder="DVR Authorization #" style="border:1px solid var(--bd);border-radius:9px;padding:10px;font-size:13.5px;min-height:44px;box-sizing:border-box">
+                    <select value="{{ seMilestone }}" onChange="{{ setSeMilestone }}" style="border:1px solid var(--bd);border-radius:9px;padding:10px;font-size:13.5px;min-height:44px;background:#fff">
+                      <option value="1">Milestone 1</option><option value="2">Milestone 2</option><option value="3">Milestone 3</option>
+                    </select>
+                    <input value="{{ seEmployer }}" onChange="{{ setSeEmployer }}" placeholder="Employer" style="border:1px solid var(--bd);border-radius:9px;padding:10px;font-size:13.5px;min-height:44px;box-sizing:border-box">
+                    <input value="{{ seGoal }}" onChange="{{ setSeGoal }}" placeholder="Employment goal" style="border:1px solid var(--bd);border-radius:9px;padding:10px;font-size:13.5px;min-height:44px;box-sizing:border-box">
+                    <input value="{{ seSupervisor }}" onChange="{{ setSeSupervisor }}" placeholder="Supervisor" style="border:1px solid var(--bd);border-radius:9px;padding:10px;font-size:13.5px;min-height:44px;box-sizing:border-box">
+                    <input value="{{ seCumHours }}" onChange="{{ setSeCumHours }}" placeholder="Cumulative hrs (milestone)" style="border:1px solid var(--bd);border-radius:9px;padding:10px;font-size:13.5px;min-height:44px;box-sizing:border-box">
+                  </div>
+                  <textarea value="{{ seDuties }}" onChange="{{ setSeDuties }}" rows="3" placeholder="Job duties completed &amp; supports provided…" style="border:1px solid var(--bd);border-radius:9px;padding:10px;font-size:13.5px;resize:vertical;box-sizing:border-box"></textarea>
+                  <label style="display:flex;align-items:center;gap:12px;min-height:44px;cursor:pointer">
+                    <input type="checkbox" checked="{{ seUpc }}" onChange="{{ toggleSeUpc }}" style="width:20px;height:20px;accent-color:var(--btn)">
+                    <span style="font-size:13px;color:var(--ink)">UPC rotation prompted</span>
+                  </label>
+                </div>
+              </sc-if>
+
+              <div style="background:#fff;border:1px solid var(--bd);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:14px">
+                <div style="font-size:10.5px;font-weight:700;letter-spacing:.1em;color:var(--mut)">SIGNATURES</div>
+                <sc-for list="{{ signatures }}" as="s" hint-placeholder-count="2">
+                  <div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                      <span style="font-size:13px;font-weight:600;color:var(--ink)">{{ s.label }}</span>
+                      <sc-if value="{{ s.signed }}" hint-placeholder-val="{{ false }}">
+                        <button onClick="{{ s.clear }}" style="border:none;background:none;color:var(--mut);font-size:12px;cursor:pointer;min-height:32px">Clear</button>
+                      </sc-if>
+                    </div>
+                    <sc-if value="{{ s.signed }}" hint-placeholder-val="{{ false }}">
+                      <div style="border:1px solid var(--bd);border-radius:10px;background:#fff;height:88px;display:grid;place-items:center">
+                        <svg width="180" height="56" viewBox="0 0 180 56"><path d="M8 40 C 24 8, 34 46, 48 30 S 72 12, 84 34 S 108 50, 122 26 S 150 18, 172 36" fill="none" stroke="#3E3355" stroke-width="2.2" stroke-linecap="round"></path></svg>
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{ s.unsigned }}" hint-placeholder-val="{{ true }}">
+                      <button onClick="{{ s.sign }}" style="width:100%;border:1.5px dashed #C9C3B8;border-radius:10px;background:var(--page);height:88px;font-size:13px;color:var(--mut);cursor:pointer" style-active="background:var(--accSoft)">Tap to sign</button>
+                    </sc-if>
+                  </div>
+                </sc-for>
+              </div>
+
+              <sc-if value="{{ noteError }}" hint-placeholder-val="{{ false }}">
+                <div style="background:#F6E3E0;color:#8C3A2F;border-radius:10px;padding:12px 14px;font-size:13px">{{ noteError }}</div>
+              </sc-if>
+              <button onClick="{{ submitNote }}" style="background:var(--btn);color:var(--btnFg);border:none;border-radius:14px;min-height:56px;font-size:16px;font-weight:600;cursor:pointer" style-active="opacity:.85">Submit note</button>
+              <div style="text-align:center;font-size:11.5px;color:var(--mut);padding-bottom:8px">Works offline — syncs automatically when you reconnect.</div>
+            </sc-if>
+
+            <!-- TIMESHEET -->
+            <sc-if value="{{ fieldTsOpen }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#fff;border:1px solid var(--bd);border-radius:14px;padding:16px">
+                <div style="display:flex;justify-content:space-between;align-items:baseline">
+                  <div style="font-size:13.5px;font-weight:600;color:var(--ink)">Route record · Jul 5 – Jul 11</div>
+                  <sc-if value="{{ tsSubmitted }}" hint-placeholder-val="{{ false }}">
+                    <span style="background:#E7F0E4;color:#39543A;border-radius:99px;padding:3px 10px;font-size:11px;font-weight:600">Submitted</span>
+                  </sc-if>
+                </div>
+                <div style="font-size:11.5px;color:var(--mut);margin-top:2px">Codes: SCC · JC (job coaching) · DH (day hab) · T (transport)</div>
+              </div>
+              <div style="background:#fff;border:1px solid var(--bd);border-radius:14px;overflow:hidden">
+                <div style="display:grid;grid-template-columns:.6fr .6fr .8fr .9fr .9fr .6fr;gap:6px;padding:10px 14px;font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--mut);border-bottom:1px solid var(--bd)">
+                  <div>CODE</div><div>PRS</div><div>DATE</div><div>START</div><div>END</div><div>HRS</div>
+                </div>
+                <sc-for list="{{ tsRows }}" as="r" hint-placeholder-count="6">
+                  <div style="display:grid;grid-template-columns:.6fr .6fr .8fr .9fr .9fr .6fr;gap:6px;padding:11px 14px;border-top:1px solid #F0EDE7;font-size:12.5px;align-items:center">
+                    <div><span style="{{ r.codeStyle }}">{{ r.code }}</span></div>
+                    <div style="font-weight:600;color:var(--ink)">{{ r.client }}</div>
+                    <div style="color:var(--mut);font-variant-numeric:tabular-nums">{{ r.date }}</div>
+                    <div style="font-variant-numeric:tabular-nums">{{ r.start }}</div>
+                    <div style="font-variant-numeric:tabular-nums">{{ r.end }}</div>
+                    <div style="font-variant-numeric:tabular-nums;font-weight:600">{{ r.hrs }}</div>
+                  </div>
+                </sc-for>
+                <div style="display:flex;justify-content:space-between;padding:12px 14px;border-top:2px solid var(--bd);font-size:13px;font-weight:700;background:var(--page)">
+                  <span>Total hours</span><span style="font-variant-numeric:tabular-nums">{{ tsTotal }}</span>
+                </div>
+              </div>
+              <sc-if value="{{ tsNotSubmitted }}" hint-placeholder-val="{{ true }}">
+                <button onClick="{{ submitTimesheet }}" style="background:var(--btn);color:var(--btnFg);border:none;border-radius:14px;min-height:52px;font-size:15px;font-weight:600;cursor:pointer" style-active="opacity:.85">Submit timesheet to office</button>
+              </sc-if>
+              <sc-if value="{{ tsSubmitted }}" hint-placeholder-val="{{ false }}">
+                <div style="background:#E7F0E4;color:#39543A;border-radius:12px;padding:14px;text-align:center;font-size:13px;font-weight:500">Submitted to office · appears on the payroll transmittal.</div>
+              </sc-if>
+            </sc-if>
+
+            <!-- eMAR -->
+            <sc-if value="{{ fieldEmarOpen }}" hint-placeholder-val="{{ false }}">
+              <div style="font-size:12.5px;color:var(--mut)">Current shift · Alma Reyes</div>
+              <sc-for list="{{ meds }}" as="m" hint-placeholder-count="3">
+                <div style="background:#fff;border:1px solid var(--bd);border-radius:14px;padding:15px 16px;display:flex;flex-direction:column;gap:12px">
+                  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+                    <div>
+                      <div style="font-size:14.5px;font-weight:600;color:var(--ink)">{{ m.name }} · {{ m.dose }}</div>
+                      <div style="font-size:12.5px;color:var(--mut);margin-top:2px">{{ m.route }} · due {{ m.due }}</div>
+                    </div>
+                    <div style="{{ m.badgeStyle }}">{{ m.status }}</div>
+                  </div>
+                  <sc-if value="{{ m.pending }}" hint-placeholder-val="{{ true }}">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                      <button onClick="{{ m.administer }}" style="background:var(--btn);color:var(--btnFg);border:none;border-radius:10px;min-height:44px;font-size:13.5px;font-weight:600;cursor:pointer" style-active="opacity:.85">Administered</button>
+                      <button onClick="{{ m.refuse }}" style="background:#fff;border:1px solid var(--bd);border-radius:10px;min-height:44px;font-size:13.5px;font-weight:500;cursor:pointer;color:var(--ink)" style-active="background:var(--accSoft)">Refused</button>
+                    </div>
+                  </sc-if>
+                </div>
+              </sc-for>
+            </sc-if>
+
+            <!-- RELIAS -->
+            <sc-if value="{{ fieldReliasOpen }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#fff;border:1px solid var(--bd);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px">
+                <div style="font-size:10.5px;font-weight:700;letter-spacing:.1em;color:var(--mut)">RELIAS</div>
+                <div style="font-size:13px;color:var(--ink);line-height:1.5">Your assigned courses sync from the Relias Learning Management System. Completions update your credentials automatically.</div>
+                <button onClick="{{ launchRelias }}" style="background:var(--btn);color:var(--btnFg);border:none;border-radius:12px;min-height:48px;font-size:14.5px;font-weight:600;cursor:pointer" style-active="opacity:.85">Launch Relias ↗</button>
+                <sc-if value="{{ reliasMsg }}" hint-placeholder-val="{{ false }}">
+                  <div style="{{ reliasMsgStyle }}">{{ reliasMsg }}</div>
+                </sc-if>
+              </div>
+              <sc-for list="{{ myRelias }}" as="c" hint-placeholder-count="3">
+                <div style="background:#fff;border:1px solid var(--bd);border-radius:14px;padding:15px 16px;display:flex;justify-content:space-between;align-items:center;gap:10px">
+                  <div>
+                    <div style="font-size:14px;font-weight:600;color:var(--ink)">{{ c.course }}</div>
+                    <div style="font-size:12px;color:var(--mut);margin-top:2px">{{ c.sub }}</div>
+                  </div>
+                  <span style="{{ c.badgeStyle }}">{{ c.status }}</span>
+                </div>
+              </sc-for>
+            </sc-if>
+
+            <!-- MOBILE ROLE SECTIONS (opened from the drawer; mirror desktop) -->
+            <sc-if value="{{ mDashOpen }}" hint-placeholder-val="{{ false }}">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                <sc-for list="{{ statCards }}" as="st" hint-placeholder-count="4">
+                  <button onClick="{{ st.goMobile }}" style="text-align:left;background:#fff;border:1px solid var(--bd);border-radius:14px;padding:14px;cursor:pointer" style-active="background:var(--accSoft)">
+                    <div style="font-size:10px;font-weight:700;letter-spacing:.09em;color:var(--mut);margin-bottom:8px">{{ st.label }}</div>
+                    <div style="font-family:'Source Serif 4',Georgia,serif;font-size:24px;font-weight:600;color:var(--ink);line-height:1">{{ st.value }}</div>
+                    <div style="font-size:11px;color:var(--mut);margin-top:6px">{{ st.sub }}</div>
+                  </button>
+                </sc-for>
+              </div>
+              <div style="font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--mut)">TODAY&rsquo;S VISITS</div>
+              <sc-for list="{{ todayVisits }}" as="v" hint-placeholder-count="3">
+                <div style="background:#fff;border:1px solid var(--bd);border-radius:12px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center">
+                  <div>
+                    <div style="font-size:13.5px;font-weight:600;color:var(--ink)">{{ v.client }}</div>
+                    <div style="font-size:12px;color:var(--mut)">{{ v.time }} · {{ v.typeLabel }} · {{ v.staff }}</div>
+                  </div>
+                  <span style="{{ v.badgeStyle }}">{{ v.statusLabel }}</span>
+                </div>
+              </sc-for>
+            </sc-if>
+
+            <sc-if value="{{ mClientsOpen }}" hint-placeholder-val="{{ false }}">
+              <input value="{{ clientSearch }}" onChange="{{ setClientSearch }}" placeholder="Search name or Medicaid ID…" style="border:1px solid var(--bd);border-radius:10px;padding:12px;font-size:14px;min-height:44px;background:#fff;box-sizing:border-box">
+              <sc-for list="{{ filteredClients }}" as="c" hint-placeholder-count="4">
+                <div style="background:#fff;border:1px solid var(--bd);border-radius:14px;padding:14px 16px">
+                  <div style="font-size:14.5px;font-weight:600;color:var(--ink)">{{ c.name }}</div>
+                  <div style="font-size:12px;color:var(--mut);margin-top:3px">{{ c.medicaid }} · Age {{ c.age }}</div>
+                  <div style="font-size:12px;color:var(--mut);margin-top:2px">{{ c.auth }}</div>
+                  <div style="font-size:12px;color:var(--mut);margin-top:2px">{{ c.cm }}</div>
+                </div>
+              </sc-for>
+            </sc-if>
+
+            <sc-if value="{{ mQaOpen }}" hint-placeholder-val="{{ false }}">
+              <sc-for list="{{ qaFlags }}" as="f" hint-placeholder-count="3">
+                <div style="background:#fff;border:1px solid var(--bd);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:8px">
+                  <div><span style="{{ f.badgeStyle }}">{{ f.kind }}</span></div>
+                  <div style="font-size:13.5px;font-weight:600;color:var(--ink)">{{ f.client }} · <span style="color:var(--mut);font-weight:400">{{ f.date }}</span></div>
+                  <div style="font-size:12.5px;color:var(--mut)">{{ f.detail }}</div>
+                  <button onClick="{{ f.resolve }}" style="border:1px solid var(--bd);background:#fff;border-radius:10px;min-height:44px;font-size:13px;font-weight:600;cursor:pointer;color:var(--ink)" style-active="background:var(--accSoft)">Mark resolved</button>
+                </div>
+              </sc-for>
+              <sc-if value="{{ qaEmpty }}" hint-placeholder-val="{{ false }}">
+                <div style="background:#fff;border:1px dashed var(--bd);border-radius:14px;padding:24px;text-align:center;font-size:13px;color:var(--mut)">No open flags.</div>
+              </sc-if>
+            </sc-if>
+
+            <sc-if value="{{ mEmarAdminOpen }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;gap:6px;flex-wrap:wrap">
+                <sc-for list="{{ emarFilters }}" as="f" hint-placeholder-count="4">
+                  <button onClick="{{ f.go }}" style="{{ f.style }}">{{ f.label }}</button>
+                </sc-for>
+              </div>
+              <sc-for list="{{ emarRows }}" as="m" hint-placeholder-count="6">
+                <div style="background:#fff;border:1px solid var(--bd);border-radius:14px;padding:13px 16px;display:flex;justify-content:space-between;align-items:center;gap:10px">
+                  <div>
+                    <div style="font-size:13.5px;font-weight:600;color:var(--ink)">{{ m.client }}</div>
+                    <div style="font-size:12px;color:var(--mut);margin-top:2px">{{ m.med }} · due {{ m.due }} · by {{ m.by }}</div>
+                  </div>
+                  <span style="{{ m.badgeStyle }}">{{ m.status }}</span>
+                </div>
+              </sc-for>
+            </sc-if>
+
+            <sc-if value="{{ mAuditOpen }}" hint-placeholder-val="{{ false }}">
+              <sc-for list="{{ auditRows }}" as="a" hint-placeholder-count="6">
+                <div style="background:#fff;border:1px solid var(--bd);border-radius:14px;padding:13px 16px">
+                  <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+                    <span style="{{ a.badgeStyle }}">{{ a.action }}</span>
+                    <span style="font-size:11px;color:var(--mut);font-variant-numeric:tabular-nums">{{ a.ts }}</span>
+                  </div>
+                  <div style="font-size:12.5px;color:var(--ink);margin-top:6px"><span style="font-family:ui-monospace,Menlo,monospace;font-size:11px">{{ a.table }}</span> · {{ a.by }}</div>
+                  <div style="font-size:12px;color:var(--mut);margin-top:2px">{{ a.detail }}</div>
+                </div>
+              </sc-for>
+            </sc-if>
+
+            <sc-if value="{{ mDocumentsOpen }}" hint-placeholder-val="{{ false }}">
+              <sc-for list="{{ documents }}" as="d" hint-placeholder-count="4">
+                <div style="background:#fff;border:1px solid var(--bd);border-radius:14px;padding:13px 16px;display:flex;align-items:center;gap:12px">
+                  <div style="{{ d.iconStyle }}">{{ d.icon }}</div>
+                  <div style="flex:1">
+                    <div style="font-size:13px;font-weight:600;color:var(--ink)">{{ d.name }}</div>
+                    <div style="font-size:11.5px;color:var(--mut);margin-top:2px">{{ d.detail }}</div>
+                  </div>
+                </div>
+              </sc-for>
+            </sc-if>
+
+            <sc-if value="{{ mReliasOpen }}" hint-placeholder-val="{{ false }}">
+              <button onClick="{{ launchRelias }}" style="background:var(--btn);color:var(--btnFg);border:none;border-radius:12px;min-height:48px;font-size:14.5px;font-weight:600;cursor:pointer" style-active="opacity:.85">Launch Relias ↗</button>
+              <sc-if value="{{ reliasMsg }}" hint-placeholder-val="{{ false }}">
+                <div style="{{ reliasMsgStyle }}">{{ reliasMsg }}</div>
+              </sc-if>
+              <sc-for list="{{ reliasRows }}" as="r" hint-placeholder-count="6">
+                <div style="background:#fff;border:1px solid var(--bd);border-radius:14px;padding:13px 16px;display:flex;justify-content:space-between;align-items:center;gap:10px">
+                  <div>
+                    <div style="font-size:13.5px;font-weight:600;color:var(--ink)">{{ r.course }}</div>
+                    <div style="font-size:12px;color:var(--mut);margin-top:2px">{{ r.name }} · due {{ r.due }} · {{ r.pct }}</div>
+                  </div>
+                  <span style="{{ r.badgeStyle }}">{{ r.status }}</span>
+                </div>
+              </sc-for>
+            </sc-if>
+
+            <sc-if value="{{ mDeskOnlyOpen }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#fff;border:1px solid var(--bd);border-radius:14px;padding:28px 20px;text-align:center;display:flex;flex-direction:column;gap:8px">
+                <div style="font-size:26px">🖥</div>
+                <div style="font-size:15px;font-weight:600;color:var(--ink)">{{ deskOnlyLabel }} is a desktop workspace</div>
+                <div style="font-size:12.5px;color:var(--mut);line-height:1.5">Wide tables and bulk actions live in the desktop app. Switch to Desktop in the top bar — your data is the same in both.</div>
+              </div>
+            </sc-if>
+
+            <!-- MORE -->
+            <sc-if value="{{ fieldMoreOpen }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#fff;border:1px solid var(--bd);border-radius:14px;padding:16px;display:flex;align-items:center;gap:12px">
+                <div style="width:44px;height:44px;border-radius:99px;background:var(--accSoft);color:var(--head);display:grid;place-items:center;font-size:14px;font-weight:700">MV</div>
+                <div>
+                  <div style="font-size:15px;font-weight:600;color:var(--ink)">Maria Vega</div>
+                  <div style="font-size:12px;color:var(--mut)">Field Staff · Greeley, CO</div>
+                </div>
+              </div>
+              <sc-for list="{{ moreItems }}" as="mi" hint-placeholder-count="3">
+                <button onClick="{{ mi.go }}" style="display:flex;align-items:center;justify-content:space-between;background:#fff;border:1px solid var(--bd);border-radius:14px;padding:15px 16px;min-height:52px;cursor:pointer;text-align:left" style-active="background:var(--accSoft)">
+                  <div>
+                    <div style="font-size:14px;font-weight:600;color:var(--ink)">{{ mi.label }}</div>
+                    <div style="font-size:12px;color:var(--mut);margin-top:2px">{{ mi.sub }}</div>
+                  </div>
+                  <span style="color:var(--mut);font-size:16px">›</span>
+                </button>
+              </sc-for>
+            </sc-if>
+
+            <!-- TRAINING -->
+            <sc-if value="{{ fieldTrainingOpen }}" hint-placeholder-val="{{ false }}">
+              <sc-for list="{{ myTrainings }}" as="t" hint-placeholder-count="3">
+                <div style="background:#fff;border:1px solid var(--bd);border-radius:14px;padding:15px 16px;display:flex;justify-content:space-between;align-items:center">
+                  <div>
+                    <div style="font-size:14px;font-weight:600;color:var(--ink)">{{ t.course }}</div>
+                    <div style="font-size:12px;color:var(--mut);margin-top:2px">Expires {{ t.exp }}</div>
+                  </div>
+                  <span style="{{ t.badgeStyle }}">{{ t.status }}</span>
+                </div>
+              </sc-for>
+              <div style="font-size:11.5px;color:var(--mut);text-align:center;padding:4px">Expired credentials block claim generation for your visits.</div>
+            </sc-if>
+
+          </div>
+
+          <!-- bottom tab bar (field staff daily workflow only) -->
+          <sc-if value="{{ showFieldTabs }}" hint-placeholder-val="{{ true }}">
+            <div style="flex:none;display:grid;grid-template-columns:repeat(4,1fr);gap:2px;background:#fff;border-top:1px solid var(--bd);padding:8px 10px 6px">
+              <sc-for list="{{ fieldTabs }}" as="t" hint-placeholder-count="4">
+                <button onClick="{{ t.go }}" style="{{ t.style }}">
+                  <span style="font-size:17px;display:block">{{ t.icon }}</span>{{ t.label }}
+                </button>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+      </x-import>
+    </div>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;$preview&quot;: {},
+  &quot;textSize&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;default&quot;: &quot;+1 pt&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;options&quot;: [&quot;standard&quot;, &quot;+1 pt&quot;, &quot;+2 pt&quot;], &quot;section&quot;: &quot;Accessibility&quot; },
+  &quot;theme&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;default&quot;: &quot;duet&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;options&quot;: [&quot;plum&quot;, &quot;sage&quot;, &quot;duet&quot;], &quot;section&quot;: &quot;Theme&quot; },
+  &quot;defaultDevice&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;default&quot;: &quot;mobile&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;options&quot;: [&quot;mobile&quot;, &quot;desk&quot;], &quot;section&quot;: &quot;Prototype&quot; }
+}">
+class Component extends DCLogic {
+  state = {
+    surface: null, theme: null,
+    device: null, actor: null,
+    drawerOpen: false, homeStyle: 'visits', deskOnlyLabel: null,
+    attachments: [{ id: 'a1', visit: 'v1', name: 'wheelchair-ramp.jpg', kind: 'IMG', status: 'Synced to S3' }],
+    menuConfig: {
+      scheduler: { clients: true, schedule: true, qa: true, evv: true, emarAdmin: false, audit: false, documents: false, reports: false, relias: true },
+      field: { clients: true, schedule: false, qa: false, evv: false, emarAdmin: false, audit: false, documents: true, reports: false, relias: true }
+    },
+    adminTab: 'dashboard',
+    sideCollapsed: false,
+    // Sections start collapsed by default, except CORE (the member area)
+    groupsClosed: { 'COMPLIANCE': true, 'BUSINESS': true, 'TRAINING & LEARNING': true, 'SYSTEM': true },
+    clientSearch: '',
+    selectedChip: null,
+    scheduleMsg: null, scheduleErr: false,
+    chips: [
+      { id: 'p1', staff: 0, day: 0, label: 'Reyes', sub: '9:00a · SCC', order: true },
+      { id: 'p2', staff: 0, day: 0, label: 'Okafor', sub: '1:00p · Job C.', order: true },
+      { id: 'p3', staff: 0, day: 2, label: 'Whitfield', sub: '10:00a · SCC', order: true },
+      { id: 'p4', staff: 1, day: 1, label: 'Ramírez', sub: '9:30a · SCC', order: false },
+      { id: 'p5', staff: 1, day: 3, label: 'Reyes', sub: '2:00p · SCC', order: true },
+      { id: 'p6', staff: 1, day: 4, label: 'Okafor', sub: '11:00a · Job C.', order: true }
+    ],
+    qaResolved: {},
+    billingSel: { b1: true, b4: true },
+    showExport: false,
+    evvLogs: [
+      { id: 'e1', visit: 'Reyes · 07/02 SCC', method: 'GPS', in: '9:01 AM', out: '11:04 AM', dist: '18 m', reason: '—' },
+      { id: 'e2', visit: 'Okafor · 07/01 Job C.', method: 'GPS', in: '1:04 PM', out: '2:58 PM', dist: '26 m', reason: '—' },
+      { id: 'e3', visit: 'Whitfield · 06/30 SCC', method: 'Telephony', in: '4:02 PM', out: '5:31 PM', dist: '—', reason: '—' },
+      { id: 'e4', visit: 'Ramírez · 06/28 SCC', method: 'Manual', in: '9:30 AM', out: '12:00 PM', dist: '—', reason: 'Device battery died mid-visit (adjusted by K. Sandoval)' }
+    ],
+    adjForm: { visit: '', in: '', out: '', reason: '' },
+    evvMsg: null, evvErr: false,
+    emarFilter: 'All',
+    emarHistory: [
+      { client: 'Ben Okafor', med: 'Risperidone · 1 mg', due: '07/01 2:00 PM', given: '2:15 PM', status: 'Administered', by: 'M. Vega' },
+      { client: 'Cora Whitfield', med: 'Metformin · 500 mg', due: '06/30 5:00 PM', given: '5:05 PM', status: 'Administered', by: 'D. Price' },
+      { client: 'Dev Ramírez', med: 'Sertraline · 25 mg', due: '06/28 10:00 AM', given: '—', status: 'Refused', by: 'D. Price' },
+      { client: 'Alma Reyes', med: 'Lisinopril · 10 mg', due: '06/26 9:00 AM', given: '—', status: 'Missed', by: '—' }
+    ],
+    auditRows: [
+      { ts: '07/06 9:02 AM', action: 'UPDATE', table: 'visits', by: 'T. Alvarez', detail: 'Visit status Scheduled → In_Progress (Reyes 07/06)' },
+      { ts: '07/03 4:41 PM', action: 'INSERT', table: 'progress_notes', by: 'M. Vega', detail: 'New note · Ramírez 07/03 · 5 units' },
+      { ts: '07/02 11:05 AM', action: 'INSERT', table: 'evv_logs', by: 'M. Vega', detail: 'GPS clock-out · Reyes 07/02' },
+      { ts: '07/01 2:16 PM', action: 'INSERT', table: 'medication_logs', by: 'M. Vega', detail: 'Risperidone 1 mg Administered · Okafor' },
+      { ts: '06/28 1:10 PM', action: 'UPDATE', table: 'evv_logs', by: 'K. Sandoval', detail: 'Manual adjustment · Ramírez 06/28 · reason recorded' },
+      { ts: '06/26 8:30 AM', action: 'UPDATE', table: 'users', by: 'K. Sandoval', detail: 'C. Torres status Active → Suspended' }
+    ],
+    staffCreds: [
+      { id: 's1', name: 'Maria Vega', role: 'Field Staff', license: 'QMAP #4412 · exp 03/2027', licOk: true, trainings: [{ c: 'CPR/First Aid', exp: '03/2027', ok: true }, { c: 'Abuse & Neglect Reporting', exp: '08/2026', ok: true }, { c: 'Safety-Care', exp: '01/2027', ok: true }] },
+      { id: 's2', name: 'Devon Price', role: 'Field Staff', license: 'QMAP #5108 · exp 09/2026', licOk: true, trainings: [{ c: 'CPR/First Aid', exp: '09/2026', ok: true }, { c: 'Abuse & Neglect Reporting', exp: '02/2027', ok: true }] },
+      { id: 's3', name: 'Lesley Martinez', role: 'Field Staff', license: 'QMAP #3327 · exp 05/2027', licOk: true, trainings: [{ c: 'CPR/First Aid', exp: '05/2027', ok: true }, { c: 'Safety-Care', exp: '11/2026', ok: true }] },
+      { id: 's4', name: 'Celine Torres', role: 'Field Staff', license: 'QMAP #4890 · expired 06/15/26', licOk: false, trainings: [{ c: 'CPR/First Aid', exp: '06/15/26', ok: false }, { c: 'Abuse & Neglect Reporting', exp: '10/2026', ok: true }] }
+    ],
+    payroll: [
+      { id: 'pr1', name: 'Vega, Maria', notesIn: true, wk1: 40, ot1: 0.25, wk2: 37.25, ot2: 0 },
+      { id: 'pr2', name: 'Price, Devon', notesIn: true, wk1: 36.5, ot1: 0, wk2: 40, ot2: 4.25 },
+      { id: 'pr3', name: 'Martinez, Lesley', notesIn: true, wk1: 40, ot1: 2.5, wk2: 40, ot2: 5.5 },
+      { id: 'pr4', name: 'Torres, Celine', notesIn: false, wk1: 4.25, ot1: 0, wk2: 14, ot2: 0 },
+      { id: 'pr5', name: 'Romero, Ray', notesIn: true, wk1: 26.5, ot1: 0, wk2: 29.5, ot2: 0 },
+      { id: 'pr6', name: 'Shockley, Marian', notesIn: false, wk1: 40, ot1: 8, wk2: 40, ot2: 4.5 }
+    ],
+    payrollCertified: false, payrollMsg: null, payrollErr: false,
+    documents: [
+      { icon: 'DVR', name: 'Employment Notice — Job Stability · D. Ramírez', detail: 'Walgreens · Warehouse/stocker · $15.00/hr · 4–7 hrs/wk', date: '10/07/25' },
+      { icon: 'SCC', name: 'State SLS Billing — SCC + NMT · A. Reyes', detail: 'June 2026 · 15.25 hrs (61 units) SCC · 8 NMT trips', date: '06/30/26' },
+      { icon: 'DVR', name: 'DVR Monthly Progress — Job Coaching · B. Okafor', detail: 'June 2026 · Milestone 1 · 18 cumulative hrs', date: '06/30/26' },
+      { icon: 'SCC', name: 'State SLS Billing — SCC + NMT · C. Whitfield', detail: 'June 2026 · 12.5 hrs (50 units) SCC · 6 NMT trips', date: '06/30/26' }
+    ],
+    showNoticeForm: false,
+    noticeForm: { type: 'Notice of Employment', client: '', employer: '', jobTitle: '', supervisor: '', phone: '', wage: '', hours: '', start: '' },
+    docMsg: null, docErr: false,
+    users: [
+      { id: 'u1', name: 'K. Sandoval', email: 'ksandoval@durablelifeskills.com', role: 'Admin', status: 'Active' },
+      { id: 'u2', name: 'T. Alvarez', email: 'talvarez@durablelifeskills.com', role: 'Scheduler', status: 'Active' },
+      { id: 'u3', name: 'Maria Vega', email: 'mvega@durablelifeskills.com', role: 'Field Staff', status: 'Active' },
+      { id: 'u4', name: 'Devon Price', email: 'dprice@durablelifeskills.com', role: 'Field Staff', status: 'Active' },
+      { id: 'u5', name: 'Celine Torres', email: 'ctorres@durablelifeskills.com', role: 'Field Staff', status: 'Suspended' }
+    ],
+    userForm: { name: '', email: '', role: 'Field Staff' },
+    settingsMsg: null,
+    // field
+    fieldScreen: 'home',
+    activeVisitId: null,
+    visits: [
+      { id: 'v1', client: 'Alma Reyes', time: '9:00 – 11:00 AM', type: 'SCC' },
+      { id: 'v2', client: 'Ben Okafor', time: '1:00 – 3:00 PM', type: 'Job_Coaching' },
+      { id: 'v3', client: 'Cora Whitfield', time: '4:00 – 5:30 PM', type: 'SCC' }
+    ],
+    clock: {}, clockBusy: false, clockMsg: null, clockErr: false, gpsAttempts: {}, submitted: {},
+    trips: [{ client: 'Alma Reyes', date: '07/02', dest: 'Goodwill & McDonald\u2019s', purpose: 'Community shopping outing' }],
+    tripForm: { dest: '', purpose: '' }, tripMsg: null, tripErr: false,
+    note: {
+      start: '09:00', end: '11:05', narrative: '', redirection: false, cancelled: false, cancelReason: '',
+      goals: [
+        { label: 'Community integration', checked: true, progress: 'Chose and completed craft activity' },
+        { label: 'Independent living skills', checked: false, progress: '' },
+        { label: 'Communication', checked: false, progress: '' },
+        { label: 'Self-advocacy', checked: false, progress: '' }
+      ],
+      seAuth: '978665', seMilestone: '1', seEmployer: '', seGoal: 'Customer Service', seSupervisor: '', seCumHours: '18', seDuties: '', seUpc: false,
+      sigClient: false, sigCaregiver: false
+    },
+    noteSavedAt: null, noteError: null,
+    tsRows: [
+      { code: 'T', client: 'AR', date: '07/02', start: '8:45 AM', end: '9:15 AM', hrs: 0.5 },
+      { code: 'SCC', client: 'AR', date: '07/02', start: '9:15 AM', end: '11:15 AM', hrs: 2 },
+      { code: 'T', client: 'AR', date: '07/02', start: '11:15 AM', end: '11:45 AM', hrs: 0.5 },
+      { code: 'JC', client: 'BO', date: '07/01', start: '1:00 PM', end: '3:00 PM', hrs: 2 },
+      { code: 'DH', client: 'CW', date: '06/30', start: '4:00 PM', end: '5:30 PM', hrs: 1.5 }
+    ],
+    tsSubmitted: false,
+    meds: [
+      { id: 'm1', name: 'Risperidone', dose: '1 mg', route: 'PO', due: '9:30 AM', status: 'Missed' },
+      { id: 'm2', name: 'Sertraline', dose: '50 mg', route: 'PO', due: '10:00 AM', status: 'Missed' },
+      { id: 'm3', name: 'Albuterol', dose: '2 puffs', route: 'Inhaled', due: '12:00 PM', status: 'Missed' }
+    ],
+    online: true, pending: 0, syncing: false, lastSync: '9:02 AM'
+  };
+
+  THEMES = {
+    plum: { acc: '#6B5A86', accSoft: '#EFEAF5', side: '#453A5E', sideFg: '#CFC7E0', page: '#F6F4F0', bd: '#E7E3DB', ink: '#2B2438', mut: '#716B80', head: '#3E3355', btn: '#6B5A86', btnFg: '#FFFFFF' },
+    sage: { acc: '#5F7161', accSoft: '#E9EFE7', side: '#2E4238', sideFg: '#B9CBBB', page: '#F5F5F0', bd: '#E4E4DA', ink: '#25322A', mut: '#68756B', head: '#37503F', btn: '#5F7161', btnFg: '#FFFFFF' },
+    duet: { acc: '#6B5A86', accSoft: '#EFEAF5', side: '#4A3D63', sideFg: '#CFC7E0', page: '#F7F5F1', bd: '#E7E3DB', ink: '#2B2438', mut: '#716B80', head: '#4A3D63', btn: '#5F7161', btnFg: '#FFFFFF' }
+  };
+
+  componentDidMount() {
+    this.applyTheme();
+    try {
+      const raw = localStorage.getItem('dls-cms-proto-v2');
+      if (raw) this.setState({ ...JSON.parse(raw), clockBusy: false, syncing: false });
+    } catch (e) { /* fresh start */ }
+  }
+  componentDidUpdate() {
+    this.applyTheme();
+    try { localStorage.setItem('dls-cms-proto-v2', JSON.stringify(this.state)); } catch (e) { /* full */ }
+  }
+  applyTheme() {
+    const t = this.THEMES[this.state.theme || this.props.theme || 'duet'] || this.THEMES.duet;
+    Object.entries(t).forEach(([k, v]) => document.body.style.setProperty('--' + k, v));
+    document.body.style.background = t.page;
+    // Text size boost (see Tweaks panel): scales all type ~1pt or ~2pt up.
+    const ts = this.props.textSize || '+1 pt';
+    document.body.style.zoom = ts === '+2 pt' ? '1.16' : ts === '+1 pt' ? '1.08' : '1';
+  }
+
+  now() { return new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); }
+  today() { return '07/06'; }
+
+  actorName() {
+    const a = this.state.actor || 'field';
+    return a === 'field' ? 'M. Vega' : a === 'scheduler' ? 'T. Alvarez' : 'K. Sandoval';
+  }
+  pushAudit(action, table, detail) {
+    this.setState({ auditRows: [{ ts: this.today() + ' ' + this.now(), action, table, by: this.actorName(), detail }, ...this.state.auditRows].slice(0, 60) });
+  }
+
+  queueWrite(n) {
+    if (this.state.online) {
+      this.setState({ pending: this.state.pending + (n || 1), syncing: true });
+      setTimeout(() => this.setState({ pending: 0, syncing: false, lastSync: this.now() }), 900);
+    } else {
+      this.setState({ pending: this.state.pending + (n || 1) });
+    }
+  }
+
+  setNote(patch) { this.setState({ note: { ...this.state.note, ...patch }, noteSavedAt: this.now() }); }
+
+  parseMin(s) {
+    const m = /(\d+):(\d+)\s*(AM|PM)/i.exec(s); if (!m) return 0;
+    let h = +m[1] % 12; if (/pm/i.test(m[3])) h += 12;
+    return h * 60 + (+m[2]);
+  }
+  units() {
+    const { start, end } = this.state.note;
+    if (!start || !end) return 0;
+    const [sh, sm] = start.split(':').map(Number); const [eh, em] = end.split(':').map(Number);
+    const min = (eh * 60 + em) - (sh * 60 + sm);
+    if (min <= 0) return 0;
+    return Math.floor(min / 15) + (min % 15 >= 8 ? 1 : 0);
+  }
+
+  renderVals() {
+    const S = this.state;
+    const device = S.device || this.props.defaultDevice || 'mobile';
+    const actor = S.actor || 'field';
+    const isField = actor === 'field';
+    const isSched = actor === 'scheduler';
+    const isAdminRole = actor === 'admin';
+    const isDeskDevice = device === 'desk';
+
+    const pillBtn = (on) => `border:none;border-radius:7px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;` + (on ? 'background:var(--acc);color:#fff' : 'background:transparent;color:var(--mut)');
+    const badge = (bg, fg) => `background:${bg};color:${fg};border-radius:99px;padding:3px 10px;font-size:11.5px;font-weight:600;white-space:nowrap`;
+    const B = { ok: badge('#E7F0E4', '#39543A'), warn: badge('#F5EBD8', '#7A5C22'), bad: badge('#F6E3E0', '#8C3A2F'), mut: badge('#EDEBE5', '#6B665C'), acc: badge('#EFEAF5', '#4A3D63') };
+    const msgStyle = (err) => 'border-radius:9px;padding:9px 14px;font-size:12.5px;font-weight:500;' + (err ? 'background:#F6E3E0;color:#8C3A2F' : 'background:#E7F0E4;color:#39543A');
+
+    // ── nav ──
+    const allTabs = {
+      dashboard: 'Dashboard', clients: 'Clients', schedule: 'Schedule', staff: 'Staff & credentials',
+      qa: 'QA', evv: 'EVV review', emarAdmin: 'eMAR oversight', audit: 'Audit trail',
+      billing: 'Billing', payroll: 'Payroll', reports: 'Reports', documents: 'Documents & notices',
+      settings: 'Settings & users', relias: 'Relias',
+      myvisits: 'My visits', mytimesheet: 'My timesheet', week: 'My week', emar: 'eMAR'
+    };
+    const groupsAdmin = [
+      { label: 'CORE', ids: ['dashboard', 'clients', 'schedule', 'staff'] },
+      { label: 'COMPLIANCE', ids: ['qa', 'evv', 'emarAdmin', 'audit'] },
+      { label: 'BUSINESS', ids: ['billing', 'payroll', 'reports', 'documents'] },
+      { label: 'TRAINING & LEARNING', ids: ['relias'] },
+      { label: 'SYSTEM', ids: ['settings'] }
+    ];
+    const cfg = S.menuConfig || { scheduler: {}, field: {} };
+    const onS = (id) => !!(cfg.scheduler || {})[id];
+    const onF = (id) => !!(cfg.field || {})[id];
+    const groupsSched = [
+      { label: 'CORE', ids: ['dashboard'].concat(['clients', 'schedule'].filter(onS)) },
+      { label: 'COMPLIANCE', ids: ['qa', 'evv', 'emarAdmin', 'audit'].filter(onS) },
+      { label: 'BUSINESS', ids: ['billing'].concat(['reports', 'documents'].filter(onS)) },
+      { label: 'TRAINING & LEARNING', ids: ['relias'].filter(onS) }
+    ].filter(g => g.ids.length);
+    const groupsField = [
+      { label: 'MY WORK', ids: ['myvisits', 'mytimesheet'] },
+      { label: 'CORE', ids: ['clients', 'schedule'].filter(onF) },
+      { label: 'COMPLIANCE', ids: ['qa', 'evv', 'emarAdmin', 'audit'].filter(onF) },
+      { label: 'BUSINESS', ids: ['reports', 'documents'].filter(onF) },
+      { label: 'TRAINING & LEARNING', ids: ['relias'].filter(onF) }
+    ].filter(g => g.ids.length);
+    const roleGroups = isAdminRole ? groupsAdmin : isSched ? groupsSched : groupsField;
+    const flatIds = roleGroups.reduce((acc, g) => acc.concat(g.ids), []);
+    const adminTab = flatIds.includes(S.adminTab) ? S.adminTab : flatIds[0];
+    const lockedForSched = { billing: true };
+    const collapsed = !!S.sideCollapsed;
+    const navIcons = { dashboard: '⌂', clients: '◉', schedule: '▦', staff: '✦', qa: '✓', evv: '◎', emarAdmin: '✚', audit: '≣', billing: '$', payroll: '⏱', reports: '▤', documents: '❐', settings: '⚙', relias: '✎', myvisits: '▣', mytimesheet: '≔', week: '▦', emar: '✚' };
+    const navGroups = roleGroups.map(g => {
+      const closed = !!(S.groupsClosed || {})[g.label];
+      return {
+        label: g.label,
+        caret: closed ? '▶' : '▼',
+        showHeader: !collapsed,
+        divider: collapsed,
+        open: collapsed || !closed,
+        toggle: () => this.setState({ groupsClosed: { ...(S.groupsClosed || {}), [g.label]: !closed } }),
+        items: g.ids.map(id => {
+          const on = adminTab === id;
+          return {
+            icon: navIcons[id] || '•',
+            text: collapsed ? '' : allTabs[id],
+            title: allTabs[id],
+            suffix: !collapsed && isSched && lockedForSched[id] ? '🔒' : '',
+            suffixStyle: 'margin-left:auto;font-size:10px;opacity:.7',
+            go: () => this.setState({ adminTab: id }),
+            style: `display:flex;align-items:center;text-align:left;border:none;border-radius:8px;font-size:12.5px;cursor:pointer;font-weight:500;box-sizing:border-box;` +
+              (collapsed ? 'justify-content:center;width:40px;height:38px;margin:0 auto;padding:0;font-size:15px;' : 'gap:9px;padding:9px 12px;width:100%;') +
+              (on ? 'background:rgba(255,255,255,.14);color:#fff' : 'background:transparent;color:var(--sideFg)')
+          };
+        })
+      };
+    });
+
+    // ── clients ──
+    const clients = [
+      { name: 'Reyes, Alma', medicaid: 'CO4481920', age: 34, dx: 2, auth: '4 hrs/wk SCC + 2 NMT', cm: 'E. Flores · Weld County CMA' },
+      { name: 'Okafor, Ben', medicaid: 'CO5510283', age: 27, dx: 3, auth: 'DVR Auth #978665 · JC', cm: 'V. Gallegos · DVR' },
+      { name: 'Whitfield, Cora', medicaid: 'CO6120944', age: 41, dx: 1, auth: '3 hrs/wk SCC + 2 NMT', cm: 'E. Flores · Weld County CMA' },
+      { name: 'Ramírez, Dev', medicaid: 'CO7093315', age: 22, dx: 2, auth: '2 hrs/wk SCC + 1 NMT', cm: 'D. Nutt · DVR' }
+    ];
+    const q = S.clientSearch.toLowerCase();
+    const filteredClients = clients.filter(c => !q || c.name.toLowerCase().includes(q) || c.medicaid.toLowerCase().includes(q));
+
+    const statCards = [
+      { label: 'ACTIVE CLIENTS', value: '4', sub: 'All plans current', go: () => this.setState({ adminTab: 'clients' }), goMobile: () => this.setState({ fieldScreen: 'm_clients' }) },
+      { label: 'VISITS TODAY', value: '3', sub: '2 staff scheduled', go: () => this.setState({ adminTab: 'schedule' }), goMobile: () => this.setState({ fieldScreen: 'm_deskonly', deskOnlyLabel: 'Schedule' }) },
+      { label: 'OPEN QA FLAGS', value: String(3 - Object.keys(S.qaResolved).length), sub: 'Resolve before export', go: () => this.setState({ adminTab: 'qa' }), goMobile: () => this.setState({ fieldScreen: 'm_qa' }) },
+      { label: 'CLAIM-READY NOTES', value: '2', sub: '13 units unbilled', go: () => this.setState({ adminTab: 'billing' }), goMobile: () => this.setState({ fieldScreen: 'm_deskonly', deskOnlyLabel: 'Billing' }) }
+    ];
+    const typeLabels = { SCC: 'SCC', Job_Coaching: 'Job Coaching' };
+    const todayVisits = S.visits.map(v => ({
+      time: v.time.split(' – ')[0], client: v.client, typeLabel: typeLabels[v.type], staff: 'M. Vega',
+      statusLabel: (S.clock[v.id] && S.clock[v.id].out) ? 'Completed' : (S.clock[v.id] ? 'In progress' : 'Scheduled'),
+      badgeStyle: (S.clock[v.id] && S.clock[v.id].out) ? B.ok : S.clock[v.id] ? B.warn : B.mut
+    }));
+
+    // ── schedule ──
+    const staffNames = ['Maria Vega', 'Devon Price'];
+    const scheduleRows = staffNames.map((name, si) => ({
+      name,
+      days: [0, 1, 2, 3, 4].map(di => ({
+        chips: S.chips.filter(c => c.staff === si && c.day === di).map(c => ({
+          label: c.label,
+          sub: c.order ? c.sub : c.sub + ' · NO MD ORDER',
+          select: () => this.setState({ selectedChip: c.id, scheduleMsg: null }),
+          style: `text-align:left;border-radius:9px;padding:7px 9px;cursor:pointer;width:100%;box-sizing:border-box;` +
+            (c.order ? 'background:var(--accSoft);border:1px solid transparent;color:var(--ink);' : 'background:#F6E3E0;border:1px solid #E5BEB7;color:#8C3A2F;') +
+            (S.selectedChip === c.id ? 'outline:2px solid var(--acc);' : '')
+        }))
+      }))
+    }));
+    const moveSelected = () => {
+      const chip = S.chips.find(c => c.id === S.selectedChip);
+      if (!chip) { this.setState({ scheduleMsg: 'Select a visit first.', scheduleErr: false }); return; }
+      if (!chip.order) { this.setState({ scheduleMsg: 'REJECTED: no active physician order on file for this visit.', scheduleErr: true }); return; }
+      this.setState({ chips: S.chips.map(c => c.id === chip.id ? { ...c, day: (c.day + 1) % 5 } : c), scheduleMsg: `Saved — ${chip.label} reassigned. Physician order verified.`, scheduleErr: false });
+      this.pushAudit('UPDATE', 'visits', `Reassigned ${chip.label} to next day`);
+    };
+
+    // ── staff & creds ──
+    const staffRows = S.staffCreds.map(s => ({
+      name: s.name, role: s.role, license: s.license,
+      licBadge: s.licOk ? B.ok : B.bad,
+      hasExpired: !s.licOk || s.trainings.some(t => !t.ok),
+      renew: () => {
+        this.setState({
+          staffCreds: S.staffCreds.map(x => x.id === s.id ? { ...x, licOk: true, license: x.license.replace(/expired.*/i, 'exp 07/2028'), trainings: x.trainings.map(t => ({ ...t, ok: true, exp: t.ok ? t.exp : '07/2028' })) } : x)
+        });
+        this.pushAudit('UPDATE', 'users', `Credential renewal recorded · ${s.name}`);
+      },
+      trainings: s.trainings.map(t => ({ label: `${t.c} · ${t.exp}`, style: t.ok ? B.mut : B.bad }))
+    }));
+
+    // ── qa ──
+    const qaAll = [
+      { id: 'q1', kind: 'Med log w/o EVV overlap', client: 'Okafor, Ben', date: '07/01/26', detail: 'Risperidone 1 mg marked Administered at 2:15 PM with no clocked-in visit spanning that time.', sev: 'warn' },
+      { id: 'q2', kind: 'Missing signature', client: 'Whitfield, Cora', date: '06/30/26', detail: 'Progress note missing client signature.', sev: 'warn' },
+      { id: 'q3', kind: 'Expired authorization', client: 'Ramírez, Dev', date: '06/28/26', detail: 'Note submitted against an expired ITD authorization — must be filed manually (word process).', sev: 'bad' }
+    ];
+    const qaFlags = qaAll.filter(f => !S.qaResolved[f.id]).map(f => ({
+      ...f, badgeStyle: f.sev === 'bad' ? B.bad : B.warn,
+      resolve: () => { this.setState({ qaResolved: { ...S.qaResolved, [f.id]: true } }); this.pushAudit('UPDATE', 'progress_notes', `QA flag resolved · ${f.client}`); }
+    }));
+
+    // ── evv ──
+    const evvRows = S.evvLogs.map(e => ({
+      ...e, methodBadge: e.method === 'GPS' ? B.ok : e.method === 'Telephony' ? B.acc : B.warn
+    }));
+    const submitAdj = () => {
+      const f = S.adjForm;
+      if (!f.visit || !f.in || !f.out) { this.setState({ evvMsg: 'Select a visit and enter both times.', evvErr: true }); return; }
+      if (!f.reason.trim()) { this.setState({ evvMsg: 'REJECTED: manual_adjustment_reason is required for manual EVV entries.', evvErr: true }); return; }
+      const fmt = (t) => { const [h, m] = t.split(':').map(Number); const ap = h >= 12 ? 'PM' : 'AM'; return `${((h + 11) % 12) + 1}:${String(m).padStart(2, '0')} ${ap}`; };
+      this.setState({
+        evvLogs: [{ id: 'e' + Date.now(), visit: f.visit, method: 'Manual', in: fmt(f.in), out: fmt(f.out), dist: '—', reason: `${f.reason.trim()} (adjusted by K. Sandoval)` }, ...S.evvLogs],
+        adjForm: { visit: '', in: '', out: '', reason: '' },
+        evvMsg: 'Manual entry saved and audit-logged.', evvErr: false
+      });
+      this.pushAudit('INSERT', 'evv_logs', `Manual adjustment · ${f.visit}`);
+    };
+
+    // ── emar oversight ──
+    const liveEmar = S.meds.map(m => ({
+      client: 'Alma Reyes', med: `${m.name} · ${m.dose}`, due: '07/06 ' + m.due,
+      given: m.status === 'Administered' ? this.now() : '—', status: m.status,
+      by: m.status === 'Missed' ? '—' : 'M. Vega'
+    }));
+    const emarAll = [...liveEmar, ...S.emarHistory];
+    const emarRows = emarAll.filter(m => S.emarFilter === 'All' || m.status === S.emarFilter).map(m => ({
+      ...m, badgeStyle: m.status === 'Administered' ? B.ok : m.status === 'Refused' ? B.warn : B.bad
+    }));
+    const emarFilters = ['All', 'Administered', 'Refused', 'Missed'].map(f => ({
+      label: f, go: () => this.setState({ emarFilter: f }),
+      style: `border:1px solid var(--bd);border-radius:99px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;` +
+        (S.emarFilter === f ? 'background:var(--acc);color:#fff;border-color:var(--acc)' : 'background:#fff;color:var(--mut)')
+    }));
+
+    // ── audit ──
+    const auditRows = S.auditRows.map(a => ({
+      ...a, badgeStyle: a.action === 'INSERT' ? B.ok : a.action === 'DELETE' ? B.bad : B.acc
+    }));
+
+    // ── billing ──
+    const billingData = [
+      { id: 'b1', client: 'Reyes, Alma', medicaid: 'CO4481920', date: '07/02/26', type: 'SCC', units: 8, blockers: [] },
+      { id: 'b2', client: 'Okafor, Ben', medicaid: 'CO5510283', date: '07/01/26', type: 'Job Coaching', units: 6, blockers: ['Missing client signature'] },
+      { id: 'b3', client: 'Whitfield, Cora', medicaid: 'CO6120944', date: '06/30/26', type: 'SCC', units: 10, blockers: ['Staff license expired 06/15/26'] },
+      { id: 'b4', client: 'Ramírez, Dev', medicaid: 'CO7093315', date: '07/03/26', type: 'SCC', units: 5, blockers: [] },
+      { id: 'b5', client: 'Reyes, Alma', medicaid: 'CO4481920', date: '06/29/26', type: 'SCC', units: 14, blockers: ['Exceeds weekly authorization (52/48 units)'] }
+    ];
+    const billingRows = billingData.map(r => {
+      const blocked = r.blockers.length > 0;
+      return {
+        ...r, blocked, sel: !!S.billingSel[r.id] && !blocked,
+        toggle: () => this.setState({ billingSel: { ...S.billingSel, [r.id]: !S.billingSel[r.id] } }),
+        status: blocked ? r.blockers[0] : 'Ready',
+        badgeStyle: blocked ? B.bad : B.ok,
+        rowStyle: `display:grid;grid-template-columns:36px 1.3fr .9fr .7fr .9fr .5fr 1.6fr;gap:8px;padding:12px 16px;border-top:1px solid #F0EDE7;font-size:13px;align-items:center;` + (blocked ? 'background:#FBF4F2' : '')
+      };
+    });
+    const selCount = billingRows.filter(r => r.sel).length;
+
+    // ── payroll ──
+    const payrollRows = S.payroll.map(p => ({
+      ...p,
+      notesLabel: p.notesIn ? 'Yes' : 'No',
+      notesStyle: (p.notesIn ? B.ok : B.bad) + ';border:none;cursor:pointer',
+      toggleNotes: () => this.setState({ payroll: S.payroll.map(x => x.id === p.id ? { ...x, notesIn: !x.notesIn } : x) }),
+      totReg: (p.wk1 + p.wk2).toFixed(2).replace(/\.00$/, ''), totOt: (p.ot1 + p.ot2).toFixed(2).replace(/\.00$/, '')
+    }));
+    const payrollTotReg = S.payroll.reduce((s, p) => s + p.wk1 + p.wk2, 0).toFixed(2).replace(/\.00$/, '');
+    const payrollTotOt = S.payroll.reduce((s, p) => s + p.ot1 + p.ot2, 0).toFixed(2).replace(/\.00$/, '');
+    const missingNotes = S.payroll.filter(p => !p.notesIn).length;
+    const submitPayroll = () => {
+      if (!S.payrollCertified) { this.setState({ payrollMsg: 'Check the certification statement first.', payrollErr: true }); return; }
+      if (missingNotes > 0) { this.setState({ payrollMsg: `BLOCKED: ${missingNotes} employee(s) still have notes outstanding.`, payrollErr: true }); return; }
+      this.setState({ payrollMsg: 'Transmittal submitted for paydate June 26, 2026.', payrollErr: false });
+      this.pushAudit('INSERT', 'payroll', 'Transmittal submitted · May 31 – Jun 13');
+    };
+
+    // ── reports ──
+    const delivered = { 'Reyes, Alma': 22, 'Okafor, Ben': 6, 'Whitfield, Cora': 10, 'Ramírez, Dev': 5 };
+    const authorized = { 'Reyes, Alma': 16, 'Okafor, Ben': 12, 'Whitfield, Cora': 12, 'Ramírez, Dev': 8 };
+    const reportCards = [
+      { label: 'UNITS DELIVERED', value: '43', sub: 'Week of June 29' },
+      { label: 'NMT TRIPS', value: String(S.trips.length + 13), sub: 'Of 28 authorized' },
+      { label: 'NOTES COMPLETED', value: '11 / 12', sub: '1 outstanding (C. Torres)' }
+    ];
+    const reportRows = Object.keys(delivered).map(name => {
+      const d = delivered[name], a = authorized[name];
+      const pct = Math.min(100, Math.round((d / a) * 100));
+      const over = d > a;
+      return {
+        name, summary: `${d} of ${a} authorized units${over ? ' — OVER AUTHORIZATION' : ''}`,
+        barStyle: `height:100%;width:${pct}%;background:${over ? '#B3664F' : 'var(--btn)'};border-radius:99px`
+      };
+    });
+
+    // ── documents ──
+    const nf = S.noticeForm;
+    const noticeTypes = ['Notice of Employment', 'Notice of Job Stability', 'Closure'].map(t => ({
+      label: t, go: () => this.setState({ noticeForm: { ...nf, type: t } }),
+      style: `border:1px solid var(--bd);border-radius:99px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;` +
+        (nf.type === t ? 'background:var(--acc);color:#fff;border-color:var(--acc)' : 'background:#fff;color:var(--mut)')
+    }));
+    const setNF = (k) => (e) => this.setState({ noticeForm: { ...this.state.noticeForm, [k]: e.target.value } });
+    const saveNotice = () => {
+      if (!nf.client || !nf.employer) { this.setState({ docMsg: 'Client and employer are required.', docErr: true }); return; }
+      this.setState({
+        documents: [{ icon: 'DVR', name: `Employment Notice — ${nf.type.replace('Notice of ', '')} · ${nf.client}`, detail: `${nf.employer}${nf.jobTitle ? ' · ' + nf.jobTitle : ''}${nf.wage ? ' · ' + nf.wage + '/hr' : ''}${nf.hours ? ' · ' + nf.hours + ' hrs/wk' : ''}`, date: '07/06/26' }, ...S.documents],
+        noticeForm: { type: 'Notice of Employment', client: '', employer: '', jobTitle: '', supervisor: '', phone: '', wage: '', hours: '', start: '' },
+        showNoticeForm: false, docMsg: null, docErr: false
+      });
+      this.pushAudit('INSERT', 'documents', `DVR notice created · ${nf.client}`);
+    };
+    const clientByVisit = { v1: 'Alma Reyes', v2: 'Ben Okafor', v3: 'Cora Whitfield' };
+    const uploadDocs = (S.attachments || []).map(a => ({
+      icon: 'S3', name: `Field upload — ${a.name}`,
+      detail: `${clientByVisit[a.visit] || 'Client'} · uploaded by M. Vega · ${a.status}`, date: '07/06/26'
+    }));
+    const documents = [...uploadDocs, ...S.documents].map(d => ({
+      ...d, iconStyle: `flex:none;width:40px;height:40px;border-radius:9px;display:grid;place-items:center;font-size:10px;font-weight:700;` +
+        (d.icon === 'DVR' ? 'background:var(--accSoft);color:var(--head)' : d.icon === 'S3' ? 'background:#F5EBD8;color:#7A5C22' : 'background:#E9EFE7;color:#37503F')
+    }));
+
+    // ── settings ──
+    const userRows = S.users.map(u => ({
+      ...u, badgeStyle: u.status === 'Active' ? B.ok : B.mut,
+      action: u.status === 'Active' ? 'Suspend' : 'Activate',
+      toggle: () => {
+        const status = u.status === 'Active' ? 'Suspended' : 'Active';
+        this.setState({ users: S.users.map(x => x.id === u.id ? { ...x, status } : x) });
+        this.pushAudit('UPDATE', 'users', `${u.name} status → ${status}`);
+      }
+    }));
+    const uf = S.userForm;
+    const addUser = () => {
+      if (!uf.name || !uf.email) { this.setState({ settingsMsg: 'Name and email required.' }); return; }
+      this.setState({ users: [...S.users, { id: 'u' + Date.now(), name: uf.name, email: uf.email, role: uf.role, status: 'Active' }], userForm: { name: '', email: '', role: 'Field Staff' }, settingsMsg: 'User added. Invite email sent.' });
+      this.pushAudit('INSERT', 'users', `New user · ${uf.name} (${uf.role})`);
+    };
+    const permRows = [
+      { data: 'Clients', admin: 'Read / write', scheduler: 'Read / write', field: 'Read (assigned only)' },
+      { data: 'Visits', admin: 'Read / write', scheduler: 'Read / write', field: 'Read own · update status' },
+      { data: 'Progress notes', admin: 'Read / write', scheduler: 'Read only', field: 'Write own' },
+      { data: 'EVV logs', admin: 'Read / write + manual', scheduler: 'Read only', field: 'Write own (GPS)' },
+      { data: 'eMAR', admin: 'Read / write', scheduler: 'Read only', field: 'Write own' },
+      { data: 'Billing / claims', admin: 'Full', scheduler: 'No access', field: 'No access' },
+      { data: 'Impersonation (view as user)', admin: 'Full', scheduler: 'No access', field: 'No access' }
+    ];
+
+    const cfgSections = [
+      ['clients', 'Clients'], ['schedule', 'Schedule'], ['qa', 'QA'], ['evv', 'EVV review'],
+      ['emarAdmin', 'eMAR oversight'], ['audit', 'Audit trail'], ['documents', 'Documents & notices'],
+      ['reports', 'Reports'], ['relias', 'Training & Learning (Relias)']
+    ];
+    const configRows = cfgSections.map(([id, label]) => ({
+      label,
+      schedOn: onS(id), fieldOn: onF(id),
+      schedToggle: () => this.setState({ menuConfig: { ...cfg, scheduler: { ...cfg.scheduler, [id]: !onS(id) } } }),
+      fieldToggle: () => this.setState({ menuConfig: { ...cfg, field: { ...cfg.field, [id]: !onF(id) } } })
+    }));
+
+    // ── relias ──
+    const reliasBadges = { 'Completed': B.ok, 'In progress': B.acc, 'Overdue': B.bad, 'Assigned': B.mut };
+    const reliasRows = [
+      { name: 'Vega, Maria', course: 'HIPAA Refresher 2026', due: '07/31/26', status: 'In progress', pct: '60%' },
+      { name: 'Vega, Maria', course: 'Person-Centered Documentation', due: '08/15/26', status: 'Assigned', pct: '0%' },
+      { name: 'Price, Devon', course: 'HIPAA Refresher 2026', due: '07/31/26', status: 'Completed', pct: '100%' },
+      { name: 'Torres, Celine', course: 'CPR / First Aid Renewal', due: '06/15/26', status: 'Overdue', pct: '20%' },
+      { name: 'Martinez, Lesley', course: 'Safety-Care Recertification', due: '11/30/26', status: 'In progress', pct: '45%' },
+      { name: 'Shockley, Marian', course: 'Abuse & Neglect Reporting', due: '09/01/26', status: 'Assigned', pct: '0%' }
+    ].map(r => ({ ...r, badgeStyle: reliasBadges[r.status] }));
+    const launchRelias = () => this.setState({ reliasMsg: 'Opening Relias via single sign-on… (integration stub — will deep-link to the DLS Relias portal)' });
+
+    // ── field ──
+    const av = S.visits.find(v => v.id === S.activeVisitId);
+    const clk = av ? S.clock[av.id] : null;
+    const clockedIn = !!(clk && clk.in && !clk.out);
+    const clockedOut = !!(clk && clk.out);
+
+    const fieldVisits = S.visits.map(v => {
+      const c = S.clock[v.id]; const done = c && c.out;
+      return {
+        client: v.client, time: v.time, typeLabel: typeLabels[v.type],
+        statusLabel: done ? 'Completed' : c ? 'In progress' : 'Scheduled',
+        badgeStyle: done ? B.ok : c ? B.warn : B.mut,
+        open: () => this.setState({ fieldScreen: 'visit', activeVisitId: v.id, clockMsg: null, tripMsg: null })
+      };
+    });
+
+    const doClockIn = () => {
+      if (S.clockBusy || !av) return;
+      this.setState({ clockBusy: true, clockMsg: null });
+      setTimeout(() => {
+        const attempts = { ...this.state.gpsAttempts };
+        attempts[av.id] = (attempts[av.id] || 0) + 1;
+        if (av.id === 'v2' && attempts[av.id] === 1) {
+          this.setState({ clockBusy: false, gpsAttempts: attempts, clockErr: true, clockMsg: 'Outside geofence — 412 m from the client\u2019s residence (limit 150 m). Move closer and retry.' });
+          return;
+        }
+        this.setState({ clockBusy: false, gpsAttempts: attempts, clockErr: false, clock: { ...this.state.clock, [av.id]: { in: this.now() } }, clockMsg: 'Clocked in · GPS verified — 23 m from residence.' });
+        this.pushAudit('INSERT', 'evv_logs', `GPS clock-in · ${av.client}`);
+        this.queueWrite(1);
+      }, 900);
+    };
+    const doClockOut = () => {
+      if (S.clockBusy || !av) return;
+      this.setState({ clockBusy: true, clockMsg: null });
+      setTimeout(() => {
+        const out = this.now();
+        const inT = this.state.clock[av.id].in;
+        const hrs = Math.max(0.25, Math.round(((this.parseMin(out) - this.parseMin(inT)) / 60) * 4) / 4);
+        const initials = av.client.split(' ').map(w => w[0]).join('');
+        this.setState({
+          clockBusy: false, clockErr: false,
+          clock: { ...this.state.clock, [av.id]: { ...this.state.clock[av.id], out } },
+          clockMsg: 'Clocked out. Complete your progress note below.',
+          tsRows: [...this.state.tsRows, { code: av.type === 'Job_Coaching' ? 'JC' : 'SCC', client: initials, date: this.today(), start: inT, end: out, hrs }]
+        });
+        this.pushAudit('INSERT', 'evv_logs', `GPS clock-out · ${av.client}`);
+        this.queueWrite(1);
+      }, 900);
+    };
+
+    // NMT trips
+    const clientTrips = av ? S.trips.filter(t => t.client === av.client).length : 0;
+    const tripLimit = 2;
+    const logTrip = () => {
+      if (!av) return;
+      const f = S.tripForm;
+      if (!f.dest.trim()) { this.setState({ tripMsg: 'Destination is required.', tripErr: true }); return; }
+      if (clientTrips >= tripLimit) { this.setState({ tripMsg: `Authorization exhausted — ${tripLimit} of ${tripLimit} NMT trips already used this week.`, tripErr: true }); return; }
+      this.setState({
+        trips: [...S.trips, { client: av.client, date: this.today(), dest: f.dest.trim(), purpose: f.purpose.trim() }],
+        tsRows: [...S.tsRows, { code: 'T', client: av.client.split(' ').map(w => w[0]).join(''), date: this.today(), start: this.now(), end: '—', hrs: 0.5 }],
+        tripForm: { dest: '', purpose: '' }, tripMsg: 'Trip logged toward NMT authorization.', tripErr: false
+      });
+      this.pushAudit('INSERT', 'visits', `NMT trip logged · ${av.client} → ${f.dest.trim()}`);
+      this.queueWrite(1);
+    };
+
+    // week schedule
+    const weekSchedule = [
+      { day: 'MONDAY 7/6 (TODAY)', visits: S.visits.map(v => ({ client: v.client, time: v.time, type: typeLabels[v.type], tag: (S.clock[v.id] && S.clock[v.id].out) ? 'Completed' : S.clock[v.id] ? 'In progress' : 'Scheduled', badgeStyle: (S.clock[v.id] && S.clock[v.id].out) ? B.ok : S.clock[v.id] ? B.warn : B.mut })) },
+      { day: 'TUESDAY 7/7', visits: [{ client: 'Dev Ramírez', time: '9:30 – 11:30 AM', type: 'SCC', tag: 'Scheduled', badgeStyle: B.mut }] },
+      { day: 'WEDNESDAY 7/8', visits: [{ client: 'Cora Whitfield', time: '10:00 AM – 12:00 PM', type: 'SCC', tag: 'Scheduled', badgeStyle: B.mut }] },
+      { day: 'THURSDAY 7/9', visits: [{ client: 'Alma Reyes', time: '2:00 – 4:00 PM', type: 'SCC', tag: 'Scheduled', badgeStyle: B.mut }] },
+      { day: 'FRIDAY 7/10', visits: [{ client: 'Ben Okafor', time: '11:00 AM – 2:00 PM', type: 'Job Coaching', tag: 'Scheduled', badgeStyle: B.mut }] }
+    ];
+
+    // client info
+    const clientInfoMap = {
+      'Alma Reyes': { medicaid: 'CO4481920', age: 34, sections: [
+        { label: 'PROGRAM & AUTHORIZATION', body: 'OBRA Specialized Services — SCC with Transportation\n4 hrs/week SCC + 2 NMT trips/week\nService plan: 01/01/26 – 12/31/26' },
+        { label: 'CASE MANAGEMENT', body: 'Case manager: E. Flores\nCCB: Weld County CMA' },
+        { label: 'ACTIVE GOALS', body: '• Community integration — weekly outings\n• Redirect requests to visit family during service time; refocus on planned activities' },
+        { label: 'NOTES FOR STAFF', body: 'Sign client out at the nurses\u2019 station before leaving the facility. Client may request purchases — staff cannot buy clothing/items for clients.' } ] },
+      'Ben Okafor': { medicaid: 'CO5510283', age: 27, sections: [
+        { label: 'PROGRAM & AUTHORIZATION', body: 'DVR Supported Employment — Job Coaching\nDVR Authorization #978665 · Milestone 1\nCounselor: V. Gallegos' },
+        { label: 'EMPLOYMENT', body: 'Employment goal: Customer Service\nCurrent placement: grocery retail — stocking, outdates, totes' },
+        { label: 'ACTIVE GOALS', body: '• Increase customer interaction (role-play planned)\n• Pace and accuracy when stocking' } ] },
+      'Cora Whitfield': { medicaid: 'CO6120944', age: 41, sections: [
+        { label: 'PROGRAM & AUTHORIZATION', body: 'OBRA Specialized Services — SCC with Transportation\n3 hrs/week SCC + 2 NMT trips/week' },
+        { label: 'CASE MANAGEMENT', body: 'Case manager: E. Flores\nCCB: Weld County CMA' },
+        { label: 'ACTIVE GOALS', body: '• Craft-based fine-motor practice\n• Community participation with peers' } ] },
+      'Dev Ramírez': { medicaid: 'CO7093315', age: 22, sections: [
+        { label: 'PROGRAM & AUTHORIZATION', body: 'DVR — Notice of Job Stability filed 10/07/25\nWalgreens · Warehouse/stocker · $15.00/hr · 4–7 hrs/wk' },
+        { label: 'CASE MANAGEMENT', body: 'DVR counselor: D. Nutt' },
+        { label: 'ACTIVE GOALS', body: '• Maintain employment stability through 90-day closure\n• Independent shift management' } ] }
+    };
+    const ci = av ? clientInfoMap[av.client] : null;
+
+    const noteGoals = S.note.goals.map((g, i) => ({
+      ...g,
+      toggle: () => this.setNote({ goals: S.note.goals.map((x, j) => j === i ? { ...x, checked: !x.checked } : x) }),
+      setProgress: (e) => this.setNote({ goals: S.note.goals.map((x, j) => j === i ? { ...x, progress: e.target.value } : x) })
+    }));
+    const signatures = [
+      { key: 'sigClient', label: 'Client signature' },
+      { key: 'sigCaregiver', label: 'Caregiver signature' }
+    ].map(s => ({
+      label: s.label, signed: S.note[s.key], unsigned: !S.note[s.key],
+      sign: () => this.setNote({ [s.key]: true }), clear: () => this.setNote({ [s.key]: false })
+    }));
+    const submitNote = () => {
+      if (!S.note.sigClient || !S.note.sigCaregiver) {
+        this.setState({ noteError: 'Both signatures are required before submitting. The draft is auto-saved — you can collect them later.' });
+        return;
+      }
+      this.setState({ noteError: null, submitted: { ...S.submitted, [av.id]: true }, fieldScreen: 'visit' });
+      this.pushAudit('INSERT', 'progress_notes', `Note submitted · ${av.client} · ${this.units()} units`);
+      this.queueWrite(2);
+    };
+
+    const meds = S.meds.map(m => ({
+      ...m, pending: m.status === 'Missed',
+      badgeStyle: m.status === 'Administered' ? B.ok : m.status === 'Refused' ? B.warn : B.bad,
+      administer: () => this.setMed(m.id, 'Administered'),
+      refuse: () => this.setMed(m.id, 'Refused')
+    }));
+
+    const tsTotal = S.tsRows.reduce((s, r) => s + (+r.hrs || 0), 0).toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1');
+    const codeColors = { SCC: B.acc, JC: B.ok, DH: B.warn, T: B.mut };
+    const tsRows = S.tsRows.map(r => ({ ...r, hrs: String(r.hrs), codeStyle: codeColors[r.code] || B.mut }));
+
+    const myRelias = [
+      { course: 'HIPAA Refresher 2026', sub: 'Due 07/31/26 · 60% complete', status: 'In progress', badgeStyle: B.acc },
+      { course: 'Person-Centered Documentation', sub: 'Due 08/15/26', status: 'Assigned', badgeStyle: B.mut },
+      { course: 'Safety-Care Recertification Prep', sub: 'Completed 06/12/26', status: 'Completed', badgeStyle: B.ok }
+    ];
+    const myTrainings = [
+      { course: 'CPR / First Aid', exp: '03/2027', status: 'Current', badgeStyle: B.ok },
+      { course: 'QMAP (medication administration)', exp: '03/2027', status: 'Current', badgeStyle: B.ok },
+      { course: 'Abuse & Neglect Reporting', exp: '08/2026', status: 'Due soon', badgeStyle: B.warn },
+      { course: 'Safety-Care', exp: '01/2027', status: 'Current', badgeStyle: B.ok }
+    ];
+
+    const syncPillStyle = (S.online
+      ? (S.syncing || S.pending > 0 ? 'background:var(--accSoft);color:var(--head);border:1px solid var(--bd);' : 'background:#E7F0E4;color:#39543A;border:1px solid #CFE0CB;')
+      : 'background:#F5EBD8;color:#7A5C22;border:1px solid #E6D5AE;')
+      + 'border-radius:99px;padding:5px 12px;font-size:11.5px;font-weight:600;white-space:nowrap';
+    const syncPillLabel = !S.online ? `Offline — ${S.pending} pending` : S.syncing ? 'Syncing…' : S.pending > 0 ? `${S.pending} pending` : `Synced · ${S.lastSync}`;
+
+    const fieldOnlyScreens = ['home', 'week', 'visit', 'note', 'timesheet', 'more', 'training', 'clientInfo', 'emar', 'relias'];
+    const fScreen = (!isField && fieldOnlyScreens.includes(S.fieldScreen)) ? 'm_dashboard' : S.fieldScreen;
+    const fieldTitles = { home: 'DLS Field', week: 'My week', visit: 'Visit', note: 'Progress note', emar: 'eMAR', timesheet: 'Timesheet', more: 'More', training: 'My training', clientInfo: 'Client info', relias: 'Training & Learning', m_dashboard: 'Dashboard', m_clients: 'Clients', m_qa: 'QA', m_emarAdmin: 'eMAR oversight', m_audit: 'Audit trail', m_documents: 'Documents', m_relias: 'Training & Learning', m_deskonly: S.deskOnlyLabel || 'Section' };
+    const mBack = isField ? 'home' : 'm_dashboard';
+    const backMap = { visit: 'home', note: 'visit', emar: 'home', training: 'more', clientInfo: 'visit', relias: 'more', m_clients: mBack, m_qa: mBack, m_emarAdmin: mBack, m_audit: mBack, m_documents: mBack, m_relias: mBack, m_deskonly: mBack };
+
+    // ── uploads (S3 stub) ──
+    const avAttachments = (S.attachments || []).filter(a => av && a.visit === av.id).map(a => ({
+      ...a,
+      badgeStyle: a.status.indexOf('Upload') === 0 ? B.acc : B.ok,
+      iconStyle: 'flex:none;width:34px;height:34px;border-radius:8px;display:grid;place-items:center;font-size:9px;font-weight:700;background:var(--accSoft);color:var(--head)'
+    }));
+    const addAttachment = (kind) => {
+      if (!av) return;
+      const id = 'a' + Date.now();
+      const name = kind === 'IMG' ? `IMG_0${641 + (S.attachments || []).length}.jpg` : `visit-doc-${this.today().replace('/', '')}.pdf`;
+      this.setState({ attachments: [...(S.attachments || []), { id, visit: av.id, name, kind, status: 'Uploading to S3…' }] });
+      this.pushAudit('INSERT', 'storage.objects', `${name} uploaded · ${av.client}`);
+      this.queueWrite(1);
+      setTimeout(() => this.setState({ attachments: this.state.attachments.map(a => a.id === id ? { ...a, status: 'Synced to S3' } : a) }), 1400);
+    };
+
+    // ── home style (user choice, default visits) ──
+    const homeIsDash = (S.homeStyle || 'visits') === 'dashboard';
+    const homePill = (on2) => `border:none;border-radius:7px;padding:6px 12px;font-size:11.5px;font-weight:600;cursor:pointer;min-height:30px;` + (on2 ? 'background:var(--acc);color:#fff' : 'background:transparent;color:var(--mut)');
+    const doneCount = Object.keys(S.clock).filter(k => S.clock[k] && S.clock[k].out).length;
+    const myStatCards = [
+      { label: 'VISITS TODAY', value: '3', sub: `${doneCount} completed` },
+      { label: 'UNITS THIS WEEK', value: String(this.units() + 13), sub: 'Across your clients' },
+      { label: 'NMT TRIPS', value: String(S.trips.length), sub: 'Logged this week' },
+      { label: 'COURSES DUE', value: '2', sub: 'HIPAA · Documentation' }
+    ];
+
+    // ── mobile drawer (mirrors the role's desktop menu) ──
+    const mobileTargets = { dashboard: 'm_dashboard', clients: 'm_clients', qa: 'm_qa', emarAdmin: 'm_emarAdmin', audit: 'm_audit', documents: 'm_documents', relias: isField ? 'relias' : 'm_relias', myvisits: 'home', mytimesheet: 'timesheet', week: 'week', emar: 'emar' };
+    const drawerSource = isField
+      ? [{ label: 'MY WORK', ids: ['myvisits', 'week', 'mytimesheet', 'emar'] }].concat(groupsField.filter(g => g.label !== 'MY WORK'))
+      : roleGroups;
+    const drawerGroups = drawerSource.map(g => {
+      const closed = !!(S.groupsClosed || {})[g.label];
+      return {
+        label: g.label,
+        caret: closed ? '▶' : '▼',
+        open: !closed,
+        toggle: () => this.setState({ groupsClosed: { ...(S.groupsClosed || {}), [g.label]: !closed } }),
+        items: g.ids.map(id => {
+          const target = mobileTargets[id];
+          const active = target && S.fieldScreen === target;
+          return {
+            icon: navIcons[id] || '•',
+            text: allTabs[id],
+            suffix: target ? '' : '🖥',
+            suffixStyle: 'margin-left:auto;font-size:11px;opacity:.7',
+            go: () => this.setState({ fieldScreen: target || 'm_deskonly', deskOnlyLabel: allTabs[id], drawerOpen: false, clockMsg: null, noteError: null }),
+            style: `display:flex;align-items:center;gap:10px;text-align:left;border:none;border-radius:8px;font-size:13.5px;cursor:pointer;font-weight:500;box-sizing:border-box;padding:11px 12px;width:100%;min-height:44px;` +
+              (active ? 'background:rgba(255,255,255,.14);color:#fff' : 'background:transparent;color:var(--sideFg)')
+          };
+        })
+      };
+    });
+    const tabDefs = [
+      { id: 'home', icon: '🏠', label: 'Today' },
+      { id: 'week', icon: '📅', label: 'Week' },
+      { id: 'timesheet', icon: '🧾', label: 'Timesheet' },
+      { id: 'more', icon: '☰', label: 'More' }
+    ];
+    const activeTab = { home: 'home', visit: 'home', note: 'home', emar: 'more', week: 'week', timesheet: 'timesheet', more: 'more', training: 'more', clientInfo: 'home', relias: 'more' }[S.fieldScreen] || 'home';
+    const fieldTabs = tabDefs.map(t => ({
+      icon: t.icon, label: t.label,
+      go: () => this.setState({ fieldScreen: t.id, clockMsg: null, noteError: null }),
+      style: `border:none;background:none;border-radius:10px;min-height:48px;cursor:pointer;font-size:10.5px;font-weight:600;padding:4px 0;` +
+        (activeTab === t.id ? 'color:var(--head);background:var(--accSoft)' : 'color:var(--mut)')
+    }));
+    const moreItems = [
+      { label: 'Training & Learning · Relias', sub: '2 courses due — HIPAA Refresher in progress', go: () => this.setState({ fieldScreen: 'relias' }) },
+      { label: 'eMAR — medication list', sub: 'Administer, refuse, or miss with audit logging', go: () => this.setState({ fieldScreen: 'emar' }) },
+      { label: 'My training & certifications', sub: '1 credential due soon', go: () => this.setState({ fieldScreen: 'training' }) },
+      { label: 'My clients', sub: 'Programs, goals, and case managers', go: () => this.setState({ fieldScreen: 'week' }) }
+    ];
+
+    return {
+      isDesk: isDeskDevice, isField: !isDeskDevice,
+      showDesk: () => this.setState({ device: 'desk' }),
+      showMobile: () => this.setState({ device: 'mobile' }),
+      deskBtnStyle: pillBtn(isDeskDevice),
+      mobileBtnStyle: pillBtn(!isDeskDevice),
+      actor,
+      setActor: (e) => this.setState({ actor: e.target.value, adminTab: e.target.value === 'field' ? 'myvisits' : 'dashboard', fieldScreen: e.target.value === 'field' ? 'home' : 'm_dashboard', drawerOpen: false }),
+      drawerGroups,
+      drawerOpen: S.drawerOpen,
+      openDrawer: () => this.setState({ drawerOpen: true }),
+      closeDrawer: () => this.setState({ drawerOpen: false }),
+      toggleOnline: () => {
+        const online = !S.online;
+        this.setState({ online });
+        if (online && this.state.pending > 0) {
+          this.setState({ syncing: true });
+          setTimeout(() => this.setState({ pending: 0, syncing: false, lastSync: this.now() }), 1100);
+        }
+      },
+      onlineBtnLabel: S.online ? '● Online — simulate offline' : '○ Offline — reconnect',
+      onlineBtnStyle: 'border:1px solid var(--bd);border-radius:10px;padding:10px 14px;font-size:12.5px;font-weight:500;cursor:pointer;' + (S.online ? 'background:#fff;color:#39543A' : 'background:#F5EBD8;color:#7A5C22;border-color:#E6D5AE'),
+      resetDemo: () => { try { localStorage.removeItem('dls-cms-proto-v2'); } catch (e) {} location.reload(); },
+
+      navGroups,
+      toggleSide: () => this.setState({ sideCollapsed: !collapsed }),
+      sideToggleIcon: collapsed ? '»' : '«',
+      sideExpanded: !collapsed,
+      sideStyle: `width:${collapsed ? '64px' : '212px'};flex:none;background:var(--side);display:flex;flex-direction:column;min-height:720px;transition:width .2s ease`,
+      sideToggleRowStyle: `display:flex;padding:14px ${collapsed ? '0' : '14px'} 6px;justify-content:${collapsed ? 'center' : 'flex-end'}`,
+      sideFooterStyle: `margin-top:auto;padding:16px ${collapsed ? '0' : '18px'};border-top:1px solid rgba(255,255,255,.12);display:flex;align-items:center;gap:10px;justify-content:${collapsed ? 'center' : 'flex-start'}`,
+      userInitials: isField ? 'MV' : isSched ? 'TA' : 'KS',
+      userName: isField ? 'Maria Vega' : isSched ? 'T. Alvarez' : 'K. Sandoval',
+      userRole: isField ? 'Field Staff' : isSched ? 'Scheduler' : 'Admin',
+
+      statCards, todayVisits,
+      tabDashboard: adminTab === 'dashboard',
+      tabClients: adminTab === 'clients',
+      tabSchedule: adminTab === 'schedule',
+      tabStaff: adminTab === 'staff',
+      tabQa: adminTab === 'qa',
+      tabEvv: adminTab === 'evv',
+      tabEmarAdmin: adminTab === 'emarAdmin',
+      tabAudit: adminTab === 'audit',
+      tabBillingOpen: adminTab === 'billing' && !isSched,
+      tabBillingLocked: adminTab === 'billing' && isSched,
+      tabPayroll: adminTab === 'payroll',
+      tabReports: adminTab === 'reports',
+      tabDocuments: adminTab === 'documents',
+      tabSettings: adminTab === 'settings',
+      tabRelias: adminTab === 'relias',
+      tabMyVisits: adminTab === 'myvisits',
+      tabMyTimesheet: adminTab === 'mytimesheet',
+
+      clientSearch: S.clientSearch,
+      setClientSearch: (e) => this.setState({ clientSearch: e.target.value }),
+      filteredClients,
+      weekDays: ['MON 7/6', 'TUE 7/7', 'WED 7/8', 'THU 7/9', 'FRI 7/10'],
+      scheduleRows, moveSelected,
+      scheduleMsg: S.scheduleMsg, scheduleMsgStyle: msgStyle(S.scheduleErr),
+      staffRows,
+      qaFlags, qaCount: qaFlags.length, qaEmpty: qaFlags.length === 0,
+      evvRows, canManualAdjust: isAdminRole,
+      adjVisit: S.adjForm.visit, adjIn: S.adjForm.in, adjOut: S.adjForm.out, adjReason: S.adjForm.reason,
+      setAdjVisit: (e) => this.setState({ adjForm: { ...S.adjForm, visit: e.target.value } }),
+      setAdjIn: (e) => this.setState({ adjForm: { ...S.adjForm, in: e.target.value } }),
+      setAdjOut: (e) => this.setState({ adjForm: { ...S.adjForm, out: e.target.value } }),
+      setAdjReason: (e) => this.setState({ adjForm: { ...S.adjForm, reason: e.target.value } }),
+      submitAdj, evvMsg: S.evvMsg, evvMsgStyle: msgStyle(S.evvErr),
+      emarFilters, emarRows,
+      auditRows,
+      billingRows,
+      exportBtnLabel: `Export 837P (${selCount})`,
+      exportBtnStyle: 'border:none;border-radius:9px;padding:10px 18px;font-size:13px;font-weight:600;' + (selCount > 0 ? 'background:var(--btn);color:var(--btnFg);cursor:pointer' : 'background:#EDEBE5;color:#A29C90;cursor:default'),
+      exportClaims: () => { if (selCount > 0) { this.setState({ showExport: true }); this.pushAudit('INSERT', 'claims', `837P generated · ${selCount} claim(s)`); } },
+      showExport: S.showExport,
+      closeExport: () => this.setState({ showExport: false }),
+      stopClick: (e) => e.stopPropagation(),
+      exportCount: selCount,
+      exportText: this.build837p(billingRows.filter(r => r.sel)),
+      payrollRows, payrollTotReg, payrollTotOt,
+      payrollCertified: S.payrollCertified,
+      toggleCertify: () => this.setState({ payrollCertified: !S.payrollCertified }),
+      submitPayroll, payrollMsg: S.payrollMsg, payrollMsgStyle: msgStyle(S.payrollErr),
+      payrollBtnStyle: 'border:none;border-radius:9px;padding:10px 18px;font-size:13px;font-weight:600;background:var(--btn);color:var(--btnFg);cursor:pointer',
+      reportCards, reportRows,
+      documents,
+      toggleNoticeForm: () => this.setState({ showNoticeForm: !S.showNoticeForm, docMsg: null }),
+      noticeFormBtnLabel: S.showNoticeForm ? 'Cancel' : 'New employment notice',
+      showNoticeForm: S.showNoticeForm,
+      noticeTypes,
+      nClient: nf.client, setNClient: setNF('client'),
+      nEmployer: nf.employer, setNEmployer: setNF('employer'),
+      nJobTitle: nf.jobTitle, setNJobTitle: setNF('jobTitle'),
+      nSupervisor: nf.supervisor, setNSupervisor: setNF('supervisor'),
+      nPhone: nf.phone, setNPhone: setNF('phone'),
+      nWage: nf.wage, setNWage: setNF('wage'),
+      nHours: nf.hours, setNHours: setNF('hours'),
+      nStart: nf.start, setNStart: setNF('start'),
+      saveNotice, docMsg: S.docMsg, docMsgStyle: msgStyle(S.docErr),
+      userRows,
+      uName: uf.name, setUName: (e) => this.setState({ userForm: { ...uf, name: e.target.value } }),
+      uEmail: uf.email, setUEmail: (e) => this.setState({ userForm: { ...uf, email: e.target.value } }),
+      uRole: uf.role, setURole: (e) => this.setState({ userForm: { ...uf, role: e.target.value } }),
+      addUser, settingsMsg: S.settingsMsg, settingsMsgStyle: msgStyle(false),
+      permRows, configRows,
+      reliasRows, launchRelias, reliasMsg: S.reliasMsg, reliasMsgStyle: msgStyle(false),
+
+      // field
+      fieldHome: fScreen === 'home',
+      fieldWeekOpen: fScreen === 'week',
+      fieldVisitOpen: fScreen === 'visit',
+      fieldNoteOpen: fScreen === 'note',
+      fieldEmarOpen: fScreen === 'emar',
+      fieldTsOpen: fScreen === 'timesheet',
+      fieldMoreOpen: fScreen === 'more',
+      fieldTrainingOpen: fScreen === 'training',
+      fieldReliasOpen: fScreen === 'relias',
+      fieldClientOpen: fScreen === 'clientInfo',
+      mDashOpen: fScreen === 'm_dashboard',
+      mClientsOpen: fScreen === 'm_clients',
+      mQaOpen: fScreen === 'm_qa',
+      mEmarAdminOpen: fScreen === 'm_emarAdmin',
+      mAuditOpen: fScreen === 'm_audit',
+      mDocumentsOpen: fScreen === 'm_documents',
+      mReliasOpen: fScreen === 'm_relias',
+      mDeskOnlyOpen: fScreen === 'm_deskonly',
+      deskOnlyLabel: S.deskOnlyLabel || 'This section',
+      showFieldTabs: isField,
+      avAttachments,
+      addPhoto: () => addAttachment('IMG'),
+      addDoc: () => addAttachment('PDF'),
+      homeIsDash, myStatCards,
+      homeVisitsGo: () => this.setState({ homeStyle: 'visits' }),
+      homeDashGo: () => this.setState({ homeStyle: 'dashboard' }),
+      homeVisitsBtn: homePill(!homeIsDash),
+      homeDashBtn: homePill(homeIsDash),
+      fieldBack: !!backMap[fScreen],
+      fieldTitle: fieldTitles[fScreen] || 'DLS Field',
+      goFieldBack: () => this.setState({ fieldScreen: backMap[fScreen] || mBack, clockMsg: null, noteError: null }),
+      syncPillStyle, syncPillLabel,
+      fieldVisits, fieldTabs, moreItems,
+      openEmar: () => this.setState({ fieldScreen: 'emar' }),
+      weekSchedule,
+      avClient: av ? av.client : '', avTime: av ? av.time : '', avType: av ? typeLabels[av.type] : '',
+      avIsScc: av && av.type === 'SCC',
+      avShowClockIn: av && !clk, avShowClockOut: clockedIn, avDone: clockedOut,
+      avClockSummary: clk && clk.out ? `${clk.in} → ${clk.out}` : '',
+      avCanNote: clockedIn || clockedOut,
+      avNoteSubmitted: av && !!S.submitted[av.id],
+      avNoteNotSubmitted: av && !S.submitted[av.id] && (clockedIn || clockedOut),
+      avQueuedSuffix: S.online ? '' : ' — queued for sync',
+      clockInLabel: S.clockBusy ? 'Getting GPS…' : '📍 Clock In',
+      clockOutLabel: S.clockBusy ? 'Getting GPS…' : 'Clock Out',
+      doClockIn, doClockOut, clockMsg: S.clockMsg,
+      clockMsgStyle: 'border-radius:10px;padding:12px 14px;font-size:13px;' + (S.clockErr ? 'background:#F6E3E0;color:#8C3A2F' : 'background:var(--accSoft);color:var(--head)'),
+      openNote: () => this.setState({ fieldScreen: 'note', noteError: null }),
+      openClientInfo: () => this.setState({ fieldScreen: 'clientInfo' }),
+      ciName: av ? av.client : '', ciMedicaid: ci ? ci.medicaid : '', ciAge: ci ? ci.age : '',
+      ciSections: ci ? ci.sections : [],
+      tripDest: S.tripForm.dest, setTripDest: (e) => this.setState({ tripForm: { ...S.tripForm, dest: e.target.value } }),
+      tripPurpose: S.tripForm.purpose, setTripPurpose: (e) => this.setState({ tripForm: { ...S.tripForm, purpose: e.target.value } }),
+      logTrip, tripMsg: S.tripMsg, tripMsgStyle: msgStyle(S.tripErr),
+      tripCountLabel: `${clientTrips} of ${tripLimit} used this week`,
+      tripCountBadge: clientTrips >= tripLimit ? B.bad : B.ok,
+      autosaveLabel: S.noteSavedAt ? `Saved ${S.noteSavedAt}` : 'Draft',
+      noteStart: S.note.start, noteEnd: S.note.end,
+      setNoteStart: (e) => this.setNote({ start: e.target.value }),
+      setNoteEnd: (e) => this.setNote({ end: e.target.value }),
+      noteUnits: this.units(), noteHours: (this.units() * 0.25).toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1'),
+      noteGoals,
+      noteNarrative: S.note.narrative, setNarrative: (e) => this.setNote({ narrative: e.target.value }),
+      noteRedirection: S.note.redirection, toggleRedirection: () => this.setNote({ redirection: !S.note.redirection }),
+      noteCancelled: S.note.cancelled, toggleCancelled: () => this.setNote({ cancelled: !S.note.cancelled }),
+      cancelReason: S.note.cancelReason, setCancelReason: (e) => this.setNote({ cancelReason: e.target.value }),
+      noteIsJc: av && av.type === 'Job_Coaching',
+      seAuth: S.note.seAuth, setSeAuth: (e) => this.setNote({ seAuth: e.target.value }),
+      seMilestone: S.note.seMilestone, setSeMilestone: (e) => this.setNote({ seMilestone: e.target.value }),
+      seEmployer: S.note.seEmployer, setSeEmployer: (e) => this.setNote({ seEmployer: e.target.value }),
+      seGoal: S.note.seGoal, setSeGoal: (e) => this.setNote({ seGoal: e.target.value }),
+      seSupervisor: S.note.seSupervisor, setSeSupervisor: (e) => this.setNote({ seSupervisor: e.target.value }),
+      seCumHours: S.note.seCumHours, setSeCumHours: (e) => this.setNote({ seCumHours: e.target.value }),
+      seDuties: S.note.seDuties, setSeDuties: (e) => this.setNote({ seDuties: e.target.value }),
+      seUpc: S.note.seUpc, toggleSeUpc: () => this.setNote({ seUpc: !S.note.seUpc }),
+      signatures, noteError: S.noteError, submitNote,
+      meds,
+      tsRows, tsTotal, tsSubmitted: S.tsSubmitted, tsNotSubmitted: !S.tsSubmitted,
+      submitTimesheet: () => {
+        this.setState({ tsSubmitted: true, payroll: S.payroll.map(p => p.id === 'pr1' ? { ...p, notesIn: true } : p) });
+        this.pushAudit('INSERT', 'timesheets', 'Route record submitted · M. Vega · Jul 5–11');
+        this.queueWrite(1);
+      },
+      myTrainings, myRelias
+    };
+  }
+
+  setMed(id, status) {
+    this.setState({ meds: this.state.meds.map(m => m.id === id ? { ...m, status } : m) });
+    this.pushAudit('UPDATE', 'medication_logs', `${status} · Alma Reyes`);
+    this.queueWrite(1);
+  }
+
+  build837p(rows) {
+    if (!rows.length) return '';
+    const lines = [
+      'ISA*00*          *00*          *ZZ*DLS0001        *ZZ*COMEDICAID     *260706*1015*^*00501*000000042*0*P*:~',
+      'GS*HC*DLS0001*COMEDICAID*20260706*1015*42*X*005010X222A1~',
+      'ST*837*0001*005010X222A1~',
+      'BHT*0019*00*000000042*20260706*1015*CH~',
+      'NM1*41*2*DURABLE LIFE SKILLS INC*****46*DLS0001~',
+      'NM1*40*2*COLORADO MEDICAID*****46*COMEDICAID~',
+      'HL*1**20*1~',
+      'NM1*85*2*DURABLE LIFE SKILLS INC*****XX*1234567890~',
+      'N3*123 MAIN ST~', 'N4*GREELEY*CO*80631~', 'REF*EI*841234567~'
+    ];
+    rows.forEach((r, i) => {
+      const total = (r.units * 15.5).toFixed(2);
+      lines.push(`HL*${i + 2}*1*22*0~`);
+      lines.push('SBR*P*18********MC~');
+      lines.push(`NM1*IL*1*${r.client.split(',')[0].toUpperCase()}*${r.client.split(', ')[1].toUpperCase()}****MI*${r.medicaid}~`);
+      lines.push(`CLM*PN-${r.id.toUpperCase()}*${total}***12:B:1*Y*A*Y*Y~`);
+      lines.push('HI*ABK:F840~');
+      lines.push('LX*1~');
+      lines.push(`SV1*HC:T2021*${total}*UN*${r.units}*12**1~`);
+      lines.push(`DTP*472*D8*2026${r.date.slice(0, 2)}${r.date.slice(3, 5)}~`);
+    });
+    lines.push(`SE*${lines.length - 1}*0001~`, 'GE*1*42~', 'IEA*1*42~');
+    return lines.join('\n');
+  }
+}
+</script>
+</body>
+</html>
