@@ -1,26 +1,39 @@
-// lib/rbac/roles.ts — role checks shared by server actions, routes, and UI
+// lib/rbac/roles.ts — role constants + the permission matrix shown in
+// Settings. Enforcement lives in RLS (supabase/policies) and
+// lib/auth/session.ts (requireRole/requireRealAdmin); this matrix mirrors it
+// for UI gating and the Settings → permission matrix screen.
 import type { Role } from "@/lib/supabase/types";
-import { createClient } from "@/lib/supabase/server";
 
 export const ROLES: Role[] = ["Admin", "Scheduler", "Field_Staff"];
 
-/** RBAC matrix mirror of supabase/policies/*.sql — used for UI gating only.
- *  The database RLS policies are the source of truth for enforcement. */
-export const CAN = {
-  Admin: { billingExport: true, manualEvvAdjustment: true, manageStaff: true, schedule: true },
-  Scheduler: { billingExport: false, manualEvvAdjustment: false, manageStaff: false, schedule: true },
-  Field_Staff: { billingExport: false, manualEvvAdjustment: false, manageStaff: false, schedule: false }
-} as const satisfies Record<Role, Record<string, boolean>>;
+export const ROLE_LABELS: Record<Role, string> = {
+  Admin: "Admin",
+  Scheduler: "Scheduler",
+  Field_Staff: "Field Staff"
+};
 
-/** Resolve the current user's role server-side. Throws if unauthenticated. */
-export async function requireRole(...allowed: Role[]): Promise<{ userId: string; role: Role }> {
-  const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("UNAUTHENTICATED");
-  const { data: profile } = await supabase
-    .from("users").select("role,status").eq("id", user.id).single();
-  if (!profile || profile.status !== "Active") throw new Error("FORBIDDEN");
-  const role = profile.role as Role;
-  if (allowed.length > 0 && !allowed.includes(role)) throw new Error("FORBIDDEN");
-  return { userId: user.id, role };
-}
+/** UI mirror of the RLS matrix — the database is the source of truth. */
+export const PERMISSION_MATRIX: {
+  capability: string;
+  Admin: boolean;
+  Scheduler: boolean;
+  Field_Staff: boolean;
+}[] = [
+  { capability: "View own visits & write progress notes", Admin: true, Scheduler: false, Field_Staff: true },
+  { capability: "View all clients", Admin: true, Scheduler: true, Field_Staff: false },
+  { capability: "View assigned clients only", Admin: false, Scheduler: false, Field_Staff: true },
+  { capability: "Schedule / reassign visits", Admin: true, Scheduler: true, Field_Staff: false },
+  { capability: "Manage physician orders", Admin: true, Scheduler: true, Field_Staff: false },
+  { capability: "eMAR administration (own clients)", Admin: true, Scheduler: false, Field_Staff: true },
+  { capability: "QA review & flag resolution", Admin: true, Scheduler: false, Field_Staff: false },
+  { capability: "EVV review & manual adjustment (reason required)", Admin: true, Scheduler: false, Field_Staff: false },
+  { capability: "Billing & 837P export", Admin: true, Scheduler: false, Field_Staff: false },
+  { capability: "Payroll transmittal", Admin: true, Scheduler: false, Field_Staff: false },
+  { capability: "Staff & credentials management", Admin: true, Scheduler: false, Field_Staff: false },
+  { capability: "Settings, users & menu configuration", Admin: true, Scheduler: false, Field_Staff: false },
+  { capability: "Impersonation (view as user)", Admin: true, Scheduler: false, Field_Staff: false },
+  { capability: "Audit trail (read-only)", Admin: true, Scheduler: false, Field_Staff: false }
+];
+
+// Back-compat re-exports: the session module owns auth gating now.
+export { requireRole, requireSession, requireRealAdmin } from "@/lib/auth/session";

@@ -1,11 +1,9 @@
-// app/page.tsx — route to the right surface by role
+// app/page.tsx — route to the right surface by (effective) role
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { getSessionContext } from "@/lib/auth/session";
 
 export default async function Home() {
-  const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-  const { data: profile } = await supabase.from("users").select("role").eq("id", user.id).single();
-  redirect(profile?.role === "Field_Staff" ? "/field" : "/admin");
+  const ctx = await getSessionContext();
+  if (!ctx.effectiveUser) redirect("/login");
+  redirect(ctx.effectiveUser.role === "Field_Staff" ? "/field" : "/admin");
 }

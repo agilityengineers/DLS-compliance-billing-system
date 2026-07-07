@@ -1,34 +1,34 @@
 // lib/evv/manualAdjustment.ts — ADMIN-ONLY manual EVV path (server action).
+// A non-empty reason is required here, by the DB CHECK constraint, and by
+// the demo-store rule; field sessions can't reach Manual at all (RLS).
 "use server";
 
-import { requireRole } from "@/lib/rbac/roles";
-import { createServiceClient } from "@/lib/supabase/server";
+import { requireRole } from "@/lib/auth/session";
+import { upsertEvvLog } from "@/lib/data/repo-field";
+import type { EvvLog } from "@/lib/supabase/types";
 
-/**
- * Admin manual adjustment: requires a non-empty reason (also enforced by a
- * DB CHECK constraint on evv_logs).
- */
 export async function manualEvvAdjustment(input: {
   visitId: string;
   clockInTime: string;
   clockOutTime: string;
   reason: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  const { userId } = await requireRole("Admin");
+  const ctx = await requireRole("Admin");
 
   if (!input.reason || input.reason.trim().length === 0) {
     return { ok: false, error: "manual_adjustment_reason is required for manual EVV entries." };
   }
 
-  const supabase = createServiceClient();
-  const { error } = await supabase.from("evv_logs").insert({
+  const log: EvvLog = {
+    id: crypto.randomUUID(),
     visit_id: input.visitId,
     clock_in_time: input.clockInTime,
     clock_out_time: input.clockOutTime,
+    clock_in_gps: null,
+    clock_out_gps: null,
     verification_method: "Manual",
-    manual_adjustment_reason: `${input.reason.trim()} (adjusted by ${userId})`,
-    offline_locked: true
-  });
-  if (error) return { ok: false, error: error.message };
-  return { ok: true };
+    offline_locked: true,
+    manual_adjustment_reason: `${input.reason.trim()} (adjusted by ${ctx.realUser!.full_name})`
+  };
+  return upsertEvvLog(log, ctx.auditCtx, { isAdmin: true });
 }
