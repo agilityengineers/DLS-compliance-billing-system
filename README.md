@@ -108,4 +108,5 @@ complete.
 - [PRODUCTION-READINESS.md](./PRODUCTION-READINESS.md) — the go-live gate (read first)
 - [DECISIONS.md](./DECISIONS.md) — product + build decision log
 - `docs/design/` — the design handoff (spec, screenshots, interactive prototype)
+- [docs/review/WORKPLAN.md](./docs/review/WORKPLAN.md) — **the one list**: every item to work on or approve, with owner, approver, and status
 - `docs/review/` — launch-readiness review, client roadmap, and the [backlog](./docs/review/BACKLOG.md) of open launch decisions

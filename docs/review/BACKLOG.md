@@ -2,6 +2,8 @@
 
 This file tracks items that are neither code defects nor feature work: launch-scope decisions, requirements still to obtain, and process steps that must not be forgotten. Code defects are ranked in [Part A of the launch-readiness review](./2026-09-launch-readiness-review.md#part-a--critical-issues); feature work is sequenced in the [roadmap](./2026-09-roadmap.md); go-live prerequisites live in [`PRODUCTION-READINESS.md`](../../PRODUCTION-READINESS.md).
 
+Both items are also rows in the [work plan and sign-off sheet](./WORKPLAN.md), which is where status is tracked.
+
 **Conventions.** IDs are `BL-nnn`. Status is `Open`, `In progress`, or `Done`. Every item names an owner, a next action, and a "done when". Close an item by setting its status to Done with the date; do not delete it.
 
 | ID | Title | Type | Status | Owner | Next action |

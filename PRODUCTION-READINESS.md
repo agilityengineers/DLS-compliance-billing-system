@@ -7,6 +7,8 @@
 
 **Status legend:** 🔴 hard blocker (no PHI until done) · 🟡 required for go-live, staged rollout acceptable · 🔵 operational hardening
 
+> **Sign-off sheet:** every item below is indexed as `R<section>.<n>` in [`docs/review/WORKPLAN.md`](./docs/review/WORKPLAN.md) with an owner, an approver, and a status. Update the status there when you check a box here.
+
 ---
 
 ## 1. Legal / HIPAA prerequisites — 🔴 all hard blockers
