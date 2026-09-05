@@ -103,6 +103,20 @@ deployments). Secrets go in Replit Secrets, never the repo. Keep
 `NEXT_PUBLIC_DEMO_MODE=true` everywhere until PRODUCTION-READINESS.md §1 is
 complete.
 
+**Real mode needs its settings at build time.** `NEXT_PUBLIC_*` values are
+inlined by `next build`; if the Supabase URL/anon key are missing during the
+build, demo mode is compiled in permanently. The app refuses to serve when
+demo mode is active while `SUPABASE_SERVICE_ROLE_KEY` or
+`BAA_SIGNED_ALL_VENDORS=true` is present, so a mis-built deployment fails
+loudly instead of serving the demo store as production.
+
+## Database tests (no Postgres install needed)
+
+`npm test` also runs `lib/db/__tests__/schema.test.ts`, which boots an
+in-process Postgres (pglite), applies `supabase/migrations/*`,
+`supabase/policies/*` and `supabase/seed.sql`, and exercises the RLS
+policies and rule triggers as each role. Use it whenever you touch SQL.
+
 ## Documents
 
 - [PRODUCTION-READINESS.md](./PRODUCTION-READINESS.md) — the go-live gate (read first)

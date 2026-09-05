@@ -50,6 +50,14 @@ class ColoradoMedicaid837PAdapter implements PayerAdapter {
       if (!client) {
         return { ok: false, totalUnits: 0, totalCharge: 0, error: `Client record missing for note ${r.note.id}.` };
       }
+      // Every service line points at diagnosis 1 (SV107); a claim with no
+      // HI segment would be rejected at the 2400 loop. Refuse up front.
+      if (!(client.active_diagnoses ?? []).some((d) => d.code?.trim())) {
+        return {
+          ok: false, totalUnits: 0, totalCharge: 0,
+          error: `${client.last_name}, ${client.first_name} has no diagnosis code on file — add one before billing.`
+        };
+      }
       claims.push({
         claimId: `PN-${r.note.id.slice(0, 8).toUpperCase()}`,
         client: {

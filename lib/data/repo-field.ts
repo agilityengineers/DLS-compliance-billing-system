@@ -125,8 +125,13 @@ export interface NoteWithContext extends ProgressNote {
   visit_type: string;
 }
 
+/** PostgREST returns at most 1000 rows per request; page through larger windows. */
+const PAGE_SIZE = 1000;
+
 export async function listNotes(filter: {
   from?: string; to?: string; staffId?: string; clientId?: string; unbilledOnly?: boolean;
+  /** Row cap. Omit → 300 (screen listings). `null` → no cap: the whole window, paged. */
+  limit?: number | null;
 } = {}): Promise<NoteWithContext[]> {
   if (isDemoMode()) {
     const { progressNotes, visits, clients, users } = getDemoStore().data;
@@ -154,21 +159,32 @@ export async function listNotes(filter: {
           visit_type: v?.visit_type ?? "SCC"
         };
       })
-      .sort((a, b) => b.date.localeCompare(a.date));
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, filter.limit === undefined ? 300 : filter.limit ?? undefined);
   }
-  let q = createDataClient()
-    .from("progress_notes")
-    .select("*, clients(first_name,last_name,medicaid_id), staff:users!progress_notes_staff_id_fkey(full_name), visits(visit_type)")
-    .order("date", { ascending: false })
-    .limit(300);
-  if (filter.from) q = q.gte("date", filter.from);
-  if (filter.to) q = q.lte("date", filter.to);
-  if (filter.staffId) q = q.eq("staff_id", filter.staffId);
-  if (filter.clientId) q = q.eq("client_id", filter.clientId);
-  if (filter.unbilledOnly) q = q.is("billed_at", null);
-  const { data, error } = await q;
-  if (error) throw new Error(error.message);
-  return (data ?? []).map((row: Record<string, unknown>) => {
+  const cap = filter.limit === undefined ? 300 : filter.limit; // null = uncapped, paged
+  const rows: Record<string, unknown>[] = [];
+  for (let offset = 0; ; ) {
+    const pageSize = cap === null ? PAGE_SIZE : Math.min(PAGE_SIZE, cap - rows.length);
+    if (pageSize <= 0) break;
+    let q = createDataClient()
+      .from("progress_notes")
+      .select("*, clients(first_name,last_name,medicaid_id), staff:users!progress_notes_staff_id_fkey(full_name), visits(visit_type)")
+      .order("date", { ascending: false })
+      .order("id") // deterministic paging
+      .range(offset, offset + pageSize - 1);
+    if (filter.from) q = q.gte("date", filter.from);
+    if (filter.to) q = q.lte("date", filter.to);
+    if (filter.staffId) q = q.eq("staff_id", filter.staffId);
+    if (filter.clientId) q = q.eq("client_id", filter.clientId);
+    if (filter.unbilledOnly) q = q.is("billed_at", null);
+    const { data, error } = await q;
+    if (error) throw new Error(error.message);
+    rows.push(...((data ?? []) as Record<string, unknown>[]));
+    if (!data || data.length < pageSize) break;
+    offset += data.length;
+  }
+  return rows.map((row: Record<string, unknown>) => {
     const c = row.clients as { first_name?: string; last_name?: string; medicaid_id?: string } | null;
     const s = row.staff as { full_name?: string } | null;
     const v = row.visits as { visit_type?: string } | null;
@@ -333,14 +349,21 @@ export async function createNmtTrip(
 ): Promise<{ ok: boolean; error?: string }> {
   const full: NmtTrip = { ...trip, id: trip.id ?? crypto.randomUUID() };
   if (isDemoMode()) {
+    const store = getDemoStore();
+    if (store.data.nmtTrips.some((t) => t.id === full.id)) return { ok: true }; // replayed sync
     try {
-      getDemoStore().insertNmtTrip(full, ctx);
+      store.insertNmtTrip(full, ctx);
       return { ok: true };
     } catch (e) {
       return fail(e);
     }
   }
-  const { error } = await createDataClient().from("nmt_trips").insert(full);
+  // Idempotent for sync replays: a retried mutation must not hit the cap
+  // trigger (which counts the row it already inserted) or a duplicate key.
+  const db = createDataClient();
+  const { data: existing } = await db.from("nmt_trips").select("id").eq("id", full.id).maybeSingle();
+  if (existing) return { ok: true };
+  const { error } = await db.from("nmt_trips").insert(full);
   return error ? { ok: false, error: error.message } : { ok: true };
 }
 

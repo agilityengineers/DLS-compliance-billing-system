@@ -118,7 +118,15 @@ export async function recordCredentialRenewal(
 
 // ═══ clients ═════════════════════════════════════════════════════════════
 
-export async function listClients(search?: string): Promise<Client[]> {
+/** PostgREST returns at most 1000 rows per request; page through larger sets. */
+const CLIENT_PAGE_SIZE = 1000;
+
+export async function listClients(
+  search?: string,
+  /** Row cap. Omit → 200 (screen listings). `null` → every client, paged. */
+  opts: { limit?: number | null } = {}
+): Promise<Client[]> {
+  const cap = opts.limit === undefined ? 200 : opts.limit;
   if (isDemoMode()) {
     let rows = getDemoStore().data.clients.map((c) => ({ ...c, calculated_age: age(c.date_of_birth) }));
     if (search) {
@@ -129,15 +137,29 @@ export async function listClients(search?: string): Promise<Client[]> {
         c.medicaid_id.toLowerCase().includes(q)
       );
     }
-    return rows.sort((a, b) => a.last_name.localeCompare(b.last_name));
+    return rows.sort((a, b) => a.last_name.localeCompare(b.last_name)).slice(0, cap ?? undefined);
   }
-  let query = createDataClient().from("v_clients").select("*").order("last_name").limit(200);
-  if (search) {
-    query = query.or(`last_name.ilike.%${search}%,first_name.ilike.%${search}%,medicaid_id.ilike.%${search}%`);
+  // The search term is interpolated into a PostgREST filter expression, where
+  // commas/parentheses/quotes are syntax. Names and Medicaid IDs never need them.
+  const safeSearch = search?.replace(/[,()"\\%]/g, " ").trim();
+  const rows: Record<string, unknown>[] = [];
+  for (let offset = 0; ; ) {
+    const pageSize = cap === null ? CLIENT_PAGE_SIZE : Math.min(CLIENT_PAGE_SIZE, cap - rows.length);
+    if (pageSize <= 0) break;
+    let query = createDataClient()
+      .from("v_clients").select("*")
+      .order("last_name").order("id")
+      .range(offset, offset + pageSize - 1);
+    if (safeSearch) {
+      query = query.or(`last_name.ilike.%${safeSearch}%,first_name.ilike.%${safeSearch}%,medicaid_id.ilike.%${safeSearch}%`);
+    }
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+    rows.push(...((data ?? []) as Record<string, unknown>[]));
+    if (!data || data.length < pageSize) break;
+    offset += data.length;
   }
-  const { data, error } = await query;
-  if (error) throw new Error(error.message);
-  return (data ?? []).map(mapClientRow);
+  return rows.map(mapClientRow);
 }
 
 export async function getClient(id: string): Promise<Client | null> {

@@ -14,8 +14,8 @@ Sources: [launch-readiness review](./2026-09-launch-readiness-review.md) (defect
 
 | ID | Decision | Detail | Approver | Status | Notes |
 |---|---|---|---|---|---|
-| D-01 | Role mapping: add `Super_Admin` above `Admin`; keep `Scheduler` and `Field_Staff` as the two employee roles | Roadmap q.1 | DLS owner | Open | Recommendation stands unless the owner wants a single Employee role |
-| D-02 | Vendor access: Super Admin has no standing PHI access; PHI only inside an Admin-granted, time-boxed, audited support window | Roadmap q.2 | DLS owner | Open | |
+| D-01 | Role mapping: add `Super_Admin` above `Admin`; keep `Scheduler` and `Field_Staff` as the two employee roles | Roadmap q.1 | DLS owner | In progress | Decided by the architect 2026-09-05; owner confirmation pending |
+| D-02 | Vendor access: Super Admin has no standing PHI access; PHI only inside an Admin-granted, time-boxed, audited support window | Roadmap q.2 | DLS owner | In progress | Decided by the architect 2026-09-05; owner confirmation pending |
 | D-03 | Intake paperwork in launch scope; contents of the intake packet and the yearly renewal packet | Roadmap q.3 | DLS owner | Open | Drives roadmap 2.2 |
 | D-04 | Authorizations in hours or units; rounding rule under HCPF; authorization week Sun–Sat | Roadmap q.4 | DLS owner | Open | Drives roadmap 3.6 |
 | D-05 | Attendance and person-centered-profile samples: build generic v1 now or wait | Roadmap q.5 | DLS owner | Open | Linked to BL-002 |
@@ -24,9 +24,9 @@ Sources: [launch-readiness review](./2026-09-launch-readiness-review.md) (defect
 | D-08 | Relias: API credentials, completion payload contract, SSO method | Roadmap q.8 | DLS owner (obtain from Relias) | Open | Blocks roadmap 2.8 |
 | D-09 | Schedule board and physician-order management ship ON at launch | Roadmap q.9 · [BL-001](./BACKLOG.md#bl-001) | DLS owner | Open | Notes need visits; visits need physician orders |
 | D-10 | Written owner feedback and the two samples supplied and filed | Roadmap q.10 · [BL-002](./BACKLOG.md#bl-002) | DLS owner (supply) · PM (file) | Open | Review Part D re-checked afterwards |
-| A-01 | Approve the two-tier feature-flag design | Review Part C2 | Architect | Open | Must precede roadmap 0.3 |
+| A-01 | Approve the two-tier feature-flag design | Review Part C2 | Architect | Done | Approved 2026-09-05 |
 | A-02 | Approve the roadmap sequencing and the must-fix-before-launch tier | Roadmap "The plan" | Architect · DLS owner | Open | |
-| A-03 | Approve the feature catalog defaults (what is on at launch, what is off) | Review Part C2 "Catalog" | Architect · DLS owner | Open | Includes D-09 |
+| A-03 | Approve the feature catalog defaults (what is on at launch, what is off) | Review Part C2 "Catalog" | Architect · DLS owner | In progress | Architect approved 2026-09-05; owner confirmation of D-09 pending |
 
 ## 2. Backlog items (non-code)
 
@@ -44,9 +44,10 @@ Sources: [launch-readiness review](./2026-09-launch-readiness-review.md) (defect
 | 0.3 | Feature flags: table, guard trigger, `fn_feature_enabled`, RLS, migration 0006, demo parity | — | 0.2, A-01 | 5 d | Dev | Architect | Open |
 | 0.4 | `requireFeature` at every gate, nav rewrite, two-tier Settings editor, Super Admin console; `Completed` on note submit when EVV is off | — | 0.3, A-03 | 5 d | Dev | Architect | Open |
 | 0.5 | Employee onboarding: invite-based Add User, invite-only Google sign-in, password reset | #1, #22 | — | 2 d | Dev | Architect | Open |
-| 0.6 | Real-database breakers: timesheet index and result checks; notes query limit; eMAR "Missed" policy | #2, #9, #6 | — | 2 d | Dev | Architect | Open |
-| 0.7 | Demo-mode guard at startup; deployment notes | #7 | — | 0.5 d | Dev | Architect | Open |
+| 0.6 | Real-database breakers: timesheet index and result checks; notes query limit; eMAR "Missed" policy; geofence trigger repair; seed runs | #2, #9, #6, #38, #39 | — | 3 d | Dev | Architect | In progress (PR-A) |
+| 0.7 | Demo-mode guard at startup; deployment notes | #7 | — | 0.5 d | Dev | Architect | In progress (PR-A) |
 | 0.8 | HIPAA blockers: service-worker cache, idle-timeout wipe, impersonation audit, roster search off the URL, Scheduler column guard, error-string mapping, security headers | #20, #21, #23, #24, #25, #27 (headers), #28 (idle) | — | 3 d | Dev | Architect | Open |
+| 0.10 | In-process Postgres (pglite) harness: migrations, policies, seed, RLS and rule triggers verified under `npm test` | — | — | 1 d | Dev | Architect | In progress (PR-A) |
 | 0.9 | Field data safety: backoff without deletion, durable failure list, keep draft until ack, no wipe on 401, per-table sync validation, notes RLS re-asserts `client_id` | #15, #16, #19 | 0.1 | 3 d | Dev | Architect | Open |
 | 1.1 | Launch data model migration 0007 + policies + types + demo/seed parity | #5 (schema part) | 0.1–0.3 | 3 d | Dev | Architect | Open |
 | 2.1 | Client records: detail page, edit, status, physician-order UI, authorization fields, residence capture | #5 | 1.1, D-09 | 6 d | Dev | DLS owner | Open |
@@ -57,10 +58,10 @@ Sources: [launch-readiness review](./2026-09-launch-readiness-review.md) (defect
 | 2.6 | Person-centered profile v1 + goals | — | 1.1, D-05 | 3 d | Dev | DLS owner | Open |
 | 2.7 | Staff credential documents; nightly scheduler for expiry jobs; `CRON_SECRET` documented | #29 | 0.5, D-07 | 2 d | Dev | Architect | Open |
 | 2.8 | Relias: nightly sync route, sync-run log, readiness guard fix, SSO off until real SP settings | #29 (Relias job) | 0.4, D-08 | 3 d + vendor | Dev | Architect | Open |
-| 3.1 | Valid 837P file and a test that proves it; agency-time ISA/GS dates | #8, #12 (dates) | — | 1 d | Dev | Architect | Open |
-| 3.2 | Safe export order; checked file attach; explicit attribution on service-role writes | #10, #26 | — | 2 d | Dev | Architect | Open |
+| 3.1 | Valid 837P file and a test that proves it; agency-time ISA/GS dates | #8, #12 (dates) | — | 1 d | Dev | Architect | In progress (PR-A; dates follow in PR-B) |
+| 3.2 | Safe export order; checked file attach; export runs as the Admin so audit attribution holds | #10, #26 | — | 2 d | Dev | Architect | In progress (PR-A) |
 | 3.3 | EVV evidence as a blocker when EVV is on, a warning when off | #11 | 0.4 | 1 d | Dev | Architect | Open |
-| 3.4 | Refuse export with placeholder NPI/address/tax id | #12 | — | 1 d | Dev | Architect | Open |
+| 3.4 | Refuse export with placeholder NPI/address/tax id | #12 | — | 1 d | Dev | Architect | In progress (PR-A) |
 | 3.5 | Real fee schedule; clearinghouse validation pass; one parallel billing cycle | — | 3.1–3.4, R4.3 | 1 d + DLS | Dev + DLS billing | DLS owner | Open |
 | 3.6 | Weekly caps in the authorization's own unit; readiness tests | #13, #14 | D-04 | 1 d | Dev | Architect | Open |
 
@@ -178,3 +179,5 @@ Sources: [launch-readiness review](./2026-09-launch-readiness-review.md) (defect
 | 35 | Search filter injection | 4.10 |
 | 36 | `sharp`, ports, PG version | 4.10 |
 | 37 | Test coverage | 4.9 |
+| 38 | GPS clock-in impossible in real mode (geofence trigger point comparison) | 0.6 |
+| 39 | seed.sql never ran against Postgres | 0.6 |

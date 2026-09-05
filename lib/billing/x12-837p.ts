@@ -34,8 +34,17 @@ export interface Submitter {
   receiverName: string; receiverId: string;
 }
 
-const SEG = "~\n";  // segment terminator (newline for readability; strip for wire)
+// Wire format: every segment ends with exactly one "~" and nothing else —
+// no newlines, no trailing empty segment. (A previous build emitted "~\n"
+// between segments and "~~" at the end; clearinghouses reject both.) Use
+// prettyPrint837P() for on-screen review only.
+const SEG = "~";    // segment terminator
 const EL = "*";     // element separator
+
+/** Human-readable rendering (one segment per line). NEVER send this to a payer. */
+export function prettyPrint837P(wire: string): string {
+  return wire.split(SEG).filter(Boolean).join(`${SEG}\n`) + SEG;
+}
 
 function pad(v: string, len: number) { return v.padEnd(len).slice(0, len); }
 function ccyymmdd(d = new Date()) { return d.toISOString().slice(0, 10).replace(/-/g, ""); }
@@ -67,7 +76,7 @@ export function exportClaim837P(claims: ClaimInput[], submitter: Submitter, cont
   segs.push(["NM1", "85", "2", submitter.name, "", "", "", "", "XX", submitter.npi].join(EL));
   segs.push(["N3", submitter.address1].join(EL));
   segs.push(["N4", submitter.city, submitter.state, submitter.zip].join(EL));
-  segs.push(["REF", "EI", submitter.taxId.replace("-", "")].join(EL));
+  segs.push(["REF", "EI", submitter.taxId.replace(/-/g, "")].join(EL));
   const billingHl = hl;
 
   for (const claim of claims) {
@@ -101,17 +110,40 @@ export function exportClaim837P(claims: ClaimInput[], submitter: Submitter, cont
   segs.push(["GE", "1", icn].join(EL));
   segs.push(["IEA", "1", icn].join(EL));
 
-  return segs.join(SEG) + SEG.trimEnd() + "~";
+  return segs.join(SEG) + SEG;
 }
+
+/** Placeholder values that must never reach a payer. */
+const PLACEHOLDER_ADDRESS = "TODO STREET ADDRESS";
 
 export function submitterFromEnv(): Submitter {
   return {
-    name: "DURABLE LIFE SKILLS INC",
+    name: process.env.BILLING_PROVIDER_NAME ?? "DURABLE LIFE SKILLS INC",
     id: process.env.BILLING_SUBMITTER_ID ?? "DLS0001",
     npi: process.env.BILLING_NPI ?? "0000000000",
     taxId: process.env.BILLING_TAX_ID ?? "000000000",
-    address1: "TODO STREET ADDRESS", city: "GREELEY", state: "CO", zip: "80631",
-    receiverName: "COLORADO MEDICAID",
+    address1: process.env.BILLING_ADDRESS1 ?? PLACEHOLDER_ADDRESS,
+    city: process.env.BILLING_CITY ?? "GREELEY",
+    state: process.env.BILLING_STATE ?? "CO",
+    zip: process.env.BILLING_ZIP ?? "80631",
+    receiverName: process.env.BILLING_RECEIVER_NAME ?? "COLORADO MEDICAID",
     receiverId: process.env.BILLING_RECEIVER_ID ?? "COMEDICAID"
   };
+}
+
+/**
+ * Configuration problems that would put a syntactically valid but wrong
+ * claim on the wire (all-zero NPI, placeholder address, blank IDs). The
+ * export action refuses to run while any are present.
+ */
+export function validateSubmitter(s: Submitter): string[] {
+  const problems: string[] = [];
+  if (!/^\d{10}$/.test(s.npi) || /^0+$/.test(s.npi)) problems.push("BILLING_NPI must be a real 10-digit NPI.");
+  const tax = s.taxId.replace(/-/g, "");
+  if (!/^\d{9}$/.test(tax) || /^0+$/.test(tax)) problems.push("BILLING_TAX_ID must be a real 9-digit tax id.");
+  if (!s.address1.trim() || s.address1.toUpperCase().includes("TODO")) problems.push("BILLING_ADDRESS1 is not set.");
+  if (!s.city.trim() || !/^[A-Z]{2}$/i.test(s.state) || !/^\d{5}(\d{4})?$/.test(s.zip)) problems.push("BILLING_CITY / BILLING_STATE / BILLING_ZIP are incomplete.");
+  if (!s.id.trim() || !s.receiverId.trim()) problems.push("BILLING_SUBMITTER_ID and BILLING_RECEIVER_ID must be set from the trading-partner agreement.");
+  if (!s.name.trim()) problems.push("BILLING_PROVIDER_NAME is blank.");
+  return problems;
 }
