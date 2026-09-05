@@ -18,6 +18,7 @@ import {
   upsertJobCoachingLog, upsertProgressNote
 } from "@/lib/data/repo-field";
 import { agencyMondayOf, hoursBetweenUtc, utcIsoToAgencyDate, utcIsoToAgencyTime } from "@/lib/time/agency";
+import { logApiError, toPublicError } from "@/lib/api/errors";
 import { getVisit, updateVisitStatus } from "@/lib/data/repo-core";
 import type { EvvLog, JobCoachingLog, MedicationLog, NmtTrip, ProgressNote, VisitStatus } from "@/lib/supabase/types";
 
@@ -28,19 +29,6 @@ const BodySchema = z.object({
   client_created_at: z.string().optional()
 });
 
-const RULE_CODES = [
-  "EVV_GEOFENCE", "NMT_AUTHORIZATION_EXHAUSTED", "NMT_NOT_AUTHORIZED",
-  "PHYSICIAN_ORDER_REQUIRED", "PHYSICIAN_ORDER_INACTIVE",
-  "CHECK_VIOLATION", "UNIQUE_VIOLATION", "RLS_DENIED"
-];
-
-function ruleStatus(error: string | undefined): number | null {
-  if (!error) return null;
-  if (RULE_CODES.some((c) => error.includes(c))) return 409;
-  // Postgres codes surfaced by PostgREST for our constraints/policies
-  if (/violates row-level security|check constraint|duplicate key|new row violates/i.test(error)) return 409;
-  return null;
-}
 
 export async function POST(req: Request) {
   const ctx = await getSessionContext();
@@ -73,7 +61,8 @@ export async function POST(req: Request) {
           // append are both idempotent) instead of dropping hours silently.
           const routeRow = await appendRouteRow(log, ctx.auditCtx);
           if (!routeRow.ok) {
-            return NextResponse.json({ error: `TIMESHEET_APPEND_FAILED: ${routeRow.error}` }, { status: 500 });
+            logApiError("sync/evv_logs", routeRow.error, "TIMESHEET_APPEND_FAILED");
+            return NextResponse.json({ error: "TIMESHEET_APPEND_FAILED" }, { status: 500 });
           }
           // Submit the completed, verified visit to the EVV aggregator
           // (Sandata in Colorado). Fire-and-forget: aggregator hiccups must
@@ -140,7 +129,8 @@ export async function POST(req: Request) {
             ctx.auditCtx
           );
           if (!appended.ok) {
-            return NextResponse.json({ error: `TIMESHEET_APPEND_FAILED: ${appended.error}` }, { status: 500 });
+            logApiError("sync/nmt_trips", appended.error, "TIMESHEET_APPEND_FAILED");
+            return NextResponse.json({ error: "TIMESHEET_APPEND_FAILED" }, { status: 500 });
           }
         }
         break;
@@ -148,13 +138,17 @@ export async function POST(req: Request) {
     }
 
     if (!result.ok) {
-      const status = ruleStatus(result.error) ?? 500;
-      return NextResponse.json({ error: result.error }, { status });
+      // Never echo database text (it can contain row values): rule codes only.
+      const pub = toPublicError(result.error);
+      if (pub.status >= 500) logApiError(`sync/${table}`, result.error, pub.error);
+      return NextResponse.json({ error: pub.error }, { status: pub.status });
     }
     return NextResponse.json({ ok: true });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    return NextResponse.json({ error: msg }, { status: ruleStatus(msg) ?? 500 });
+    const pub = toPublicError(msg);
+    if (pub.status >= 500) logApiError(`sync/${table}`, msg, pub.error);
+    return NextResponse.json({ error: pub.error }, { status: pub.status });
   }
 }
 

@@ -265,3 +265,56 @@ describe("rule triggers and RLS (regression)", () => {
     );
   });
 });
+
+describe("0007 — Scheduler column guard on clients", () => {
+  const client = "00000000-0000-4000-b000-000000000002"; // synthetic seed row
+
+  it("lets a Scheduler change scheduling and authorization fields", async () => {
+    const r = await t.queryAs<{ case_manager_name: string; authorized_scc_hours_per_week: string }>(
+      SEED_USERS.scheduler,
+      `update clients
+         set case_manager_name = 'R. Ortega', authorized_scc_hours_per_week = 6,
+             service_plan_end = service_plan_end + 30
+       where id = $1 returning case_manager_name, authorized_scc_hours_per_week`, [client]);
+    expect(r[0].case_manager_name).toBe("R. Ortega");
+    expect(Number(r[0].authorized_scc_hours_per_week)).toBe(6);
+  });
+
+  it("blocks a Scheduler from changing identity, clinical or location columns", async () => {
+    const attempts = [
+      "medicaid_id = 'CO0000001'",
+      "first_name = 'Benjamin'",
+      "last_name = 'Okafor-Smith'",
+      "date_of_birth = '1995-07-03'",
+      "active_diagnoses = '[]'::jsonb",
+      "insurance_provider = 'Other'",
+      "residence_gps = point(0, 0)"
+    ];
+    for (const set of attempts) {
+      await t.expectError(
+        () => t.queryAs(SEED_USERS.scheduler, `update clients set ${set} where id = $1`, [client]),
+        /RLS_DENIED: schedulers may only edit scheduling fields/
+      );
+    }
+    const still = await row<{ medicaid_id: string; first_name: string }>(
+      `select medicaid_id, first_name from clients where id = $1`, [client]);
+    expect(still.medicaid_id).toBe("CO5510283");
+    expect(still.first_name).toBe("Ben");
+  });
+
+  it("does not restrict an Admin", async () => {
+    const r = await t.queryAs<{ insurance_provider: string }>(SEED_USERS.admin,
+      `update clients set insurance_provider = 'Health First Colorado (verified)' where id = $1
+       returning insurance_provider`, [client]);
+    expect(r[0].insurance_provider).toBe("Health First Colorado (verified)");
+  });
+
+  it("still lets a Scheduler create a client (intake needs the identity fields)", async () => {
+    const id = "00000000-0000-4000-b000-0000000000f7";
+    const r = await t.queryAs<{ id: string }>(SEED_USERS.scheduler,
+      `insert into clients (id, first_name, last_name, medicaid_id, date_of_birth)
+       values ($1, 'Test', 'Intake', 'CO0000777', '2000-01-01') returning id`, [id]);
+    expect(r[0].id).toBe(id);
+    await t.db.query(`delete from clients where id = $1`, [id]);
+  });
+});

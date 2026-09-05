@@ -1,23 +1,31 @@
 // components/idle-timeout.tsx — lost-device protocol, stage 1 (see
-// PRODUCTION-READINESS.md §3): sign out after N idle minutes. PIN/biometric
-// lock + remote wipe are required before any real-PHI pilot.
+// PRODUCTION-READINESS.md §3): sign out after N idle minutes. On the field
+// shell the local encrypted store and the service-worker caches are wiped
+// FIRST, so a phone that times out holds no PHI — the same guarantee as the
+// explicit Sign-out button. PIN/biometric lock + remote wipe remain required
+// before any real-PHI pilot.
 "use client";
 
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 
-const IDLE_MINUTES = Number(process.env.NEXT_PUBLIC_SESSION_IDLE_MINUTES ?? 20);
+// A blank, zero, or unparsable setting falls back to the default instead of
+// silently disabling the timeout.
+const parsed = Number(process.env.NEXT_PUBLIC_SESSION_IDLE_MINUTES);
+const IDLE_MINUTES = Number.isFinite(parsed) && parsed > 0 ? parsed : 20;
 
-export function IdleTimeout() {
+export function IdleTimeout({ wipe = false }: { wipe?: boolean }) {
   const router = useRouter();
   const timer = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
-    if (!IDLE_MINUTES || IDLE_MINUTES <= 0) return;
-
     const reset = () => {
       clearTimeout(timer.current);
-      timer.current = setTimeout(() => {
+      timer.current = setTimeout(async () => {
+        if (wipe) {
+          const { wipeLocalData } = await import("@/lib/offline/wipe");
+          await wipeLocalData();
+        }
         router.push("/logout?reason=idle");
       }, IDLE_MINUTES * 60_000);
     };
@@ -29,7 +37,7 @@ export function IdleTimeout() {
       clearTimeout(timer.current);
       events.forEach((e) => window.removeEventListener(e, reset));
     };
-  }, [router]);
+  }, [router, wipe]);
 
   return null;
 }

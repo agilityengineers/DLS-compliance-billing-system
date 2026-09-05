@@ -44,11 +44,17 @@ rejections, NMT-cap blocks, and physician-order failures demo truthfully.
 ## Real mode (Supabase)
 
 1. Create a Supabase project; run in order:
-   `supabase/migrations/0001…0005` → `supabase/policies/*.sql` → `supabase/seed.sql` (synthetic data).
-2. Auth → enable **Email** (no verification) and **Google** (callback `https://<host>/auth/callback`).
+   `supabase/migrations/0001…0007` → `supabase/policies/*.sql` → `supabase/seed.sql` (synthetic data).
+2. Auth → enable **Email** and **Google**; add `https://<host>/auth/callback` to the redirect
+   allow-list (invite and password-reset links land there too).
 3. Copy `.env.example` → `.env.local`; set the Supabase URL/keys, `SUPABASE_JWT_SECRET`
    (required for impersonation), and `NEXT_PUBLIC_DEMO_MODE=false`.
 4. `npm run dev`.
+
+**Onboarding is invite-only.** Settings → Add user sends a Supabase invite; the link opens
+`/auth/reset` where the employee sets a password. A Google account that was never invited is
+signed out again with "not set up" — no self-registration. "Forgot password?" on the sign-in
+page sends a reset link to the same page.
 
 ## Architecture
 

@@ -1,21 +1,27 @@
 /* public/sw.js — hand-written service worker.
  *
  * STRATEGY
- *  - Precache + network-first-with-fallback: the /field/* app shell routes.
- *    Data renders from IndexedDB (Dexie, encrypted) — pages work offline.
  *  - Cache-first: static assets (_next/static, icons, brand, manifest).
- *  - Network-only, NO CACHE, for API/data requests: PHI must never land in
- *    the SW cache. Offline data lives in IndexedDB, managed by lib/offline.
+ *  - Offline shell for the field app: ONLY routes whose HTML is a client-
+ *    rendered shell with no PHI in it (they render from IndexedDB, which is
+ *    encrypted). Those are precached on install and refreshed network-first.
+ *  - Everything else — API/data requests AND server-rendered field pages
+ *    (timesheet, documents, training, more: their HTML carries names) — is
+ *    network-only and NEVER written to Cache Storage. Offline, a navigation
+ *    to one of those falls back to the /field shell.
  */
-const SHELL_CACHE = "dls-shell-v2";
-const SHELL_URLS = [
-  "/field",
-  "/field/week",
-  "/field/timesheet",
-  "/field/more",
-  "/field/emar",
-  "/manifest.json"
-];
+const SHELL_CACHE = "dls-shell-v3";
+
+// Client-rendered shells: safe to cache (no PHI in the HTML).
+const SHELL_URLS = ["/field", "/field/week", "/field/emar", "/manifest.json"];
+function isCacheableShell(pathname) {
+  return (
+    pathname === "/field" ||
+    pathname === "/field/week" ||
+    pathname === "/field/emar" ||
+    /^\/field\/visits\/[^/]+(\/note)?$/.test(pathname)
+  );
+}
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -48,11 +54,8 @@ function isStaticAsset(url) {
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (event.request.method !== "GET") return;
+  if (isPhiRequest(url)) return; // network only
 
-  // PHI/data: network only. Offline fallback is IndexedDB in app code.
-  if (isPhiRequest(url)) return;
-
-  // Static assets: cache-first
   if (isStaticAsset(url)) {
     event.respondWith(
       caches.match(event.request).then(
@@ -68,21 +71,23 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Field shell navigation: network-first; offline falls back to the cached
-  // shell for that route (deep links included — /field/visits/* falls back
-  // to /field, where Dexie renders the visit from local data).
   if (event.request.mode === "navigate" && url.pathname.startsWith("/field")) {
+    const cacheable = isCacheableShell(url.pathname);
     event.respondWith(
       fetch(event.request)
         .then((res) => {
-          const copy = res.clone();
-          caches.open(SHELL_CACHE).then((c) => c.put(url.pathname, copy));
+          // Only PHI-free shells are stored; server-rendered pages pass through.
+          if (cacheable && res.ok) {
+            const copy = res.clone();
+            caches.open(SHELL_CACHE).then((c) => c.put(url.pathname, copy));
+          }
           return res;
         })
         .catch(async () => {
-          const exact = await caches.match(url.pathname);
+          const exact = cacheable ? await caches.match(url.pathname) : null;
           if (exact) return exact;
-          // client-side router will resolve the deep link from IndexedDB
+          // Deep links and server-rendered pages fall back to the Today shell,
+          // which renders the local (encrypted) data.
           return caches.match("/field");
         })
     );

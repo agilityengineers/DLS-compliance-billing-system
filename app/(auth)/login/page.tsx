@@ -18,12 +18,15 @@ export default async function LoginPage({
   }
   const demo = isDemoMode();
 
-  const errorText =
-    searchParams.error === "suspended"
-      ? "This account is suspended. Contact your administrator."
-      : searchParams.error
-        ? "Sign-in failed. Try again."
-        : null;
+  const ERRORS: Record<string, string> = {
+    suspended: "This account is suspended. Contact your administrator.",
+    not_provisioned: "This account has not been set up for DLS. Ask your administrator to invite you.",
+    idle_timeout: "You were signed out after a period of inactivity. Sign in again to continue.",
+    session_revoked: "Your session ended. Sign in again to continue.",
+    oauth_failed: "Google sign-in did not complete. Try again.",
+    missing_code: "Sign-in link was incomplete. Try again."
+  };
+  const errorText = searchParams.error ? ERRORS[searchParams.error] ?? "Sign-in failed. Try again." : null;
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-background p-4">

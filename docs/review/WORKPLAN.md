@@ -43,10 +43,10 @@ Sources: [launch-readiness review](./2026-09-launch-readiness-review.md) (defect
 | 0.2 | `Super_Admin` role at every enum site | — | D-01 | 2 d | Dev | Architect | Open |
 | 0.3 | Feature flags: table, guard trigger, `fn_feature_enabled`, RLS, migration 0006, demo parity | — | 0.2, A-01 | 5 d | Dev | Architect | Open |
 | 0.4 | `requireFeature` at every gate, nav rewrite, two-tier Settings editor, Super Admin console; `Completed` on note submit when EVV is off | — | 0.3, A-03 | 5 d | Dev | Architect | Open |
-| 0.5 | Employee onboarding: invite-based Add User, invite-only Google sign-in, password reset | #1, #22 | — | 2 d | Dev | Architect | Open |
+| 0.5 | Employee onboarding: invite-based Add User, invite-only Google sign-in, password reset | #1, #22 | — | 2 d | Dev | Architect | In progress (PR-C) |
 | 0.6 | Real-database breakers: timesheet index and result checks; notes query limit; eMAR "Missed" policy; geofence trigger repair; seed runs | #2, #9, #6, #38, #39 | — | 3 d | Dev | Architect | In progress (PR-A) |
 | 0.7 | Demo-mode guard at startup; deployment notes | #7 | — | 0.5 d | Dev | Architect | In progress (PR-A) |
-| 0.8 | HIPAA blockers: service-worker cache, idle-timeout wipe, impersonation audit, roster search off the URL, Scheduler column guard, error-string mapping, security headers | #20, #21, #23, #24, #25, #27 (headers), #28 (idle) | — | 3 d | Dev | Architect | Open |
+| 0.8 | HIPAA blockers: service-worker cache, idle-timeout wipe, impersonation audit, roster search off the URL, Scheduler column guard, error-string mapping, security headers | #20, #21, #23, #24, #25, #27 (headers), #28 (idle) | — | 3 d | Dev | Architect | In progress (PR-C) |
 | 0.10 | In-process Postgres (pglite) harness: migrations, policies, seed, RLS and rule triggers verified under `npm test` | — | — | 1 d | Dev | Architect | In progress (PR-A) |
 | 0.9 | Field data safety: backoff without deletion, durable failure list, keep draft until ack, no wipe on 401, per-table sync validation, notes RLS re-asserts `client_id` | #15, #16, #19 | 0.1 | 3 d | Dev | Architect | Open |
 | 1.1 | Launch data model migration 0007 + policies + types + demo/seed parity | #5 (schema part) | 0.1–0.3 | 3 d | Dev | Architect | Open |
@@ -176,7 +176,7 @@ Sources: [launch-readiness review](./2026-09-launch-readiness-review.md) (defect
 | 32 | Offboarding drops failures | 4.10 |
 | 33 | No-op writes report success | 4.10 |
 | 34 | Sandata fire-and-forget | 4.1 |
-| 35 | Search filter injection | 4.10 |
+| 35 | Search filter injection | 4.10 (done in PR-A) |
 | 36 | `sharp`, ports, PG version | 4.10 |
 | 37 | Test coverage | 4.9 |
 | 38 | GPS clock-in impossible in real mode (geofence trigger point comparison) | 0.6 |
