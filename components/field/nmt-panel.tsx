@@ -12,18 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { Client, Visit } from "@/lib/supabase/types";
-
-function sundayOf(dateIso: string): string {
-  const d = new Date(`${dateIso}T12:00:00`);
-  d.setDate(d.getDate() - d.getDay());
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function addDays(iso: string, n: number): string {
-  const d = new Date(`${iso}T12:00:00`);
-  d.setDate(d.getDate() + n);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
+import { agencyAddDays, agencySundayOf, agencyTodayIso } from "@/lib/time/agency";
 
 export function NmtPanel({ visit, client }: { visit: Visit; client: Client }) {
   const [destination, setDestination] = useState("");
@@ -31,10 +20,9 @@ export function NmtPanel({ visit, client }: { visit: Visit; client: Client }) {
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const today = new Date();
-  const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-  const weekStart = sundayOf(todayIso);
-  const weekEnd = addDays(weekStart, 6);
+  const todayIso = agencyTodayIso();
+  const weekStart = agencySundayOf(todayIso);
+  const weekEnd = agencyAddDays(weekStart, 6);
 
   const used = useLiveQuery(async () => {
     const trips = await db.nmt_trips.where("client_id").equals(client.id).toArray();

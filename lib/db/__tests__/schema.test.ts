@@ -159,6 +159,28 @@ describe("rule triggers and RLS (regression)", () => {
     );
   });
 
+  it("evaluates the physician order on the AGENCY day, not the UTC day", async () => {
+    // An order that expires 2027-06-30. A visit at 6 pm Denver on 2027-06-30 is
+    // 2027-07-01T00:00Z — still the 30th to the agency, so it must be accepted;
+    // a visit at 12:30 am on 2027-07-01 Denver must be rejected.
+    const c = await row<{ id: string }>(`select id from clients limit 1`);
+    const order = await row<{ id: string }>(
+      `insert into physician_orders (client_id, order_number, ordering_physician, order_type, effective_date, expiration_date)
+       values ($1, 'PO-TZ-TEST', 'Dr. Test', 'Standing', '2027-06-01', '2027-06-30') returning id`, [c.id]);
+    const accepted = await t.queryAs<{ id: string }>(SEED_USERS.admin,
+      `insert into visits (client_id, staff_id, visit_type, scheduled_start, scheduled_end, physician_order_id)
+       values ($1, $2, 'SCC', '2027-07-01T00:00:00Z', '2027-07-01T02:00:00Z', $3) returning id`,
+      [c.id, SEED_USERS.vega, order.id]);
+    expect(accepted).toHaveLength(1);
+    await t.expectError(
+      () => t.queryAs(SEED_USERS.admin,
+        `insert into visits (client_id, staff_id, visit_type, scheduled_start, scheduled_end, physician_order_id)
+         values ($1, $2, 'SCC', '2027-07-01T06:30:00Z', '2027-07-01T08:00:00Z', $3)`,
+        [c.id, SEED_USERS.vega, order.id]),
+      /PHYSICIAN_ORDER/
+    );
+  });
+
   it("blocks NMT trips beyond the client's weekly authorization", async () => {
     const c = await row<{ id: string; cap: number }>(
       `select id, authorized_nmt_trips_per_week as cap from clients where authorized_nmt_trips_per_week > 0 limit 1`);

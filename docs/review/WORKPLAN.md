@@ -39,7 +39,7 @@ Sources: [launch-readiness review](./2026-09-launch-readiness-review.md) (defect
 
 | ID | Item | Fixes (review Part A) | Depends on | Effort | Owner | Approver | Status |
 |---|---|---|---|---|---|---|---|
-| 0.1 | Time-zone helper and all date/time call sites; demo data emits UTC | #3, #4 | — | 3 d | Dev | Architect | Open |
+| 0.1 | Time-zone helper and all date/time call sites; demo data emits UTC | #3, #4 | — | 3 d | Dev | Architect | In progress (PR-B) |
 | 0.2 | `Super_Admin` role at every enum site | — | D-01 | 2 d | Dev | Architect | Open |
 | 0.3 | Feature flags: table, guard trigger, `fn_feature_enabled`, RLS, migration 0006, demo parity | — | 0.2, A-01 | 5 d | Dev | Architect | Open |
 | 0.4 | `requireFeature` at every gate, nav rewrite, two-tier Settings editor, Super Admin console; `Completed` on note submit when EVV is off | — | 0.3, A-03 | 5 d | Dev | Architect | Open |
@@ -58,7 +58,7 @@ Sources: [launch-readiness review](./2026-09-launch-readiness-review.md) (defect
 | 2.6 | Person-centered profile v1 + goals | — | 1.1, D-05 | 3 d | Dev | DLS owner | Open |
 | 2.7 | Staff credential documents; nightly scheduler for expiry jobs; `CRON_SECRET` documented | #29 | 0.5, D-07 | 2 d | Dev | Architect | Open |
 | 2.8 | Relias: nightly sync route, sync-run log, readiness guard fix, SSO off until real SP settings | #29 (Relias job) | 0.4, D-08 | 3 d + vendor | Dev | Architect | Open |
-| 3.1 | Valid 837P file and a test that proves it; agency-time ISA/GS dates | #8, #12 (dates) | — | 1 d | Dev | Architect | In progress (PR-A; dates follow in PR-B) |
+| 3.1 | Valid 837P file and a test that proves it; agency-time ISA/GS dates | #8, #12 (dates) | — | 1 d | Dev | Architect | In progress (PR-A wire format; PR-B agency dates) |
 | 3.2 | Safe export order; checked file attach; export runs as the Admin so audit attribution holds | #10, #26 | — | 2 d | Dev | Architect | In progress (PR-A) |
 | 3.3 | EVV evidence as a blocker when EVV is on, a warning when off | #11 | 0.4 | 1 d | Dev | Architect | Open |
 | 3.4 | Refuse export with placeholder NPI/address/tax id | #12 | — | 1 d | Dev | Architect | In progress (PR-A) |

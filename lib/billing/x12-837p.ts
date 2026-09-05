@@ -13,6 +13,7 @@
 //  - CLIA / prior-auth REF segments where required
 //
 // Pure function; no I/O. Unit-tested in __tests__/x12-837p.test.ts.
+import { utcIsoToAgencyDate, utcIsoToAgencyTime } from "@/lib/time/agency";
 
 export interface ClaimServiceLine {
   procedureCode: string;   // e.g. "T2021" — TODO confirm per payer contract
@@ -47,8 +48,10 @@ export function prettyPrint837P(wire: string): string {
 }
 
 function pad(v: string, len: number) { return v.padEnd(len).slice(0, len); }
-function ccyymmdd(d = new Date()) { return d.toISOString().slice(0, 10).replace(/-/g, ""); }
-function hhmm(d = new Date()) { return d.toISOString().slice(11, 16).replace(":", ""); }
+// Interchange/transaction dates are the SUBMITTER's local date/time (agency zone),
+// not UTC — a 6 pm Denver export is not "tomorrow" to the payer.
+function ccyymmdd(d = new Date()) { return utcIsoToAgencyDate(d.toISOString()).replace(/-/g, ""); }
+function hhmm(d = new Date()) { return utcIsoToAgencyTime(d.toISOString()).replace(":", ""); }
 
 export function exportClaim837P(claims: ClaimInput[], submitter: Submitter, controlNumber = 1): string {
   const icn = String(controlNumber).padStart(9, "0");

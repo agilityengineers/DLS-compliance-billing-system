@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { upsertVisit, findActiveOrder } from "@/app/admin/schedule/actions";
 import type { PhysicianOrder, VisitWithNames } from "@/lib/supabase/types";
 import { cn } from "@/lib/utils";
+import { agencyAddDays, agencyToUtcIso, formatAgencyTime, utcIsoToAgencyDate, utcIsoToAgencyParts } from "@/lib/time/agency";
 
 interface Props {
   visits: VisitWithNames[];
@@ -19,11 +20,7 @@ interface Props {
   weekMonday: string; // YYYY-MM-DD
 }
 
-function addDays(iso: string, n: number): string {
-  const d = new Date(`${iso}T12:00:00`);
-  d.setDate(d.getDate() + n);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
+const addDays = agencyAddDays;
 
 export function ScheduleBoard({ visits, staff, clients, orders, weekMonday }: Props) {
   const router = useRouter();
@@ -45,18 +42,19 @@ export function ScheduleBoard({ visits, staff, clients, orders, weekMonday }: Pr
     if (!visit) return;
     setError(null);
     setNotice(null);
-    const start = new Date(visit.scheduled_start);
-    const end = new Date(visit.scheduled_end);
-    start.setDate(start.getDate() + offsetDays);
-    end.setDate(end.getDate() + offsetDays);
+    // Shift by whole AGENCY days, keeping the wall-clock time (DST-safe).
+    const s = utcIsoToAgencyParts(visit.scheduled_start);
+    const e = utcIsoToAgencyParts(visit.scheduled_end);
+    const newStart = agencyToUtcIso(agencyAddDays(s.date, offsetDays), s.time);
+    const newEnd = agencyToUtcIso(agencyAddDays(e.date, offsetDays), e.time);
     startTransition(async () => {
       const res = await upsertVisit({
         id: visit.id,
         client_id: visit.client_id,
         staff_id: visit.staff_id,
         visit_type: visit.visit_type,
-        scheduled_start: toLocalIso(start),
-        scheduled_end: toLocalIso(end),
+        scheduled_start: newStart,
+        scheduled_end: newEnd,
         physician_order_id: visit.physician_order_id,
         status: visit.status
       });
@@ -106,7 +104,7 @@ export function ScheduleBoard({ visits, staff, clients, orders, weekMonday }: Pr
                 <td className="px-3 py-3 align-top font-medium">{s.full_name}</td>
                 {days.map((d) => {
                   const cellVisits = visits.filter(
-                    (v) => v.staff_id === s.id && v.scheduled_start.slice(0, 10) === d
+                    (v) => v.staff_id === s.id && utcIsoToAgencyDate(v.scheduled_start) === d
                   );
                   return (
                     <td key={d} className="min-w-36 space-y-1.5 px-1.5 py-2 align-top">
@@ -128,7 +126,7 @@ export function ScheduleBoard({ visits, staff, clients, orders, weekMonday }: Pr
                           >
                             <div className="font-semibold">{v.client_name.split(" ").slice(-1)[0]}</div>
                             <div className={noOrder ? "" : "text-muted-foreground"}>
-                              {new Date(v.scheduled_start).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }).toLowerCase().replace(" ", "")}
+                              {formatAgencyTime(v.scheduled_start).toLowerCase().replace(" ", "")}
                               {" · "}
                               {v.visit_type === "Job_Coaching" ? "Job C." : v.visit_type.replace(/_/g, " ")}
                             </div>
@@ -148,11 +146,6 @@ export function ScheduleBoard({ visits, staff, clients, orders, weekMonday }: Pr
       <NewVisitForm staff={staff} clients={clients} weekMonday={weekMonday} onSaved={() => router.refresh()} />
     </div>
   );
-}
-
-function toLocalIso(d: Date): string {
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:00`;
 }
 
 function NewVisitForm({
@@ -262,8 +255,9 @@ function NewVisitForm({
               client_id: clientId,
               staff_id: staffId,
               visit_type: visitType,
-              scheduled_start: `${date}T${start}:00`,
-              scheduled_end: `${date}T${end}:00`,
+              // Form times are agency wall-clock; the column is timestamptz (UTC).
+              scheduled_start: agencyToUtcIso(date, start),
+              scheduled_end: agencyToUtcIso(date, end),
               physician_order_id: orderInfo && orderInfo !== "unknown" ? orderInfo.id : null,
               status: "Scheduled"
             });

@@ -4,6 +4,7 @@
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth/session";
 import { listVisits, recordCredentialRenewal, saveVisit, updateUser } from "@/lib/data/repo-core";
+import { agencyTodayIso } from "@/lib/time/agency";
 
 export async function renewLicense(userId: string, expirationDate: string) {
   const ctx = await requireRole("Admin");
@@ -31,7 +32,7 @@ export async function offboardStaff(userId: string, reassignToId: string): Promi
   const ctx = await requireRole("Admin");
   if (userId === reassignToId) return { ok: false, error: "Cannot reassign to the same person." };
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = agencyTodayIso();
   const upcoming = (await listVisits({ staffId: userId, from: today })).filter(
     (v) => v.status === "Scheduled" || v.status === "In_Progress"
   );

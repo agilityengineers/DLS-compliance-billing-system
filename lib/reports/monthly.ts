@@ -11,6 +11,7 @@ import { getClient } from "@/lib/data/repo-core";
 import { listVisits } from "@/lib/data/repo-core";
 import { getJobCoachingLog, listNmtTripsForClientWeek, listNotes } from "@/lib/data/repo-field";
 import type { NmtTrip } from "@/lib/supabase/types";
+import { agencyAddDays, utcIsoToAgencyDate } from "@/lib/time/agency";
 
 export type MonthlyReportKind = "sls" | "dvr";
 
@@ -46,10 +47,7 @@ const DOC_STYLE = `
 async function nmtTripsForMonth(clientId: string, from: string, to: string): Promise<NmtTrip[]> {
   // Collect via week windows spanning the month.
   const trips = new Map<string, NmtTrip>();
-  const start = new Date(`${from}T12:00:00`);
-  const end = new Date(`${to}T12:00:00`);
-  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 7)) {
-    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  for (let iso = from; iso <= to; iso = agencyAddDays(iso, 7)) {
     for (const t of await listNmtTripsForClientWeek(clientId, iso)) {
       if (t.trip_date >= from && t.trip_date <= to) trips.set(t.id, t);
     }
@@ -107,7 +105,7 @@ export async function composeSlsBillingNote(clientId: string, month: string): Pr
   <h2>Cancellations</h2>
   ${cancellations.length === 0 ? "<p>No cancelled visits.</p>" : `<table>
     <tr><th style="width:70pt">Date</th><th>Reason</th></tr>
-    ${cancellations.map((v) => `<tr><td>${fmtDate(v.scheduled_start.slice(0, 10))}</td><td>${esc(v.cancellation_reason ?? "—")}</td></tr>`).join("")}
+    ${cancellations.map((v) => `<tr><td>${fmtDate(utcIsoToAgencyDate(v.scheduled_start))}</td><td>${esc(v.cancellation_reason ?? "—")}</td></tr>`).join("")}
   </table>`}
 
   <div class="sig"><div>Provider signature / date</div><div>Program approval / date</div></div>

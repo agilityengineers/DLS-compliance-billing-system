@@ -7,13 +7,14 @@ import { listClients } from "@/lib/data/repo-core";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Table, THead, TBody } from "@/components/ui/table";
+import { agencyTodayIso } from "@/lib/time/agency";
 
 export default async function ClientsPage({ searchParams }: { searchParams: { q?: string } }) {
   const ctx = await getSessionContext();
   if (!ctx.effectiveUser) redirect("/login");
   const q = searchParams.q?.trim() ?? "";
   const clients = await listClients(q || undefined);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = agencyTodayIso();
 
   return (
     <div className="space-y-4">

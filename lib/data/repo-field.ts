@@ -7,6 +7,7 @@ import { getDemoStore, DemoRuleError, type AuditContext } from "@/lib/data/demo/
 import { createDataClient } from "@/lib/supabase/server";
 import { normalizeGps } from "./repo-core";
 import { calculateBillingUnits } from "@/lib/billing/units";
+import { agencyAddDays, agencyDayRangeUtc, agencySundayOf, utcIsoToAgencyDate } from "@/lib/time/agency";
 import type {
   DocumentRow, EvvLog, JobCoachingLog, MedicationLog, NmtTrip, ProgressNote,
   ServiceCode, Timesheet, TimesheetEntry, UserPrefs
@@ -45,7 +46,7 @@ export async function listEvvLogs(filter: { from?: string; to?: string } = {}): 
     const { evvLogs, visits, clients, users } = getDemoStore().data;
     return evvLogs
       .filter((l) => {
-        const d = (l.clock_in_time ?? "").slice(0, 10);
+        const d = l.clock_in_time ? utcIsoToAgencyDate(l.clock_in_time) : "";
         if (filter.from && d < filter.from) return false;
         if (filter.to && d > filter.to) return false;
         return true;
@@ -68,8 +69,8 @@ export async function listEvvLogs(filter: { from?: string; to?: string } = {}): 
     .select("*, visits(visit_type, clients(first_name,last_name), staff:users!visits_staff_id_fkey(full_name))")
     .order("clock_in_time", { ascending: false })
     .limit(200);
-  if (filter.from) q = q.gte("clock_in_time", `${filter.from}T00:00:00`);
-  if (filter.to) q = q.lte("clock_in_time", `${filter.to}T23:59:59`);
+  if (filter.from) q = q.gte("clock_in_time", agencyDayRangeUtc(filter.from, filter.from).fromUtc);
+  if (filter.to) q = q.lt("clock_in_time", agencyDayRangeUtc(filter.to, filter.to).toUtc);
   const { data, error } = await q;
   if (error) throw new Error(error.message);
   return (data ?? []).map((row: Record<string, unknown>) => {
@@ -269,7 +270,7 @@ export async function listMedications(filter: {
     const { medicationLogs, clients } = getDemoStore().data;
     return medicationLogs
       .filter((m) => {
-        const d = m.scheduled_time.slice(0, 10);
+        const d = utcIsoToAgencyDate(m.scheduled_time);
         if (filter.from && d < filter.from) return false;
         if (filter.to && d > filter.to) return false;
         if (filter.status && m.status !== filter.status) return false;
@@ -287,8 +288,8 @@ export async function listMedications(filter: {
     .select("*, clients(first_name,last_name)")
     .order("scheduled_time")
     .limit(300);
-  if (filter.from) q = q.gte("scheduled_time", `${filter.from}T00:00:00`);
-  if (filter.to) q = q.lte("scheduled_time", `${filter.to}T23:59:59`);
+  if (filter.from) q = q.gte("scheduled_time", agencyDayRangeUtc(filter.from, filter.from).fromUtc);
+  if (filter.to) q = q.lt("scheduled_time", agencyDayRangeUtc(filter.to, filter.to).toUtc);
   if (filter.status) q = q.eq("status", filter.status);
   if (filter.clientIds) q = q.in("client_id", filter.clientIds);
   const { data, error } = await q;
@@ -321,13 +322,9 @@ export async function updateMedication(
 // ═══ NMT trips ═══════════════════════════════════════════════════════════
 
 export async function listNmtTripsForClientWeek(clientId: string, dateInWeek: string): Promise<NmtTrip[]> {
-  const d = new Date(`${dateInWeek}T12:00:00`);
-  const sunday = new Date(d);
-  sunday.setDate(sunday.getDate() - sunday.getDay());
-  const saturday = new Date(sunday);
-  saturday.setDate(saturday.getDate() + 6);
-  const from = sunday.toISOString().slice(0, 10);
-  const to = saturday.toISOString().slice(0, 10);
+  // Sun–Sat authorization week — pure calendar math on the trip date.
+  const from = agencySundayOf(dateInWeek);
+  const to = agencyAddDays(from, 6);
 
   if (isDemoMode()) {
     return getDemoStore().data.nmtTrips.filter(
@@ -618,12 +615,7 @@ export function serviceCodeForVisitType(visitType: string): ServiceCode {
 }
 
 function addDaysIso(iso: string, days: number): string {
-  const d = new Date(`${iso}T12:00:00`);
-  d.setDate(d.getDate() + days);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  return agencyAddDays(iso, days);
 }
 
 export { DemoRuleError };

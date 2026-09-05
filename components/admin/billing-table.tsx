@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, THead, TBody } from "@/components/ui/table";
 import { bulkExport837P } from "@/app/admin/billing/actions";
+import { agencyTodayIso } from "@/lib/time/agency";
 
 export interface BillingRow {
   id: string;
@@ -54,7 +55,7 @@ export function BillingTable({ rows }: { rows: BillingRow[] }) {
     const blob = new Blob([res.file], { type: "text/plain" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = res.fileName ?? `dls-837p-${new Date().toISOString().slice(0, 10)}.txt`;
+    a.download = res.fileName ?? `dls-837p-${agencyTodayIso()}.txt`;
     a.click();
     URL.revokeObjectURL(a.href);
     setSuccess(`Exported ${res.exported} claim${res.exported === 1 ? "" : "s"} · control number ${res.controlNumber}. Notes marked billed.`);

@@ -7,6 +7,7 @@ import { listUsers } from "@/lib/data/repo-core";
 import { Badge } from "@/components/ui/badge";
 import { Table, THead, TBody } from "@/components/ui/table";
 import { StaffRowActions } from "@/components/admin/staff-row-actions";
+import { agencyTodayIso } from "@/lib/time/agency";
 
 export default async function StaffPage() {
   let ctx;
@@ -18,7 +19,7 @@ export default async function StaffPage() {
   void ctx;
 
   const staff = await listUsers();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = agencyTodayIso();
   const fieldStaff = staff.filter((s) => s.role === "Field_Staff" && s.status === "Active");
 
   return (

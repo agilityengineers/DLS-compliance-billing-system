@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { createDvrNotice } from "@/app/admin/documents/actions";
+import { agencyTodayIso } from "@/lib/time/agency";
 
 export function DvrNoticeForm({ clients }: { clients: { id: string; name: string }[] }) {
   const router = useRouter();
@@ -18,7 +19,7 @@ export function DvrNoticeForm({ clients }: { clients: { id: string; name: string
     noticeType: "new_placement",
     employer: "",
     position: "",
-    startDate: new Date().toISOString().slice(0, 10),
+    startDate: agencyTodayIso(),
     wage: "",
     hoursPerWeek: 20,
     supervisor: "",
