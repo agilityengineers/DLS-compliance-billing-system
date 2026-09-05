@@ -91,6 +91,13 @@ staging database (fake data) and confirm each rejection:
 - [ ] 🟡 Parallel-run period: one billing cycle where 837P output is compared against the current manual process before submission.
 - [ ] 🔵 Train schedulers/admins on impersonation etiquette: the banner is always visible to the admin; every impersonated action is logged under their identity.
 
+## 8. Open launch decisions — tracked in `docs/review/BACKLOG.md`
+
+Neither item is a code defect; both change what "launch" means and must be closed before go-live.
+
+- [ ] 🟡 **[BL-001](./docs/review/BACKLOG.md#bl-001)** — Ship the schedule board and physician-order management ON at launch. Notes require a visit and visits require an active physician order, so gating the schedule off would stop documentation and billing. Needs the owner's confirmation and the feature-catalog default.
+- [ ] 🟡 **[BL-002](./docs/review/BACKLOG.md#bl-002)** — File the written owner feedback, requirement documents, and the attendance/person-centered-profile samples under `docs/requirements/`, then re-check the launch-readiness review and roadmap against them.
+
 ---
 
 *Maintained alongside DECISIONS.md. When an item closes, check it here and note

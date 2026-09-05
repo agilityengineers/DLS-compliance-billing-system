@@ -105,4 +105,5 @@ Shipping all of it in one migration means a single production maintenance window
 6. **Incident review.** Who reviews incidents, what statuses and timelines you need, and whether county/state reporting should be tracked in the system.
 7. **Hosting.** Replit (current setup) or Vercel?
 8. **Relias.** API credentials, the completion data format, and which single sign-on method Relias supports for DLS.
-9. **Schedule at launch.** Confirm the schedule board ships on, since notes and billing depend on visits.
+9. **Schedule at launch.** Confirm the schedule board ships on, since notes and billing depend on visits. Tracked as backlog item [BL-001](./BACKLOG.md#bl-001).
+10. **Written feedback and samples.** Any owner feedback notes or requirement documents you have, plus the attendance-record and person-centered-profile samples, so we can file them in the project and re-check this plan against them. Tracked as backlog item [BL-002](./BACKLOG.md#bl-002).

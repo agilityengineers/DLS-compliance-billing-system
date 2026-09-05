@@ -184,3 +184,5 @@ There is no feature-flag system, and the nearest thing (menu configuration) cann
 7. **Deployment.** Replit (current config) or Vercel? Decides the cron mechanism and the image-optimizer setting.
 8. **Relias.** API credentials and completion payload contract; SSO method (SAML/OIDC vs. deep link).
 9. **Schedule at launch.** Confirm the schedule board (visit creation + physician orders) ships on, since notes and billing depend on visits.
+
+Questions 9 and 5 are tracked as backlog items [BL-001](./BACKLOG.md#bl-001) and [BL-002](./BACKLOG.md#bl-002) in [`BACKLOG.md`](./BACKLOG.md) so they stay on the radar independently of this document.
