@@ -9,6 +9,7 @@ import "@fontsource/source-serif-4/400.css";
 import "@fontsource/source-serif-4/600.css";
 import "@fontsource/source-serif-4/700.css";
 import "./globals.css";
+import { assertDemoModeIsIntentional } from "@/lib/demo/mode";
 
 export const metadata: Metadata = {
   title: "DLS-CMS",
@@ -23,6 +24,8 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  // Refuse to serve a demo build that is sitting on production secrets.
+  assertDemoModeIsIntentional();
   return (
     <html lang="en">
       <body>{children}</body>

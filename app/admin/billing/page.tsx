@@ -8,6 +8,7 @@ import { evaluateUnbilledNotes } from "@/lib/billing/readiness";
 import { listClaimExports } from "@/lib/data/repo-business";
 import { BillingTable, type BillingRow } from "@/components/admin/billing-table";
 import { DesktopWorkspace } from "@/components/admin/desktop-workspace";
+import { formatAgencyDateTime } from "@/lib/time/agency";
 
 export default async function BillingPage() {
   const ctx = await getSessionContext();
@@ -62,7 +63,7 @@ export default async function BillingPage() {
               {exports.map((e) => (
                 <li key={e.id} className="flex items-center justify-between gap-4 px-4 py-2.5">
                   <span className="tabular-nums text-muted-foreground">
-                    {new Date(e.exported_at).toLocaleString([], { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                    {formatAgencyDateTime(e.exported_at)}
                   </span>
                   <span className="font-medium">CN {e.control_number}</span>
                   <span>{e.note_ids.length} note{e.note_ids.length === 1 ? "" : "s"}</span>

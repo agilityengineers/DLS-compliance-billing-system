@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, THead, TBody } from "@/components/ui/table";
 import { DesktopWorkspace } from "@/components/admin/desktop-workspace";
 import { PayrollCertify } from "@/components/admin/payroll-certify";
+import { formatAgencyDateTime } from "@/lib/time/agency";
 
 function fmt(iso: string): string {
   return new Date(`${iso}T12:00:00`).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
@@ -86,7 +87,7 @@ export default async function PayrollPage() {
         <div className="mt-5">
           {submitted ? (
             <p className="rounded-btn bg-pill-success px-4 py-3 text-sm text-pill-success-fg">
-              Transmittal submitted{period.certified_at ? ` ${new Date(period.certified_at).toLocaleString()}` : ""} —
+              Transmittal submitted{period.certified_at ? ` ${formatAgencyDateTime(period.certified_at)}` : ""} —
               lines are frozen in the certified snapshot.
             </p>
           ) : (

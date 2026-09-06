@@ -7,6 +7,8 @@
 
 **Status legend:** 🔴 hard blocker (no PHI until done) · 🟡 required for go-live, staged rollout acceptable · 🔵 operational hardening
 
+> **Sign-off sheet:** every item below is indexed as `R<section>.<n>` in [`docs/review/WORKPLAN.md`](./docs/review/WORKPLAN.md) with an owner, an approver, and a status. Update the status there when you check a box here.
+
 ---
 
 ## 1. Legal / HIPAA prerequisites — 🔴 all hard blockers
@@ -49,7 +51,7 @@ continue" list:
 Things the demo deliberately simplifies. Each is labeled in-code with `DEMO:`.
 
 1. 🔴 **Demo sign-in picker** (`/login` role cards) — remove/disable outside demo mode. It exists so the client can tour all three roles without auth setup.
-2. 🔴 **Service-role usage in admin server actions** is limited to: audit queries, claim export, payroll snapshot, notification job. Each call site sets explicit `performed_by`; verify none regressed. All other admin writes use the user-session client so RLS + audit attribution hold.
+2. 🔴 **Service-role usage in admin server actions** is limited to: audit queries, payroll snapshot, notification job, OAuth first-profile insert. The claim export runs as the Admin (RLS `claims_admin_all`) so its audit rows carry `performed_by`/`impersonating`. Each remaining call site sets explicit `performed_by`; verify none regressed. All other admin writes use the user-session client so RLS + audit attribution hold.
 3. 🔴 **Fee schedule contains synthetic rates** (`supabase/seed.sql` marks them). Load the real Colorado Medicaid fee schedule (+ DVR rates) before any claim leaves the building. The 837P generator refuses export when a note's rate is missing — do not weaken that check.
 4. 🔴 **837P payer specifics**: submitter/receiver IDs, NPI, taxonomy, and payer-specific loops are placeholders from `.env` — validate against the payer companion guide and test with a clearinghouse validation pass.
 5. 🔴 **Sandata adapter is an interface + mock transport.** Wire real credentials, run Sandata certification/UAT, and confirm visit acceptance before relying on EVV compliance.
@@ -62,17 +64,18 @@ Things the demo deliberately simplifies. Each is labeled in-code with `DEMO:`.
 ## 5. Server-enforced business rules — verification checklist
 
 The rules are enforced in **Postgres** (triggers/constraints) so offline-synced
-writes cannot bypass them. Before go-live, run the verification suite against a
-staging database (fake data) and confirm each rejection:
+writes cannot bypass them. `npm test` now runs them against an in-process
+Postgres (pglite) on every run; before go-live, re-run the same checks against
+the staging database (fake data) and confirm each rejection:
 
-- [ ] Geofence: EVV insert >150 m from residence → `EVV_GEOFENCE` exception (migration 0002).
-- [ ] Manual EVV from a field session → RLS denial; without reason → CHECK violation.
-- [ ] Second open clock-in for a visit → unique-index violation (`uq_evv_open_per_visit`).
-- [ ] Visit without active physician order → `PHYSICIAN_ORDER_REQUIRED` (migration 0003).
-- [ ] NMT trip beyond the client's weekly authorization → `NMT_AUTHORIZATION_EXHAUSTED` (migration 0004).
-- [ ] eMAR `Administered` without `administered_time` → CHECK violation (migration 0001).
-- [ ] Audit rows appear for every PHI mutation, with signature bytes redacted (migration 0002).
-- [ ] Unit math: DB generated column and `lib/billing/units.ts` agree (vitest suite green).
+- [x] Geofence: EVV insert >150 m from residence → `EVV_GEOFENCE` exception (migration 0002). — verified in pglite by `lib/db/__tests__/schema.test.ts` (2026-09-05); re-run on staging
+- [x] Manual EVV from a field session → RLS denial; without reason → CHECK violation. — verified in pglite by `lib/db/__tests__/schema.test.ts` (2026-09-05); re-run on staging
+- [x] Second open clock-in for a visit → unique-index violation (`uq_evv_open_per_visit`). — verified in pglite by `lib/db/__tests__/schema.test.ts` (2026-09-05); re-run on staging
+- [x] Visit without active physician order → `PHYSICIAN_ORDER_REQUIRED` (migration 0003). — verified in pglite by `lib/db/__tests__/schema.test.ts` (2026-09-05); re-run on staging
+- [x] NMT trip beyond the client's weekly authorization → `NMT_AUTHORIZATION_EXHAUSTED` (migration 0004). — verified in pglite by `lib/db/__tests__/schema.test.ts` (2026-09-05); re-run on staging
+- [x] eMAR `Administered` without `administered_time` → CHECK violation (migration 0001). — verified in pglite by `lib/db/__tests__/schema.test.ts` (2026-09-05); re-run on staging
+- [x] Audit rows appear for every PHI mutation, with signature bytes redacted (migration 0002). — verified in pglite by `lib/db/__tests__/schema.test.ts` (2026-09-05); re-run on staging
+- [x] Unit math: DB generated column and `lib/billing/units.ts` agree (vitest suite green). — verified in pglite by `lib/db/__tests__/schema.test.ts` (2026-09-05); re-run on staging
 
 ## 6. Infrastructure & operations — 🟡/🔵
 
@@ -90,6 +93,13 @@ staging database (fake data) and confirm each rejection:
 - [ ] 🟡 Credential/training records loaded and verified before the expired-credential claim blocker goes live (it will block claims immediately if data is wrong).
 - [ ] 🟡 Parallel-run period: one billing cycle where 837P output is compared against the current manual process before submission.
 - [ ] 🔵 Train schedulers/admins on impersonation etiquette: the banner is always visible to the admin; every impersonated action is logged under their identity.
+
+## 8. Open launch decisions — tracked in `docs/review/BACKLOG.md`
+
+Neither item is a code defect; both change what "launch" means and must be closed before go-live.
+
+- [ ] 🟡 **[BL-001](./docs/review/BACKLOG.md#bl-001)** — Ship the schedule board and physician-order management ON at launch. Notes require a visit and visits require an active physician order, so gating the schedule off would stop documentation and billing. Needs the owner's confirmation and the feature-catalog default.
+- [ ] 🟡 **[BL-002](./docs/review/BACKLOG.md#bl-002)** — File the written owner feedback, requirement documents, and the attendance/person-centered-profile samples under `docs/requirements/`, then re-check the launch-readiness review and roadmap against them.
 
 ---
 

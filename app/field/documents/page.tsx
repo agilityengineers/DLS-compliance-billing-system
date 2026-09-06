@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getSessionContext } from "@/lib/auth/session";
 import { listDocuments } from "@/lib/data/repo-field";
 import { Badge } from "@/components/ui/badge";
+import { formatAgencyDate } from "@/lib/time/agency";
 
 export default async function FieldDocumentsPage() {
   const ctx = await getSessionContext();
@@ -19,7 +20,7 @@ export default async function FieldDocumentsPage() {
             <div className="min-w-0">
               <div className="truncate font-medium">{d.file_name}</div>
               <div className="text-xs text-muted-foreground">
-                {d.client_name ?? "No client"} · {new Date(d.created_at).toLocaleDateString()}
+                {d.client_name ?? "No client"} · {formatAgencyDate(d.created_at)}
               </div>
             </div>
             <Badge variant={d.status === "synced" ? "success" : d.status === "uploading" ? "warning" : "destructive"}>

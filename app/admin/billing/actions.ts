@@ -7,10 +7,12 @@
 
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth/session";
+import { isDemoMode } from "@/lib/demo/mode";
 import { evaluateUnbilledNotes } from "@/lib/billing/readiness";
 import { getPayerAdapter } from "@/lib/billing/payers";
+import { submitterFromEnv, validateSubmitter } from "@/lib/billing/x12-837p";
 import { getClient } from "@/lib/data/repo-core";
-import { attachClaimExportFile, recordClaimExport } from "@/lib/data/repo-business";
+import { discardClaimExport, finalizeClaimExport, openClaimExport } from "@/lib/data/repo-business";
 import type { Client } from "@/lib/supabase/types";
 
 export async function bulkExport837P(noteIds: string[]): Promise<{
@@ -23,6 +25,16 @@ export async function bulkExport837P(noteIds: string[]): Promise<{
   blocked?: Record<string, string[]>;
 }> {
   const ctx = await requireRole("Admin");
+
+  // Never put placeholder provider identity (all-zero NPI, TODO address) on
+  // the wire. Demo mode is exempt: its file is synthetic by definition and
+  // the demo tour exports it without any billing env configured.
+  if (!isDemoMode()) {
+    const configProblems = validateSubmitter(submitterFromEnv());
+    if (configProblems.length > 0) {
+      return { ok: false, error: `Billing configuration is incomplete — ${configProblems.join(" ")}` };
+    }
+  }
 
   const readiness = await evaluateUnbilledNotes();
   const byId = new Map(readiness.map((r) => [r.note.id, r]));
@@ -46,31 +58,35 @@ export async function bulkExport837P(noteIds: string[]): Promise<{
     if (c) clients.set(id, c);
   }
 
-  // Provisional control number; the ledger assigns the real one — rebuild
-  // with it so the ISA/GS control numbers match the persisted record.
+  // Dry-run build first (rates, diagnoses, client records) so nothing touches
+  // the ledger unless the batch can actually be produced.
   const adapter = getPayerAdapter("COLORADO_MEDICAID");
   const probe = adapter.buildBatch(ready, clients, 0);
   if (!probe.ok) return { ok: false, error: probe.error, blocked };
 
-  const ledger = await recordClaimExport(
-    {
-      noteIds: ready.map((r) => r.note.id),
-      totalUnits: probe.totalUnits,
-      totalCharge: probe.totalCharge,
-      fileContent: "", // replaced below
-      payer: adapter.key
-    },
+  // Two-phase export: reserve the control number → build the real file with
+  // it → attach the file AND mark notes billed. A note is never marked billed
+  // without a stored file, and a failed phase leaves no half-recorded export.
+  const readyIds = ready.map((r) => r.note.id);
+  const opened = await openClaimExport(
+    { noteIds: readyIds, totalUnits: probe.totalUnits, totalCharge: probe.totalCharge, payer: adapter.key },
     ctx.auditCtx
   );
-  if (!ledger.ok || !ledger.controlNumber) {
-    return { ok: false, error: ledger.error ?? "Failed to persist the export ledger.", blocked };
+  if (!opened.ok || !opened.id || !opened.controlNumber) {
+    return { ok: false, error: opened.error ?? "Failed to open the export ledger.", blocked };
   }
 
-  const finalBatch = adapter.buildBatch(ready, clients, ledger.controlNumber);
+  const finalBatch = adapter.buildBatch(ready, clients, opened.controlNumber);
   if (!finalBatch.ok || !finalBatch.fileContent) {
+    await discardClaimExport(opened.id);
     return { ok: false, error: finalBatch.error ?? "Batch build failed.", blocked };
   }
-  if (ledger.id) await attachClaimExportFile(ledger.id, finalBatch.fileContent);
+
+  const finalized = await finalizeClaimExport(opened.id, finalBatch.fileContent, readyIds, ctx.auditCtx);
+  if (!finalized.ok) {
+    await discardClaimExport(opened.id);
+    return { ok: false, error: `${finalized.error} Nothing was marked billed — try the export again.`, blocked };
+  }
 
   revalidatePath("/admin/billing");
   revalidatePath("/admin");
@@ -78,7 +94,7 @@ export async function bulkExport837P(noteIds: string[]): Promise<{
     ok: true,
     file: finalBatch.fileContent,
     fileName: finalBatch.fileName,
-    controlNumber: ledger.controlNumber,
+    controlNumber: opened.controlNumber,
     exported: ready.length,
     blocked
   };

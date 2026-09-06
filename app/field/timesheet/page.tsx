@@ -7,12 +7,9 @@ import { getOrCreateTimesheet, listTimesheetEntries } from "@/lib/data/repo-fiel
 import { getClient } from "@/lib/data/repo-core";
 import { SubmitTimesheetButton } from "@/components/field/submit-timesheet-button";
 import { Badge } from "@/components/ui/badge";
+import { agencyMondayOf, agencyTodayIso, formatAgencyCalendarDate, formatAgencyDateTime } from "@/lib/time/agency";
 
-function mondayIso(): string {
-  const d = new Date();
-  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
+const mondayIso = () => agencyMondayOf(agencyTodayIso());
 
 export default async function TimesheetPage() {
   const ctx = await getSessionContext();
@@ -37,7 +34,7 @@ export default async function TimesheetPage() {
         <div>
           <h1 className="page-title">My timesheet</h1>
           <p className="text-sm text-muted-foreground">
-            Route record · week of {new Date(`${timesheet.period_start}T12:00:00`).toLocaleDateString([], { month: "long", day: "numeric" })}
+            Route record · week of {formatAgencyCalendarDate(timesheet.period_start)}
           </p>
         </div>
         {submitted ? <Badge variant="success">Submitted</Badge> : <Badge variant="muted">Open</Badge>}
@@ -57,7 +54,7 @@ export default async function TimesheetPage() {
             {entries.map((e) => (
               <tr key={e.id} className="border-b border-border last:border-0">
                 <td className="px-3 py-2.5">
-                  {new Date(`${e.work_date}T12:00:00`).toLocaleDateString([], { weekday: "short", day: "numeric" })}
+                  {formatAgencyCalendarDate(e.work_date, { weekday: "short", day: "numeric" })}
                   {e.start_time && e.end_time && (
                     <span className="block text-xs text-muted-foreground">
                       {e.start_time}–{e.end_time}
@@ -91,7 +88,7 @@ export default async function TimesheetPage() {
       {!submitted && <SubmitTimesheetButton timesheetId={timesheet.id} />}
       {submitted && (
         <p className="text-center text-xs text-muted-foreground">
-          Submitted {timesheet.submitted_at ? new Date(timesheet.submitted_at).toLocaleString() : ""} — payroll
+          Submitted {timesheet.submitted_at ? formatAgencyDateTime(timesheet.submitted_at) : ""} — payroll
           shows your notes as in.
         </p>
       )}

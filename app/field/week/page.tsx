@@ -5,37 +5,25 @@ import Link from "next/link";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/offline/db";
 import { Badge } from "@/components/ui/badge";
+import { agencyAddDays, agencyMondayOf, agencyTodayIso, formatAgencyCalendarDate, utcIsoToAgencyDate } from "@/lib/time/agency";
 
 const STATUS_VARIANT = {
   Scheduled: "muted", In_Progress: "warning", Completed: "success", Cancelled: "destructive", Billed: "default"
 } as const;
 
-function iso(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
 export default function WeekPage() {
-  const monday = (() => {
-    const d = new Date();
-    d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
-    return d;
-  })();
-
-  const days = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(monday);
-    d.setDate(d.getDate() + i);
-    return d;
-  });
-  const todayStr = iso(new Date());
+  const todayStr = agencyTodayIso();
+  const monday = agencyMondayOf(todayStr);
+  const days = Array.from({ length: 7 }, (_, i) => agencyAddDays(monday, i));
 
   const visits = useLiveQuery(async () => {
-    const from = iso(days[0]);
-    const to = iso(days[6]);
+    const from = days[0];
+    const to = days[6];
     const all = await db.visits.toArray();
     const clients = await db.clients.toArray();
     return all
       .filter((v) => {
-        const d = v.scheduled_start.slice(0, 10);
+        const d = utcIsoToAgencyDate(v.scheduled_start);
         return d >= from && d <= to;
       })
       .map((v) => {
@@ -49,13 +37,12 @@ export default function WeekPage() {
   return (
     <div className="space-y-5">
       <h1 className="page-title">My week</h1>
-      {days.map((d) => {
-        const dStr = iso(d);
-        const dayVisits = (visits ?? []).filter((v) => v.scheduled_start.slice(0, 10) === dStr);
+      {days.map((dStr) => {
+        const dayVisits = (visits ?? []).filter((v) => utcIsoToAgencyDate(v.scheduled_start) === dStr);
         return (
           <section key={dStr} className="space-y-2">
             <h2 className="label-caps text-muted-foreground">
-              {d.toLocaleDateString([], { weekday: "long", month: "numeric", day: "numeric" })}
+              {formatAgencyCalendarDate(dStr, { weekday: "long", month: "numeric", day: "numeric" })}
               {dStr === todayStr && " (today)"}
             </h2>
             {dayVisits.length === 0 ? (

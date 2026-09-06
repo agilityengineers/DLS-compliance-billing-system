@@ -12,6 +12,7 @@ import { listNotes, type NoteWithContext, listEvvLogs } from "@/lib/data/repo-fi
 import { listClients, listPhysicianOrders, listUsers, listVisits } from "@/lib/data/repo-core";
 import { getFeeSchedule, listReliasCompletions, listReliasCourses } from "@/lib/data/repo-business";
 import type { Client, FeeScheduleRow, StaffUser, VisitType, VisitWithNames } from "@/lib/supabase/types";
+import { agencyAddDays, agencySundayOf, agencyTodayIso } from "@/lib/time/agency";
 
 export interface NoteReadiness {
   note: NoteWithContext;
@@ -28,30 +29,33 @@ const AUTH_FIELD: Record<VisitType, keyof Client> = {
   Early_Intervention: "authorized_ei_hours_per_week"
 };
 
-function sundayOf(dateIso: string): string {
-  const d = new Date(`${dateIso}T12:00:00`);
-  d.setDate(d.getDate() - d.getDay());
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function addDaysIso(iso: string, n: number): string {
-  const d = new Date(`${iso}T12:00:00`);
-  d.setDate(d.getDate() + n);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
+// Sun–Sat authorization week (DECISIONS.md), agency calendar.
+const sundayOf = agencySundayOf;
+const addDaysIso = agencyAddDays;
 
 /**
  * Evaluate claim readiness for all unbilled notes in a window.
  * One data pass — per-note evaluation shares the loaded context.
  */
 export async function evaluateUnbilledNotes(opts: { from?: string; to?: string } = {}): Promise<NoteReadiness[]> {
-  const today = new Date().toISOString().slice(0, 10);
-  const [notes, allNotes, users, clients, visits, orders, fees, courses, completions] = await Promise.all([
-    listNotes({ ...opts, unbilledOnly: true }),
-    listNotes({}), // full window for weekly-unit sums
+  const today = agencyTodayIso();
+  const notes = (await listNotes({ ...opts, unbilledOnly: true })).filter((n) => !n.cancellation_reason);
+  if (notes.length === 0) return [];
+
+  // Weekly-cap math needs EVERY note in each Sun–Sat week that holds an
+  // unbilled note — a capped "most recent N" slice silently disabled the
+  // authorization blocker once the agency passed the query cap. Load the
+  // exact window with no cap (the repo pages through it).
+  const dates = notes.map((n) => n.date).sort();
+  const windowFrom = sundayOf(dates[0]);
+  const windowTo = addDaysIso(sundayOf(dates[dates.length - 1]), 6);
+
+  const [allNotes, users, clients, visits, orders, fees, courses, completions] = await Promise.all([
+    listNotes({ from: windowFrom, to: windowTo, limit: null }),
     listUsers(),
-    listClients(),
-    listVisits({}),
+    listClients(undefined, { limit: null }),
+    // ±1 day: scheduled_start is stored in UTC and evening visits fall on the next UTC date.
+    listVisits({ from: addDaysIso(windowFrom, -1), to: addDaysIso(windowTo, 1) }),
     listPhysicianOrders(),
     getFeeSchedule(),
     listReliasCourses(),
@@ -63,12 +67,17 @@ export async function evaluateUnbilledNotes(opts: { from?: string; to?: string }
   const visitById = new Map(visits.map((v) => [v.id, v]));
 
   return notes
-    .filter((n) => !n.cancellation_reason)
     .map((note) => {
       const staff = userById.get(note.staff_id);
       const client = clientById.get(note.client_id);
       const visit = visitById.get(note.visit_id);
       const blockers: string[] = [];
+
+      // Fail CLOSED: a lookup that cannot be resolved blocks the claim. It
+      // must never silently skip the credential, authorization, or order checks.
+      if (!staff) blockers.push("Staff record not found for this note.");
+      if (!client) blockers.push("Client record not found for this note.");
+      if (!visit) blockers.push("Visit record not found for this note.");
 
       // 1a. Staff license
       if (staff?.license_expiration_date && staff.license_expiration_date < today) {
