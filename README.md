@@ -44,7 +44,7 @@ rejections, NMT-cap blocks, and physician-order failures demo truthfully.
 ## Real mode (Supabase)
 
 1. Create a Supabase project; run in order:
-   `supabase/migrations/0001…0007` → `supabase/policies/*.sql` → `supabase/seed.sql` (synthetic data).
+   `supabase/migrations/0001…0008` → `supabase/policies/*.sql` → `supabase/seed.sql` (synthetic data).
 2. Auth → enable **Email** and **Google**; add `https://<host>/auth/callback` to the redirect
    allow-list (invite and password-reset links land there too).
 3. Copy `.env.example` → `.env.local`; set the Supabase URL/keys, `SUPABASE_JWT_SECRET`

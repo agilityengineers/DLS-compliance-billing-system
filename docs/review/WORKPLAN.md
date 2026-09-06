@@ -48,7 +48,7 @@ Sources: [launch-readiness review](./2026-09-launch-readiness-review.md) (defect
 | 0.7 | Demo-mode guard at startup; deployment notes | #7 | — | 0.5 d | Dev | Architect | In progress (PR-A) |
 | 0.8 | HIPAA blockers: service-worker cache, idle-timeout wipe, impersonation audit, roster search off the URL, Scheduler column guard, error-string mapping, security headers | #20, #21, #23, #24, #25, #27 (headers), #28 (idle) | — | 3 d | Dev | Architect | In progress (PR-C) |
 | 0.10 | In-process Postgres (pglite) harness: migrations, policies, seed, RLS and rule triggers verified under `npm test` | — | — | 1 d | Dev | Architect | In progress (PR-A) |
-| 0.9 | Field data safety: backoff without deletion, durable failure list, keep draft until ack, no wipe on 401, per-table sync validation, notes RLS re-asserts `client_id` | #15, #16, #19 | 0.1 | 3 d | Dev | Architect | Open |
+| 0.9 | Field data safety: backoff without deletion, durable failure list, keep draft until ack, no wipe on 401, per-table sync validation, notes RLS re-asserts `client_id` | #15, #16, #19 | 0.1 | 3 d | Dev | Architect | In progress (PR-D) |
 | 1.1 | Launch data model migration 0007 + policies + types + demo/seed parity | #5 (schema part) | 0.1–0.3 | 3 d | Dev | Architect | Open |
 | 2.1 | Client records: detail page, edit, status, physician-order UI, authorization fields, residence capture | #5 | 1.1, D-09 | 6 d | Dev | DLS owner | Open |
 | 2.2 | Intake and yearly renewal paperwork: requirement types, per-client items, reminders, badges | — | 2.1, D-03 | 5 d | Dev | DLS owner | Open |

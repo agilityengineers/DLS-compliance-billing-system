@@ -208,6 +208,15 @@ export async function getNoteForVisit(visitId: string): Promise<ProgressNote | n
   return (data as ProgressNote) ?? null;
 }
 
+/** One note by id (RLS-scoped in real mode). */
+export async function getProgressNote(id: string): Promise<ProgressNote | null> {
+  if (isDemoMode()) {
+    return getDemoStore().data.progressNotes.find((n) => n.id === id) ?? null;
+  }
+  const { data } = await createDataClient().from("progress_notes").select("*").eq("id", id).maybeSingle();
+  return (data as ProgressNote) ?? null;
+}
+
 export async function upsertProgressNote(
   note: ProgressNote,
   ctx: AuditContext
@@ -303,6 +312,15 @@ export async function listMedications(filter: {
   });
 }
 
+/** One medication record by id (RLS-scoped in real mode). */
+export async function getMedicationLog(id: string): Promise<MedicationLog | null> {
+  if (isDemoMode()) {
+    return getDemoStore().data.medicationLogs.find((m) => m.id === id) ?? null;
+  }
+  const { data } = await createDataClient().from("medication_logs").select("*").eq("id", id).maybeSingle();
+  return (data as MedicationLog) ?? null;
+}
+
 export async function updateMedication(
   med: MedicationLog,
   ctx: AuditContext
@@ -317,6 +335,20 @@ export async function updateMedication(
   }
   const { error } = await createDataClient().from("medication_logs").upsert(med, { onConflict: "id" });
   return error ? { ok: false, error: error.message } : { ok: true };
+}
+
+/**
+ * Is this client on any of the staff member's visits? Mirrors the database's
+ * fn_client_assigned_to_me() so demo mode enforces the same assignment rule
+ * the RLS policies enforce in real mode.
+ */
+export async function isClientAssignedToStaff(clientId: string, staffId: string): Promise<boolean> {
+  if (isDemoMode()) {
+    return getDemoStore().data.visits.some((v) => v.client_id === clientId && v.staff_id === staffId);
+  }
+  const { data } = await createDataClient()
+    .from("visits").select("id").eq("client_id", clientId).eq("staff_id", staffId).limit(1);
+  return (data ?? []).length > 0;
 }
 
 // ═══ NMT trips ═══════════════════════════════════════════════════════════

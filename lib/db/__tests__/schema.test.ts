@@ -318,3 +318,50 @@ describe("0007 — Scheduler column guard on clients", () => {
     await t.db.query(`delete from clients where id = $1`, [id]);
   });
 });
+
+describe("0008 — a field note must agree with its visit", () => {
+  const noteId = "00000000-0000-4000-e000-0000000000a1";
+  const vegaVisit = () => row<{ id: string; client_id: string }>(
+    `select id, client_id from visits where staff_id = $1 order by scheduled_start limit 1`, [SEED_USERS.vega]);
+
+  it("accepts a note whose client matches the caller's own visit", async () => {
+    const v = await vegaVisit();
+    const r = await t.queryAs<{ id: string }>(SEED_USERS.vega,
+      `insert into progress_notes (id, visit_id, client_id, staff_id, date, start_time, end_time)
+       values ($1, $2, $3, $4, '2026-06-02', '09:00', '10:00') returning id`,
+      [noteId, v.id, v.client_id, SEED_USERS.vega]);
+    expect(r[0].id).toBe(noteId);
+  });
+
+  it("rejects repointing that note at another client", async () => {
+    const v = await vegaVisit();
+    const other = await row<{ id: string }>(`select id from clients where id <> $1 limit 1`, [v.client_id]);
+    await t.expectError(
+      () => t.queryAs(SEED_USERS.vega, `update progress_notes set client_id = $1 where id = $2`, [other.id, noteId]),
+      /row-level security/i
+    );
+    await t.db.query(`delete from progress_notes where id = $1`, [noteId]);
+  });
+
+  it("rejects a note for a different client than the visit's", async () => {
+    const v = await vegaVisit();
+    const other = await row<{ id: string }>(`select id from clients where id <> $1 limit 1`, [v.client_id]);
+    await t.expectError(
+      () => t.queryAs(SEED_USERS.vega,
+        `insert into progress_notes (visit_id, client_id, staff_id, date, start_time, end_time)
+         values ($1, $2, $3, '2026-06-02', '09:00', '10:00')`, [v.id, other.id, SEED_USERS.vega]),
+      /row-level security/i
+    );
+  });
+
+  it("rejects a note filed against another staff member's visit", async () => {
+    const v = await row<{ id: string; client_id: string }>(
+      `select id, client_id from visits where staff_id = $1 limit 1`, [SEED_USERS.price]);
+    await t.expectError(
+      () => t.queryAs(SEED_USERS.vega,
+        `insert into progress_notes (visit_id, client_id, staff_id, date, start_time, end_time)
+         values ($1, $2, $3, '2026-06-02', '09:00', '10:00')`, [v.id, v.client_id, SEED_USERS.vega]),
+      /row-level security/i
+    );
+  });
+});

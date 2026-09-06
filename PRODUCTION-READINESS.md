@@ -42,7 +42,7 @@ continue" list:
 - [x] Session idle timeout (default 20 min, `NEXT_PUBLIC_SESSION_IDLE_MINUTES`) — shipped Phase 1.
 - [x] Local drafts purged after successful submit; synced queue items purged — shipped Phase 1.
 - [ ] 🔴 **App PIN or biometric (WebAuthn) lock** wrapping the local data key (KEK over DEK), so a stolen device — locked or unlocked — still challenges. Today the raw data key sits in its own IndexedDB database: encryption protects exported/backed-up data blobs, **not** an attacker with full same-origin device access. The PIN wrap closes exactly that gap.
-- [ ] 🔴 **Remote sign-out / remote wipe**: server-side session revocation (Supabase `auth.admin.signOut`) plus the client wipe hook (`lib/offline/wipe.ts` — triggered today on 401; must also be triggerable per-device by an Admin).
+- [ ] 🔴 **Remote sign-out / remote wipe**: server-side session revocation (Supabase `auth.admin.signOut`) plus the client wipe hook (`lib/offline/wipe.ts` — runs on sign-out and on the field idle timeout; a 401 from sync no longer wipes, it pauses sync and asks for sign-in so unsynced work survives an expired token; the Admin-triggered per-device wipe is still to build).
 - [ ] 🟡 MDM or device policy for agency-owned devices (screen lock enforced, OS updates).
 - [ ] 🟡 Document the lost-device runbook: who suspends, who wipes, notification timelines under the breach rule.
 

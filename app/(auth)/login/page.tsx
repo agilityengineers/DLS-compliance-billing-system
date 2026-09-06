@@ -23,6 +23,7 @@ export default async function LoginPage({
     not_provisioned: "This account has not been set up for DLS. Ask your administrator to invite you.",
     idle_timeout: "You were signed out after a period of inactivity. Sign in again to continue.",
     session_revoked: "Your session ended. Sign in again to continue.",
+    session_expired: "Your session expired. Sign in again — unsynced work on this device is kept and will sync.",
     oauth_failed: "Google sign-in did not complete. Try again.",
     missing_code: "Sign-in link was incomplete. Try again."
   };

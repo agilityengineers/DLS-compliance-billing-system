@@ -2,8 +2,9 @@
 // note (no pagination). Sections: service time (live unit calc) → goals →
 // narrative → SCC panel → DVR supported-employment panel (job coaching) →
 // cancellation → dual signatures (both REQUIRED to submit).
-// Auto-saves to encrypted IndexedDB; drafts are PURGED after submit; the
-// submission itself goes through the offline sync queue.
+// Auto-saves to encrypted IndexedDB; the draft is purged once the server
+// acknowledges the note (sync engine); the submission itself goes through
+// the offline sync queue.
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -14,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { SignaturePad } from "@/components/field/signature-pad";
 import { useAutoSave, loadDraft } from "@/lib/offline/useAutoSave";
-import { db, writeLocal, newLocalId } from "@/lib/offline/db";
+import { writeLocal, newLocalId } from "@/lib/offline/db";
 import { SyncEngine } from "@/lib/offline/syncEngine";
 import { calculateBillingUnits } from "@/lib/billing/units";
 import { agencyTodayIso } from "@/lib/time/agency";
@@ -148,9 +149,9 @@ export function NoteForm({
         dvr_cumulative_hours: form.se.dvr_cumulative_hours ? Number(form.se.dvr_cumulative_hours) : null
       });
     }
-    // Lost-device protocol: the draft (signatures, narrative) must not
-    // linger after submit — the queued/synced copy is the record now.
-    await db.drafts.delete(draftKey);
+    // The draft stays until the server ACKNOWLEDGES the note: the sync engine
+    // deletes `note:<visitId>` on success. Deleting it here would leave a
+    // failed sync with no recoverable copy on the device (review #15).
     void SyncEngine.drain();
     setSubmitting(false);
     router.push(`/field/visits/${visitId}`);

@@ -8,6 +8,7 @@ import { MapPin, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { db } from "@/lib/offline/db";
 import { clockIn, clockOut, requestTelephonyFallback } from "@/lib/evv/clock";
+import { SyncEngine } from "@/lib/offline/syncEngine";
 
 export function ClockPanel({
   visitId, residence, visitType
@@ -31,6 +32,9 @@ export function ClockPanel({
     const res = action === "in" ? await clockIn(visitId, residence) : await clockOut(visitId, residence);
     setBusy(false);
     if (res.ok) {
+      // Push now rather than at the next navigation: a clock record must not
+      // wait on the device for a page change that may never come.
+      void SyncEngine.drain();
       setMessage(action === "in"
         ? `Clocked in · GPS verified (${Math.round(res.geofence.distanceMeters)}m from residence)`
         : "Clocked out. Complete your progress note below.");
@@ -74,7 +78,8 @@ export function ClockPanel({
         <Button
           variant="outline" size="touch" className="w-full"
           onClick={async () => {
-            const { instructions } = await requestTelephonyFallback(visitId);
+            const { instructions, recorded } = await requestTelephonyFallback(visitId);
+            if (recorded) void SyncEngine.drain();
             setMessage(instructions);
           }}
         >
