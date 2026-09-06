@@ -8,6 +8,7 @@ import "server-only";
 import { exportClaim837P, submitterFromEnv, type ClaimInput } from "./x12-837p";
 import type { NoteReadiness } from "./readiness";
 import type { Client } from "@/lib/supabase/types";
+import { agencyTodayIso } from "@/lib/time/agency";
 
 export interface ClaimBatchResult {
   ok: boolean;
@@ -84,7 +85,7 @@ class ColoradoMedicaid837PAdapter implements PayerAdapter {
     return {
       ok: true,
       fileContent,
-      fileName: `dls-837p-${new Date().toISOString().slice(0, 10)}-cn${controlNumber}.txt`,
+      fileName: `dls-837p-${agencyTodayIso()}-cn${controlNumber}.txt`,
       totalUnits,
       totalCharge
     };

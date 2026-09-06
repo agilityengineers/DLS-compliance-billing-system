@@ -12,6 +12,7 @@ import { listNotes, type NoteWithContext, listEvvLogs } from "@/lib/data/repo-fi
 import { listClients, listPhysicianOrders, listUsers, listVisits } from "@/lib/data/repo-core";
 import { getFeeSchedule, listReliasCompletions, listReliasCourses } from "@/lib/data/repo-business";
 import type { Client, FeeScheduleRow, StaffUser, VisitType, VisitWithNames } from "@/lib/supabase/types";
+import { agencyAddDays, agencySundayOf, agencyTodayIso } from "@/lib/time/agency";
 
 export interface NoteReadiness {
   note: NoteWithContext;
@@ -28,24 +29,16 @@ const AUTH_FIELD: Record<VisitType, keyof Client> = {
   Early_Intervention: "authorized_ei_hours_per_week"
 };
 
-function sundayOf(dateIso: string): string {
-  const d = new Date(`${dateIso}T12:00:00`);
-  d.setDate(d.getDate() - d.getDay());
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function addDaysIso(iso: string, n: number): string {
-  const d = new Date(`${iso}T12:00:00`);
-  d.setDate(d.getDate() + n);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
+// Sun–Sat authorization week (DECISIONS.md), agency calendar.
+const sundayOf = agencySundayOf;
+const addDaysIso = agencyAddDays;
 
 /**
  * Evaluate claim readiness for all unbilled notes in a window.
  * One data pass — per-note evaluation shares the loaded context.
  */
 export async function evaluateUnbilledNotes(opts: { from?: string; to?: string } = {}): Promise<NoteReadiness[]> {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = agencyTodayIso();
   const notes = (await listNotes({ ...opts, unbilledOnly: true })).filter((n) => !n.cancellation_reason);
   if (notes.length === 0) return [];
 

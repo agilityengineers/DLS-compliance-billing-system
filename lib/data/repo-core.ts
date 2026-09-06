@@ -4,6 +4,7 @@
 import "server-only";
 
 import { isDemoMode } from "@/lib/demo/mode";
+import { agencyAddDays, agencyDayRangeUtc, agencyToUtcIso, utcIsoToAgencyDate } from "@/lib/time/agency";
 import { getDemoStore, type AuditContext } from "@/lib/data/demo/store";
 import { createDataClient } from "@/lib/supabase/server";
 import type {
@@ -248,8 +249,9 @@ export async function listVisits(filter: VisitFilter = {}): Promise<VisitWithNam
       .filter((v) => {
         if (filter.staffId && v.staff_id !== filter.staffId) return false;
         if (filter.clientId && v.client_id !== filter.clientId) return false;
-        if (filter.from && v.scheduled_start.slice(0, 10) < filter.from) return false;
-        if (filter.to && v.scheduled_start.slice(0, 10) > filter.to) return false;
+        const day = utcIsoToAgencyDate(v.scheduled_start);
+        if (filter.from && day < filter.from) return false;
+        if (filter.to && day > filter.to) return false;
         if (filter.excludeCancelled && v.status === "Cancelled") return false;
         return true;
       })
@@ -271,8 +273,9 @@ export async function listVisits(filter: VisitFilter = {}): Promise<VisitWithNam
     .order("scheduled_start");
   if (filter.staffId) q = q.eq("staff_id", filter.staffId);
   if (filter.clientId) q = q.eq("client_id", filter.clientId);
-  if (filter.from) q = q.gte("scheduled_start", `${filter.from}T00:00:00`);
-  if (filter.to) q = q.lte("scheduled_start", `${filter.to}T23:59:59`);
+  // Agency-local day bounds expressed as UTC instants (timestamptz column).
+  if (filter.from) q = q.gte("scheduled_start", agencyDayRangeUtc(filter.from, filter.from).fromUtc);
+  if (filter.to) q = q.lt("scheduled_start", agencyDayRangeUtc(filter.to, filter.to).toUtc);
   if (filter.excludeCancelled) q = q.neq("status", "Cancelled");
   const { data, error } = await q;
   if (error) throw new Error(error.message);
@@ -421,13 +424,14 @@ export async function generateVisitsFromTemplates(
     // weekday: 0=Sun…6=Sat; week starts Monday.
     const offset = (t.weekday + 6) % 7;
     const date = addDaysIso(weekMondayIso, offset);
-    const already = existing.some((v) => v.template_id === t.id && v.scheduled_start.slice(0, 10) === date);
+    const already = existing.some((v) => v.template_id === t.id && utcIsoToAgencyDate(v.scheduled_start) === date);
     if (already) continue;
     const res = await saveVisit(
       {
         client_id: t.client_id, staff_id: t.staff_id, visit_type: t.visit_type,
-        scheduled_start: `${date}T${t.start_time.slice(0, 5)}:00`,
-        scheduled_end: `${date}T${t.end_time.slice(0, 5)}:00`,
+        // Template times are agency wall-clock; the column is timestamptz (UTC).
+        scheduled_start: agencyToUtcIso(date, t.start_time.slice(0, 5)),
+        scheduled_end: agencyToUtcIso(date, t.end_time.slice(0, 5)),
         physician_order_id: t.physician_order_id, status: "Scheduled", template_id: t.id
       },
       ctx
@@ -439,10 +443,5 @@ export async function generateVisitsFromTemplates(
 }
 
 function addDaysIso(iso: string, days: number): string {
-  const d = new Date(`${iso}T12:00:00`);
-  d.setDate(d.getDate() + days);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  return agencyAddDays(iso, days);
 }

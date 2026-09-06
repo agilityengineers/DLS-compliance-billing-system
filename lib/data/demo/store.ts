@@ -9,7 +9,8 @@
 //
 // Data resets on server restart (by design — synthetic only, no PHI).
 
-import { buildDemoDataset, type DemoDataset, sundayOfWeek, isoDate } from "./dataset";
+import { buildDemoDataset, type DemoDataset } from "./dataset";
+import { agencyAddDays, agencySundayOf, utcIsoToAgencyDate } from "@/lib/time/agency";
 import { haversineMeters } from "@/lib/evv/gps";
 import type {
   AuditRow, EvvLog, MedicationLog, NmtTrip, ProgressNote, Visit
@@ -131,7 +132,8 @@ export class DemoStore {
     if (!visit.physician_order_id) {
       throw new DemoRuleError("PHYSICIAN_ORDER_REQUIRED", "visits cannot be saved without an active physician order");
     }
-    const date = visit.scheduled_start.slice(0, 10);
+    // Same day basis as fn_visit_requires_active_order: the AGENCY date of the instant.
+    const date = utcIsoToAgencyDate(visit.scheduled_start);
     const po = this.data.physicianOrders.find((o) => o.id === visit.physician_order_id);
     const active = po && po.client_id === visit.client_id &&
       po.effective_date <= date && (!po.expiration_date || po.expiration_date >= date);
@@ -160,10 +162,9 @@ export class DemoStore {
     const authorized = client?.authorized_nmt_trips_per_week ?? 0;
     if (authorized <= 0) throw new DemoRuleError("NMT_NOT_AUTHORIZED", "client has no NMT trip authorization");
 
-    const weekStart = sundayOfWeek(new Date(`${trip.trip_date}T12:00:00`));
-    const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekEnd.getDate() + 6);
-    const inWeek = (d: string) => d >= isoDate(weekStart) && d <= isoDate(weekEnd);
+    const weekStart = agencySundayOf(trip.trip_date);
+    const weekEnd = agencyAddDays(weekStart, 6);
+    const inWeek = (d: string) => d >= weekStart && d <= weekEnd;
     const used = this.data.nmtTrips.filter(
       (t) => t.client_id === trip.client_id && inWeek(t.trip_date) && t.id !== trip.id
     ).length;

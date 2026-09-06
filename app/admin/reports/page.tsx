@@ -5,6 +5,7 @@ import { requireRole } from "@/lib/auth/session";
 import { listClients } from "@/lib/data/repo-core";
 import { listNotes } from "@/lib/data/repo-field";
 import type { Client, VisitType } from "@/lib/supabase/types";
+import { agencyAddDays, agencySundayOf, agencyTodayIso, formatAgencyCalendarDate } from "@/lib/time/agency";
 
 const SERVICES: { type: VisitType; label: string; field: keyof Client }[] = [
   { type: "SCC", label: "SCC", field: "authorized_scc_hours_per_week" },
@@ -13,18 +14,6 @@ const SERVICES: { type: VisitType; label: string; field: keyof Client }[] = [
   { type: "Early_Intervention", label: "Early Intervention", field: "authorized_ei_hours_per_week" }
 ];
 
-function sundayOfCurrentWeek(): string {
-  const d = new Date();
-  d.setDate(d.getDate() - d.getDay());
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function addDays(iso: string, n: number): string {
-  const d = new Date(`${iso}T12:00:00`);
-  d.setDate(d.getDate() + n);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
 export default async function ReportsPage() {
   try {
     await requireRole("Admin", "Scheduler");
@@ -32,8 +21,8 @@ export default async function ReportsPage() {
     redirect("/admin");
   }
 
-  const weekStart = sundayOfCurrentWeek();
-  const weekEnd = addDays(weekStart, 6);
+  const weekStart = agencySundayOf(agencyTodayIso());
+  const weekEnd = agencyAddDays(weekStart, 6);
   const [clients, notes] = await Promise.all([
     listClients(),
     listNotes({ from: weekStart, to: weekEnd })
@@ -65,7 +54,7 @@ export default async function ReportsPage() {
         <h1 className="page-title">Reports</h1>
         <p className="text-sm text-muted-foreground">
           Units delivered vs authorized · week of{" "}
-          {new Date(`${weekStart}T12:00:00`).toLocaleDateString([], { month: "long", day: "numeric" })}.
+          {formatAgencyCalendarDate(weekStart)}.
           {anyOver && (
             <span className="ml-1 font-medium text-pill-danger-fg">
               Over-authorization detected — the affected claims are blocked.
