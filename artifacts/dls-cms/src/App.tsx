@@ -13,6 +13,9 @@ import FieldLayout from "@/app/field/layout";
 // ── Root / auth pages ─────────────────────────────────────────────────────
 import Home from "@/app/page";
 import LoginPage from "@/app/(auth)/login/page";
+import LogoutPage from "@/app/auth/logout/page";
+import ResetPasswordPage from "@/app/auth/reset/page";
+import AuthCallbackPage from "@/app/auth/callback/page";
 
 // ── Admin pages ───────────────────────────────────────────────────────────
 import AdminDashboard from "@/app/admin/page";
@@ -86,6 +89,9 @@ function Router() {
       {/* Root + auth */}
       <Route path="/">{() => <AsyncRoute loader={Home as AsyncComponent} />}</Route>
       <Route path="/login">{() => <AsyncRoute loader={LoginPage as AsyncComponent} />}</Route>
+      <Route path="/logout">{() => <LogoutPage />}</Route>
+      <Route path="/auth/reset">{() => <ResetPasswordPage />}</Route>
+      <Route path="/auth/callback">{() => <AuthCallbackPage />}</Route>
 
       {/* Admin console */}
       <Route path="/admin">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminDashboard as AsyncComponent)} />}</Route>

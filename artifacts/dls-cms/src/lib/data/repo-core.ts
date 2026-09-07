@@ -6,7 +6,7 @@ import "server-only";
 import { isDemoMode } from "@/lib/demo/mode";
 import { agencyAddDays, agencyDayRangeUtc, agencyToUtcIso, utcIsoToAgencyDate } from "@/lib/time/agency";
 import { getDemoStore, type AuditContext } from "@/lib/data/demo/store";
-import { createDataClient } from "@/lib/supabase/server";
+import { createDataClient, createServiceClient } from "@/lib/supabase/server";
 import type {
   Client, PhysicianOrder, RecurringVisitTemplate, Role, StaffUser, TrainingRecord,
   Visit, VisitStatus, VisitType, VisitWithNames
@@ -72,12 +72,25 @@ export async function createUser(
     store.audit("users", "INSERT", user.id, null, { ...user }, ctx);
     return { ok: true };
   }
-  // Real mode: the auth account must exist first (invite via Supabase Auth);
-  // this inserts the app profile for an existing auth user by email.
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const { data: invited, error: inviteError } =
+    await createServiceClient().auth.admin.inviteUserByEmail(input.email, {
+      redirectTo: `${appUrl}/auth/callback?next=/auth/reset`,
+      data: { full_name: input.full_name },
+    });
+  if (inviteError || !invited?.user) {
+    return {
+      ok: false,
+      error: inviteError?.message?.includes("already been registered")
+        ? "An account with that email already exists in Supabase Auth."
+        : `Invite failed: ${inviteError?.message ?? "no user returned"}`,
+    };
+  }
   const { error } = await createDataClient().from("users").insert({
-    email: input.email, full_name: input.full_name, role: input.role, status: "Active"
+    id: invited.user.id, email: input.email, full_name: input.full_name,
+    role: input.role, status: "Active"
   });
-  if (error) return { ok: false, error: `${error.message} — in real mode, invite the user via Supabase Auth first.` };
+  if (error) return { ok: false, error: error.message };
   return { ok: true };
 }
 

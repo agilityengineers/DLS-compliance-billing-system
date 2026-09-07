@@ -25,7 +25,21 @@ export function CredentialsForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  async function forgotPassword() {
+    setError(null);
+    setNotice(null);
+    if (!email) {
+      setError("Enter your email address first, then choose “Forgot password?”.");
+      return;
+    }
+    await createClient().auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth/callback?next=/auth/reset`,
+    });
+    setNotice("If that address belongs to a DLS account, a password-reset link is on its way.");
+  }
 
   async function signInGoogle() {
     setError(null);
@@ -45,7 +59,7 @@ export function CredentialsForm() {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (error) {
-      setError(error.message);
+      setError("Email or password is incorrect.");
       return;
     }
     router.push("/");
@@ -74,9 +88,13 @@ export function CredentialsForm() {
           <Input id="password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
         </div>
         {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
+        {notice && <p className="text-sm text-muted-foreground" role="status">{notice}</p>}
         <Button type="submit" className="w-full" disabled={loading}>
           {loading ? "Signing in…" : "Sign in"}
         </Button>
+        <button type="button" onClick={() => void forgotPassword()} className="w-full text-center text-xs text-muted-foreground underline hover:text-foreground">
+          Forgot password?
+        </button>
       </form>
     </div>
   );

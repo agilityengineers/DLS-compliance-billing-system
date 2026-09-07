@@ -6,8 +6,8 @@ import { getSessionContext } from "@/lib/auth/session";
 import { listVisits, getClient, getVisit, updateVisitStatus } from "@/lib/data/repo-core";
 import {
   appendTimesheetEntry, createDocument, createNmtTrip, getEvvLogForVisit,
-  getNoteForVisit, getOrCreateTimesheet, getUserPrefs,
-  listMedications, listNmtTripsForClientWeek, listNotes, serviceCodeForVisitType,
+  getMedicationLog, getNoteForVisit, getOrCreateTimesheet, getProgressNote, getUserPrefs,
+  isClientAssignedToStaff, listMedications, listNmtTripsForClientWeek, listNotes, serviceCodeForVisitType,
   updateDocumentStatus, updateMedication, upsertEvvLog, upsertJobCoachingLog,
   upsertProgressNote,
 } from "@/lib/data/repo-field";
@@ -24,6 +24,8 @@ import {
   utcIsoToAgencyDate,
   utcIsoToAgencyTime,
 } from "@/lib/time/agency";
+import { SyncBody, describeIssues } from "@/lib/api/sync-schemas";
+import { toPublicError } from "@/lib/api/errors";
 
 // ── bootstrap (mirrors /api/field/bootstrap GET) ──────────────────────────
 export async function bootstrap() {
@@ -59,18 +61,6 @@ export type PushOutcome =
   | { kind: "transient"; error: string }
   | { kind: "unauthenticated" };
 
-const RULE_CODES = [
-  "EVV_GEOFENCE", "NMT_AUTHORIZATION_EXHAUSTED", "NMT_NOT_AUTHORIZED",
-  "PHYSICIAN_ORDER_REQUIRED", "PHYSICIAN_ORDER_INACTIVE",
-  "CHECK_VIOLATION", "UNIQUE_VIOLATION", "RLS_DENIED",
-];
-
-function isRuleError(error: string | undefined): boolean {
-  if (!error) return false;
-  if (RULE_CODES.some((c) => error.includes(c))) return true;
-  return /violates row-level security|check constraint|duplicate key|new row violates/i.test(error);
-}
-
 export async function pushMutation(input: {
   table: string;
   op: "insert" | "update";
@@ -79,8 +69,14 @@ export async function pushMutation(input: {
 }): Promise<PushOutcome> {
   const ctx = await getSessionContext();
   if (!ctx.effectiveUser) return { kind: "unauthenticated" };
-  const { table, payload, client_created_at } = input;
+  const parsed = SyncBody.safeParse(input);
+  if (!parsed.success) {
+    return { kind: "rejected", error: `INVALID_PAYLOAD: ${describeIssues(parsed.error)}` };
+  }
+  const { table, payload, client_created_at } = parsed.data;
+  const me = ctx.effectiveUser.id;
   const isAdmin = ctx.effectiveUser.role === "Admin";
+  const isField = ctx.effectiveUser.role === "Field_Staff";
 
   try {
     let result: { ok: boolean; error?: string } = { ok: true };
@@ -92,6 +88,12 @@ export async function pushMutation(input: {
         if (server && server.id === log.id && server.offline_locked && client_created_at) {
           return { kind: "ok" };
         }
+        if (isField) {
+          const visit = await getVisit(log.visit_id);
+          if (!visit || visit.staff_id !== me) {
+            return { kind: "rejected", error: "RLS_DENIED: this visit is not assigned to you" };
+          }
+        }
         result = await upsertEvvLog(log, ctx.auditCtx, { isAdmin });
         if (result.ok && log.clock_out_time && log.clock_in_time) {
           const routeRow = await appendRouteRow(log, ctx.auditCtx);
@@ -102,7 +104,18 @@ export async function pushMutation(input: {
         break;
       }
       case "progress_notes": {
-        const note = payload as unknown as ProgressNote;
+        if (payload.staff_id && payload.staff_id !== me) {
+          return { kind: "rejected", error: "RLS_DENIED: note names another staff member" };
+        }
+        const visit = await getVisit(payload.visit_id);
+        if (!visit) return { kind: "rejected", error: "RLS_DENIED: visit not found" };
+        if (isField && visit.staff_id !== me) {
+          return { kind: "rejected", error: "RLS_DENIED: this visit is not assigned to you" };
+        }
+        if (visit.client_id !== payload.client_id) {
+          return { kind: "rejected", error: "RLS_DENIED: client does not match the visit" };
+        }
+        const note = { ...payload, staff_id: me } as unknown as ProgressNote;
         const server = await getNoteForVisit(note.visit_id);
         const serverClosed =
           server && server.id === note.id &&
@@ -112,22 +125,39 @@ export async function pushMutation(input: {
         break;
       }
       case "medication_logs": {
-        const med = payload as unknown as MedicationLog;
-        if (med.status !== "Missed" && !med.administered_by) {
-          med.administered_by = ctx.effectiveUser.id;
+        const current = await getMedicationLog(payload.id);
+        if (!current) return { kind: "rejected", error: "RLS_DENIED: medication record not found" };
+        if (isField && !(await isClientAssignedToStaff(current.client_id, me))) {
+          return { kind: "rejected", error: "RLS_DENIED: this client is not assigned to you" };
         }
+        const med: MedicationLog = {
+          ...current,
+          status: payload.status,
+          administered_time: payload.administered_time,
+          notes: payload.notes === undefined ? current.notes : payload.notes,
+          administered_by: payload.status === "Missed" ? null : me,
+        };
         result = await updateMedication(med, ctx.auditCtx);
         break;
       }
       case "job_coaching_logs": {
+        if (isField) {
+          const parent = await getProgressNote(payload.progress_note_id);
+          if (!parent || parent.staff_id !== me) {
+            return { kind: "rejected", error: "RLS_DENIED: the parent note is not yours" };
+          }
+        }
         result = await upsertJobCoachingLog(payload as unknown as JobCoachingLog, ctx.auditCtx);
         break;
       }
       case "visits": {
-        const status = payload.status as VisitStatus;
-        if (status !== "Cancelled" && status !== "Completed") {
-          return { kind: "rejected", error: "Field sync may only cancel or complete visits" };
+        if (isField) {
+          const visit = await getVisit(payload.id);
+          if (!visit || visit.staff_id !== me) {
+            return { kind: "rejected", error: "RLS_DENIED: this visit is not assigned to you" };
+          }
         }
+        const status = payload.status as VisitStatus;
         if (status === "Cancelled" && !(payload.cancellation_reason as string | undefined)?.trim()) {
           return { kind: "rejected", error: "CHECK_VIOLATION: cancellation requires a reason" };
         }
@@ -137,7 +167,13 @@ export async function pushMutation(input: {
         break;
       }
       case "nmt_trips": {
-        const trip = payload as unknown as NmtTrip;
+        if (payload.staff_id && payload.staff_id !== me) {
+          return { kind: "rejected", error: "RLS_DENIED: trip names another staff member" };
+        }
+        if (isField && !(await isClientAssignedToStaff(payload.client_id, me))) {
+          return { kind: "rejected", error: "RLS_DENIED: this client is not assigned to you" };
+        }
+        const trip = { ...payload, staff_id: me } as unknown as NmtTrip;
         result = await createNmtTrip(trip, ctx.auditCtx);
         if (result.ok) {
           const monday = agencyMondayOf(trip.trip_date);
@@ -161,14 +197,18 @@ export async function pushMutation(input: {
     }
 
     if (!result.ok) {
-      return isRuleError(result.error)
-        ? { kind: "rejected", error: result.error ?? "Rejected" }
-        : { kind: "transient", error: result.error ?? "Sync failed" };
+      const pub = toPublicError(result.error);
+      return pub.status < 500
+        ? { kind: "rejected", error: pub.error }
+        : { kind: "transient", error: pub.error };
     }
     return { kind: "ok" };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    return isRuleError(msg) ? { kind: "rejected", error: msg } : { kind: "transient", error: msg };
+    const pub = toPublicError(msg);
+    return pub.status < 500
+      ? { kind: "rejected", error: pub.error }
+      : { kind: "transient", error: pub.error };
   }
 }
 
@@ -239,7 +279,7 @@ export async function createUpload(input: {
     },
     ctx.auditCtx,
   );
-  if (!res.ok) throw new Error(res.error ?? "Failed to create document");
+  if (!res.ok) throw new Error(toPublicError(res.error).error);
 
   return { documentId, uploadUrl: target.uploadUrl, provider: target.provider };
 }
@@ -248,5 +288,5 @@ export async function confirmUpload(documentId: string, status: "synced" | "erro
   const ctx = await getSessionContext();
   if (!ctx.effectiveUser) throw new Error("UNAUTHENTICATED");
   const res = await updateDocumentStatus(documentId, status, ctx.auditCtx);
-  if (!res.ok) throw new Error(res.error ?? "Failed to confirm upload");
+  if (!res.ok) throw new Error(toPublicError(res.error).error);
 }

@@ -7,7 +7,7 @@
  *  - Network-only, NO CACHE, for API/data requests: PHI must never land in
  *    the SW cache. Offline data lives in IndexedDB, managed by lib/offline.
  */
-const SHELL_CACHE = "dls-shell-v2";
+const SHELL_CACHE = "dls-shell-v3";
 const SHELL_URLS = [
   "/field",
   "/field/week",
@@ -38,7 +38,7 @@ function isPhiRequest(url) {
 
 function isStaticAsset(url) {
   return (
-    url.pathname.startsWith("/_next/static/") ||
+    url.pathname.startsWith("/assets/") ||
     url.pathname.startsWith("/icons/") ||
     url.pathname.startsWith("/brand/") ||
     url.pathname === "/manifest.json"

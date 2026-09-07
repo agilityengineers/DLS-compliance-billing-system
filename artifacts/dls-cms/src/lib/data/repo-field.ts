@@ -208,6 +208,16 @@ export async function getNoteForVisit(visitId: string): Promise<ProgressNote | n
   return (data as ProgressNote) ?? null;
 }
 
+/** One note by id (RLS-scoped in real mode). */
+export async function getProgressNote(id: string): Promise<ProgressNote | null> {
+  if (isDemoMode()) {
+    return getDemoStore().data.progressNotes.find((note) => note.id === id) ?? null;
+  }
+  const { data } = await createDataClient()
+    .from("progress_notes").select("*").eq("id", id).maybeSingle();
+  return (data as ProgressNote) ?? null;
+}
+
 export async function upsertProgressNote(
   note: ProgressNote,
   ctx: AuditContext
@@ -317,6 +327,28 @@ export async function updateMedication(
   }
   const { error } = await createDataClient().from("medication_logs").upsert(med, { onConflict: "id" });
   return error ? { ok: false, error: error.message } : { ok: true };
+}
+
+/** One scheduled medication record by id (RLS-scoped in real mode). */
+export async function getMedicationLog(id: string): Promise<MedicationLog | null> {
+  if (isDemoMode()) {
+    return getDemoStore().data.medicationLogs.find((med) => med.id === id) ?? null;
+  }
+  const { data } = await createDataClient()
+    .from("medication_logs").select("*").eq("id", id).maybeSingle();
+  return (data as MedicationLog) ?? null;
+}
+
+/** Mirrors fn_client_assigned_to_me() for the in-process demo boundary. */
+export async function isClientAssignedToStaff(clientId: string, staffId: string): Promise<boolean> {
+  if (isDemoMode()) {
+    return getDemoStore().data.visits.some(
+      (visit) => visit.client_id === clientId && visit.staff_id === staffId,
+    );
+  }
+  const { data } = await createDataClient()
+    .from("visits").select("id").eq("client_id", clientId).eq("staff_id", staffId).limit(1);
+  return (data ?? []).length > 0;
 }
 
 // ═══ NMT trips ═══════════════════════════════════════════════════════════

@@ -6,18 +6,21 @@
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 
-const IDLE_MINUTES = Number(process.env.NEXT_PUBLIC_SESSION_IDLE_MINUTES ?? 20);
+const parsed = Number(process.env.NEXT_PUBLIC_SESSION_IDLE_MINUTES);
+const IDLE_MINUTES = Number.isFinite(parsed) && parsed > 0 ? parsed : 20;
 
-export function IdleTimeout() {
+export function IdleTimeout({ wipe = false }: { wipe?: boolean }) {
   const router = useRouter();
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
-    if (!IDLE_MINUTES || IDLE_MINUTES <= 0) return;
-
     const reset = () => {
       clearTimeout(timer.current);
-      timer.current = setTimeout(() => {
+      timer.current = setTimeout(async () => {
+        if (wipe) {
+          const { wipeLocalData } = await import("@/lib/offline/wipe");
+          await wipeLocalData();
+        }
         router.push("/logout?reason=idle");
       }, IDLE_MINUTES * 60_000);
     };
@@ -29,7 +32,7 @@ export function IdleTimeout() {
       clearTimeout(timer.current);
       events.forEach((e) => window.removeEventListener(e, reset));
     };
-  }, [router]);
+  }, [router, wipe]);
 
   return null;
 }

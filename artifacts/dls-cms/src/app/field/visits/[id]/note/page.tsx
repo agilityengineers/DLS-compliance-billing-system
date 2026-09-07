@@ -28,13 +28,19 @@ export default function NotePage() {
     );
   }
 
-  if (existing && existing.synced !== 0) {
+  if (existing) {
     return (
       <div className="space-y-3">
         <h1 className="page-title">Progress note</h1>
-        <p className="rounded-card-m bg-pill-success p-4 text-sm text-pill-success-fg">
-          A note for this visit was already submitted and synced.
-        </p>
+        {existing.synced !== 0 ? (
+          <p className="rounded-card-m bg-pill-success p-4 text-sm text-pill-success-fg">
+            A note for this visit was already submitted and synced.
+          </p>
+        ) : (
+          <p className="rounded-card-m bg-pill-warning p-4 text-sm text-pill-warning-fg" role="status">
+            This note was submitted and is waiting to sync. It remains on this device until the server confirms it.
+          </p>
+        )}
       </div>
     );
   }

@@ -1,39 +1,33 @@
-// lib/offline/syncEngine.ts — drains sync_queue to POST /api/sync.
-//
-// The server route is the single enforcement point: it authenticates the
-// session and writes through the repo, where the DATABASE (or the demo
-// store's identical rules) rejects geofence/NMT/order/manual violations.
+// Durable in-browser sync for the migrated Vite app. Mutations are validated
+// and sent through the same repository/rule layer in-process.
 //
 // Ordering: FIFO per RECORD. A failing record blocks only its own later
 // mutations — other records keep syncing (no head-of-line blocking).
-// Rule rejections (4xx with a code) are terminal: the item moves out of the
-// queue and surfaces to the user instead of retrying forever.
-// A 401 means the session was revoked → local wipe + sign-in (remote
-// sign-out hook, lost-device protocol).
+// Nothing leaves the device without an acknowledgement: terminal failures
+// are parked durably, transient failures use capped exponential backoff, and
+// an expired session pauses syncing without wiping unsynced work.
 "use client";
 
-import { db, type SyncQueueItem } from "./db";
-import { wipeLocalData } from "./wipe";
-import { pushMutation } from "./field-api";
+import { db, type FailedItem, type SyncQueueItem } from "./db";
+import { backoffMs, SYNC_MAX_ATTEMPTS } from "./backoff";
+import { pushMutation, type PushOutcome } from "./field-api";
 
 export interface SyncState {
   online: boolean;
   syncing: boolean;
   pendingCount: number;
+  failed: FailedItem[];
   lastSyncAt: Date | null;
   lastError: string | null;
-  rejected: { table: string; error: string }[];
+  authRequired: boolean;
 }
 
 type Listener = (s: SyncState) => void;
 
-const MAX_ATTEMPTS = 8;
-const BACKOFF_BASE_MS = 5_000;
-
 class SyncEngineImpl {
   private state: SyncState = {
     online: typeof navigator !== "undefined" ? navigator.onLine : true,
-    syncing: false, pendingCount: 0, lastSyncAt: null, lastError: null, rejected: []
+    syncing: false, pendingCount: 0, failed: [], lastSyncAt: null, lastError: null, authRequired: false
   };
   private listeners = new Set<Listener>();
   private started = false;
@@ -42,7 +36,7 @@ class SyncEngineImpl {
   start() {
     if (this.started || typeof window === "undefined") return;
     this.started = true;
-    window.addEventListener("online", () => { this.set({ online: true }); void this.drain(); });
+    window.addEventListener("online", () => { this.set({ online: true }); void this.drain({ force: true }); });
     window.addEventListener("offline", () => this.set({ online: false }));
     void this.refreshPending();
     if (navigator.onLine) void this.drain();
@@ -62,16 +56,22 @@ class SyncEngineImpl {
   }
 
   async refreshPending() {
-    this.set({ pendingCount: await db.sync_queue.count() });
+    const [pendingCount, failed] = await Promise.all([
+      db.sync_queue.count(),
+      db.sync_failed.orderBy("failed_at").reverse().toArray()
+    ]);
+    this.set({ pendingCount, failed });
   }
 
-  /** Drain the queue. Public so the UI retry button can call it. */
-  async drain() {
+  /** Force ignores backoff and probes again after a fresh sign-in. */
+  async drain(opts: { force?: boolean } = {}) {
     if (this.state.syncing || !navigator.onLine) return;
-    this.set({ syncing: true, lastError: null });
+    if (this.state.authRequired && !opts.force) return;
+    this.set({ syncing: true, lastError: null, authRequired: false });
     clearTimeout(this.retryTimer);
 
-    let scheduleRetry = false;
+    const now = Date.now();
+    let nextAt: number | null = null;
     try {
       const items = await db.sync_queue.orderBy("id").toArray();
       // Records whose earlier mutation failed this pass: skip their later
@@ -81,6 +81,11 @@ class SyncEngineImpl {
       for (const item of items) {
         const recordId = String(item.payload.id ?? "");
         if (recordId && blockedRecords.has(recordId)) continue;
+        const eligibleAt = item.next_attempt_at ? Date.parse(item.next_attempt_at) : 0;
+        if (!opts.force && eligibleAt > now) {
+          nextAt = nextAt === null ? eligibleAt : Math.min(nextAt, eligibleAt);
+          continue;
+        }
 
         const outcome = await this.push(item);
 
@@ -90,40 +95,39 @@ class SyncEngineImpl {
             const row = await db.table(item.table).get(recordId);
             if (row) await db.table(item.table).put({ ...(row as object), synced: 1 });
           }
+          if (item.table === "progress_notes") {
+            const visitId = String(item.payload.visit_id ?? "");
+            if (visitId) await db.drafts.delete(`note:${visitId}`);
+          }
           continue;
         }
 
         if (outcome.kind === "unauthenticated") {
-          // Session revoked server-side → remote sign-out: wipe and re-auth.
-          await wipeLocalData();
-          window.location.href = "/login?error=session_revoked";
+          this.set({ authRequired: true, lastError: "Sign in again to sync work kept on this device." });
           return;
         }
 
         if (outcome.kind === "rejected") {
-          // Business-rule rejection — terminal. Remove from the queue and
-          // surface; retrying can never succeed.
-          await db.sync_queue.delete(item.id!);
-          this.set({
-            rejected: [...this.state.rejected.slice(-4), { table: item.table, error: outcome.error }],
-            lastError: outcome.error
-          });
+          await this.park(item, "rejected", outcome.error);
+          this.set({ lastError: outcome.error });
           if (recordId) blockedRecords.add(recordId);
           continue;
         }
 
         // Transient failure: count the attempt, block this record only.
         const attempts = item.attempts + 1;
-        if (attempts >= MAX_ATTEMPTS) {
-          console.error("[SyncEngine] giving up after max attempts", item.table, outcome.error);
-          await db.sync_queue.delete(item.id!);
-          this.set({
-            rejected: [...this.state.rejected.slice(-4), { table: item.table, error: `Gave up after ${MAX_ATTEMPTS} attempts: ${outcome.error}` }]
-          });
+        if (attempts >= SYNC_MAX_ATTEMPTS) {
+          await this.park({ ...item, attempts }, "exhausted", outcome.error);
         } else {
+          const at = Date.now() + backoffMs(attempts);
           const row = await db.sync_queue.get(item.id!);
-          if (row) await db.sync_queue.put({ ...row, attempts, last_error: outcome.error });
-          scheduleRetry = true;
+          if (row) {
+            await db.sync_queue.put({
+              ...row, attempts, last_error: outcome.error,
+              next_attempt_at: new Date(at).toISOString()
+            });
+          }
+          nextAt = nextAt === null ? at : Math.min(nextAt, at);
         }
         if (recordId) blockedRecords.add(recordId);
         this.set({ lastError: outcome.error });
@@ -132,19 +136,43 @@ class SyncEngineImpl {
     } finally {
       await this.refreshPending();
       this.set({ syncing: false });
-      if (scheduleRetry && navigator.onLine) {
-        this.retryTimer = setTimeout(() => void this.drain(), BACKOFF_BASE_MS + Math.random() * 5_000);
+      if (nextAt !== null && navigator.onLine && !this.state.authRequired) {
+        this.retryTimer = setTimeout(() => void this.drain(), Math.max(1_000, nextAt - Date.now()));
       }
     }
   }
 
-  clearRejected() {
-    this.set({ rejected: [], lastError: null });
+  private async park(item: SyncQueueItem, kind: FailedItem["kind"], error: string) {
+    await db.transaction("rw", db.sync_queue, db.sync_failed, async () => {
+      await db.sync_failed.add({
+        table: item.table, op: item.op, payload: item.payload,
+        created_at: item.created_at, attempts: item.attempts,
+        kind, error, failed_at: new Date().toISOString()
+      });
+      await db.sync_queue.delete(item.id!);
+    });
   }
 
-  private async push(item: SyncQueueItem): Promise<
-    { kind: "ok" } | { kind: "rejected"; error: string } | { kind: "transient"; error: string } | { kind: "unauthenticated" }
-  > {
+  async retryFailed(id: number) {
+    const failed = await db.sync_failed.get(id);
+    if (!failed) return;
+    await db.transaction("rw", db.sync_queue, db.sync_failed, async () => {
+      await db.sync_queue.add({
+        table: failed.table, op: failed.op, payload: failed.payload,
+        created_at: failed.created_at, attempts: 0, last_error: null, next_attempt_at: null
+      });
+      await db.sync_failed.delete(id);
+    });
+    await this.refreshPending();
+    void this.drain({ force: true });
+  }
+
+  async dismissFailed(id: number) {
+    await db.sync_failed.delete(id);
+    await this.refreshPending();
+  }
+
+  private async push(item: SyncQueueItem): Promise<PushOutcome> {
     try {
       return await pushMutation({
         table: item.table,

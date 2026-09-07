@@ -3,7 +3,9 @@
 // The migrated app runs entirely in demo mode (in-memory store, no Supabase).
 // These functions are imported statically by the repo layer but are only ever
 // invoked on the non-demo (real Supabase) code path, which is unreachable in
-// this build. If real mode is ever wired up, restore the Supabase clients here.
+// this build. If real mode is wired up, restore the user/data clients plus
+// the narrowly-scoped service client used only for admin invites and
+// impersonation audit events. Never expose its service-role key to Vite.
 
 function unavailable(): never {
   throw new Error(
