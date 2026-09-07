@@ -14,3 +14,9 @@ Replit’s GitHub connectors and the local Git credential helper are separate. A
 **Why:** Treating connector authorization as proof that command-line Git is authenticated can cause repeated rebases or incomplete synchronization.
 
 **How to apply:** Check for rebase metadata before syncing. Prefer a normal fast-forward push when Git credentials work; if they do not, use an already-authorized GitHub connection only with the user’s requested repository and verify local and remote branch SHAs afterward.
+
+`main` is the canonical source-of-truth branch for this project. The former Claude/Replit default branch is retained only as a safety copy and should not receive new product work.
+
+**Why:** GitHub review work and the migrated Replit application diverged across two branches, making each surface appear incomplete. The user explicitly chose to reconcile both histories into `main` and make it the default.
+
+**How to apply:** Start future work from `main`, keep Replit tracking `origin/main`, and port any upstream changes into the live artifact before merging. Do not switch the repository default back to the safety branch.
