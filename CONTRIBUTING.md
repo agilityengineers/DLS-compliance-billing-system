@@ -25,15 +25,22 @@ The script updates repository settings only; it does not modify branch history.
 
 ## Administrator recovery path
 
-Repository administrators retain a bypass path for genuine emergencies, such
-as restoring access after a broken rule or recovering from an unavailable
-required check. Bypass is exceptional and must not be used for routine product
-changes.
+The `main` protections apply to repository administrators. There is no standing
+administrator bypass.
 
-When an administrator bypass is necessary:
+If a broken rule or unavailable required check creates a genuine repository
+lockout, an authorized repository owner may use GitHub's repository settings to
+make a separately governed, temporary rule change. This is an emergency
+recovery procedure, not an alternative contribution workflow.
 
-1. Make the smallest change needed to restore repository operation.
-2. Do not rewrite existing branch history.
-3. Record the reason in the commit or related issue.
-4. Follow up through the normal pull-request process to review and validate the
-   resulting state.
+For emergency recovery:
+
+1. Record the reason and intended recovery in an issue before changing the rule
+   whenever access permits.
+2. Temporarily change only the setting that blocks recovery.
+3. Make the smallest change needed to restore repository operation without
+   rewriting branch history.
+4. Immediately restore the complete versioned policy with
+   `scripts/apply-main-branch-protection.sh`.
+5. Follow up through the normal pull-request process to review and validate the
+   recovered state.
