@@ -3,6 +3,8 @@
 const repository = process.env.GITHUB_REPOSITORY;
 const token = process.env.GITHUB_TOKEN;
 const apiBase = process.env.GITHUB_API_URL || "https://api.github.com";
+const graphqlUrl =
+  process.env.GITHUB_GRAPHQL_URL || `${apiBase.replace(/\/$/, "")}/graphql`;
 const mainBranch = process.env.MAIN_BRANCH || "main";
 const safetyBranch =
   process.env.SAFETY_BRANCH || "claude/dls-cms-design-review-s6prak";
@@ -16,32 +18,59 @@ if (!token) {
   throw new Error("GITHUB_TOKEN is required for the read-only protection audit.");
 }
 
-async function getProtection(branch) {
-  const response = await fetch(
-    `${apiBase}/repos/${repository}/branches/${encodeURIComponent(branch)}/protection`,
-    {
-      headers: {
-        Accept: "application/vnd.github+json",
-        Authorization: `Bearer ${token}`,
-        "X-GitHub-Api-Version": "2022-11-28",
-        "User-Agent": "dls-branch-safeguard-audit",
-      },
+async function getProtectionRules() {
+  const [owner, name] = repository.split("/");
+  const response = await fetch(graphqlUrl, {
+    method: "POST",
+    headers: {
+      Accept: "application/vnd.github+json",
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      "User-Agent": "dls-branch-safeguard-audit",
     },
-  );
+    body: JSON.stringify({
+      query: `
+        query BranchSafeguards($owner: String!, $name: String!) {
+          repository(owner: $owner, name: $name) {
+            branchProtectionRules(first: 100) {
+              nodes {
+                pattern
+                allowsDeletions
+                allowsForcePushes
+                isAdminEnforced
+                requiredApprovingReviewCount
+                requiredStatusCheckContexts
+                requiresApprovingReviews
+                requiresConversationResolution
+                requiresStatusChecks
+                requiresStrictStatusChecks
+              }
+            }
+          }
+        }
+      `,
+      variables: { owner, name },
+    }),
+  });
 
   if (!response.ok) {
     const detail = await response.text();
     throw new Error(
-      `Unable to read protection for ${branch}: GitHub returned ${response.status}. ` +
-        `The workflow is read-only and needs permission to inspect branch protection. ${detail}`,
+      `Unable to read branch protection: GitHub returned ${response.status}. ` +
+        `The workflow is read-only and needs permission to inspect protection rules. ${detail}`,
     );
   }
 
-  return response.json();
-}
+  const result = await response.json();
+  if (result.errors?.length) {
+    throw new Error(
+      `Unable to read branch protection: ${result.errors
+        .map((error) => error.message)
+        .join("; ")}`,
+    );
+  }
 
-function enabled(protection, field) {
-  return protection[field]?.enabled === true;
+  return result.data?.repository?.branchProtectionRules?.nodes ?? [];
 }
 
 const failures = [];
@@ -50,45 +79,55 @@ function requireSafeguard(condition, message) {
   if (!condition) failures.push(message);
 }
 
-const [mainProtection, safetyProtection] = await Promise.all([
-  getProtection(mainBranch),
-  getProtection(safetyBranch),
-]);
-
-const reviewRules = mainProtection.required_pull_request_reviews;
-const statusRules = mainProtection.required_status_checks;
-const statusContexts = statusRules?.contexts ?? [];
+const protectionRules = await getProtectionRules();
+const mainProtection = protectionRules.find(
+  (rule) => rule.pattern === mainBranch,
+);
+const safetyProtection = protectionRules.find(
+  (rule) => rule.pattern === safetyBranch,
+);
 
 requireSafeguard(
-  !enabled(mainProtection, "allow_force_pushes"),
+  mainProtection !== undefined,
+  `${mainBranch}: no exact branch protection rule exists`,
+);
+requireSafeguard(
+  safetyProtection !== undefined,
+  `${safetyBranch}: no exact branch protection rule exists`,
+);
+
+requireSafeguard(
+  mainProtection?.allowsForcePushes === false,
   `${mainBranch}: force-push protection is disabled`,
 );
 requireSafeguard(
-  !enabled(mainProtection, "allow_deletions"),
+  mainProtection?.allowsDeletions === false,
   `${mainBranch}: deletion protection is disabled`,
 );
 requireSafeguard(
-  enabled(mainProtection, "enforce_admins"),
+  mainProtection?.isAdminEnforced === true,
   `${mainBranch}: safeguards do not apply to administrators`,
 );
 requireSafeguard(
-  reviewRules?.required_approving_review_count >= 1,
+  mainProtection?.requiresApprovingReviews === true &&
+    mainProtection?.requiredApprovingReviewCount >= 1,
   `${mainBranch}: at least one approving review is not required`,
 );
 requireSafeguard(
-  statusRules?.strict === true,
+  mainProtection?.requiresStatusChecks === true &&
+    mainProtection?.requiresStrictStatusChecks === true,
   `${mainBranch}: required checks do not require an up-to-date branch`,
 );
 requireSafeguard(
-  statusContexts.includes(requiredCheck),
+  mainProtection?.requiredStatusCheckContexts?.includes(requiredCheck),
   `${mainBranch}: required check "${requiredCheck}" is missing`,
 );
 requireSafeguard(
-  enabled(mainProtection, "required_conversation_resolution"),
+  mainProtection?.requiresConversationResolution === true,
   `${mainBranch}: review conversations are not required to be resolved`,
 );
 requireSafeguard(
-  !enabled(safetyProtection, "allow_deletions"),
+  safetyProtection?.allowsDeletions === false,
   `${safetyBranch}: deletion protection is disabled`,
 );
 
