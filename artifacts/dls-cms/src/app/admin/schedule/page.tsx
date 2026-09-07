@@ -7,12 +7,7 @@ import { listClients, listFieldStaff, listPhysicianOrders, listVisits } from "@/
 import { ScheduleBoard } from "@/components/admin/schedule-board";
 import { GenerateRecurringButton } from "@/components/admin/generate-recurring-button";
 import { DesktopWorkspace } from "@/components/admin/desktop-workspace";
-
-function mondayOf(dateIso?: string): string {
-  const d = dateIso ? new Date(`${dateIso}T12:00:00`) : new Date();
-  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
+import { agencyAddDays, agencyMondayOf, agencyTodayIso, formatAgencyCalendarDate } from "@/lib/time/agency";
 
 export default async function SchedulePage({ searchParams }: { searchParams: { week?: string } }) {
   try {
@@ -21,12 +16,8 @@ export default async function SchedulePage({ searchParams }: { searchParams: { w
     redirect("/admin");
   }
 
-  const weekMonday = mondayOf(searchParams.week);
-  const weekEnd = (() => {
-    const d = new Date(`${weekMonday}T12:00:00`);
-    d.setDate(d.getDate() + 6);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  })();
+  const weekMonday = agencyMondayOf(/^\d{4}-\d{2}-\d{2}$/.test(searchParams.week ?? "") ? searchParams.week! : agencyTodayIso());
+  const weekEnd = agencyAddDays(weekMonday, 6);
 
   const [visits, staff, clients, orders] = await Promise.all([
     listVisits({ from: weekMonday, to: weekEnd, excludeCancelled: true }),
@@ -41,7 +32,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: { w
         <div>
           <h1 className="page-title">Schedule</h1>
           <p className="text-sm text-muted-foreground">
-            Week of {new Date(`${weekMonday}T12:00:00`).toLocaleDateString([], { month: "long", day: "numeric" })}.
+            Week of {formatAgencyCalendarDate(weekMonday)}.
             Select a visit, then reassign. Visits without a physician order are flagged and{" "}
             <strong className="text-foreground">cannot be saved</strong>.
           </p>

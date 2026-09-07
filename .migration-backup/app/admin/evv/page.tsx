@@ -7,6 +7,7 @@ import { listVisits } from "@/lib/data/repo-core";
 import { Badge } from "@/components/ui/badge";
 import { Table, THead, TBody } from "@/components/ui/table";
 import { ManualAdjustmentForm } from "@/components/admin/manual-adjustment-form";
+import { agencyAddDays, agencyTodayIso, formatAgencyDate, formatAgencyDateTime, formatAgencyTime } from "@/lib/time/agency";
 
 export default async function EvvReviewPage() {
   try {
@@ -20,14 +21,14 @@ export default async function EvvReviewPage() {
   const [logs, recentVisits] = await Promise.all([
     listEvvLogs({}),
     listVisits({
-      from: new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10),
-      to: new Date().toISOString().slice(0, 10),
+      from: agencyAddDays(agencyTodayIso(), -14),
+      to: agencyTodayIso(),
       excludeCancelled: true
     })
   ]);
 
   const fmtT = (t: string | null) =>
-    t ? new Date(t).toLocaleString([], { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" }) : "—";
+    t ? formatAgencyDateTime(t) : "—";
 
   return (
     <div className="space-y-6">
@@ -74,7 +75,7 @@ export default async function EvvReviewPage() {
         <ManualAdjustmentForm
           visits={recentVisits.map((v) => ({
             id: v.id,
-            label: `${v.client_name} · ${new Date(v.scheduled_start).toLocaleDateString()} ${new Date(v.scheduled_start).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} (${v.staff_name})`
+            label: `${v.client_name} · ${formatAgencyDate(v.scheduled_start)} ${formatAgencyTime(v.scheduled_start)} (${v.staff_name})`
           }))}
         />
       ) : (

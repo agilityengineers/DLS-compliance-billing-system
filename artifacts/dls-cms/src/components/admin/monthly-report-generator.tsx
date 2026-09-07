@@ -10,6 +10,7 @@ import { composeDvrMonthlyReport, composeSlsBillingNote } from "@/lib/reports/mo
 import { createDocument } from "@/lib/data/repo-field";
 import { getSessionContext } from "@/lib/auth/session";
 import { useRevalidate } from "@/shims/use-revalidate";
+import { revalidatePath } from "next/cache";
 
 async function compose(clientId: string, month: string, kind: "sls" | "dvr") {
   return kind === "dvr"
@@ -18,7 +19,7 @@ async function compose(clientId: string, month: string, kind: "sls" | "dvr") {
 }
 
 export function MonthlyReportGenerator({ clients }: { clients: { id: string; name: string }[] }) {
-  const revalidate = useRevalidate();
+  useRevalidate();
   const now = new Date();
   const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const [clientId, setClientId] = useState(clients[0]?.id ?? "");
@@ -76,7 +77,7 @@ export function MonthlyReportGenerator({ clients }: { clients: { id: string; nam
           ctx.auditCtx,
         );
       }
-      revalidate();
+      revalidatePath("/admin/reports");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {

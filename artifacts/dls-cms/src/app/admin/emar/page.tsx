@@ -6,10 +6,11 @@ import { listMedications } from "@/lib/data/repo-field";
 import { Badge } from "@/components/ui/badge";
 import { Table, THead, TBody } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { agencyAddDays, agencyTodayIso, formatAgencyDateTime, formatAgencyTime } from "@/lib/time/agency";
 
 const STATUSES = ["All", "Administered", "Refused", "Missed"] as const;
 
-export default async function EmarOversightPage({ searchParams }: { searchParams: { status?: string } }) {
+export default async function EmarOversightPage({ searchParams = {} }: { searchParams?: { status?: string } }) {
   try {
     await requireRole("Admin", "Scheduler");
   } catch {
@@ -19,11 +20,9 @@ export default async function EmarOversightPage({ searchParams }: { searchParams
     ? (searchParams.status as (typeof STATUSES)[number])
     : "All";
 
-  const today = new Date();
-  const from = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 14);
-  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  const today = agencyTodayIso();
   const meds = await listMedications({
-    from: iso(from), to: iso(today),
+    from: agencyAddDays(today, -14), to: today,
     status: filter === "All" ? undefined : filter
   });
 
@@ -68,10 +67,10 @@ export default async function EmarOversightPage({ searchParams }: { searchParams
               <td className="font-medium">{m.client_name}</td>
               <td>{m.medication_name} · {m.dosage}</td>
               <td>{m.route}</td>
-              <td className="tabular-nums">{new Date(m.scheduled_time).toLocaleString([], { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" })}</td>
+              <td className="tabular-nums">{formatAgencyDateTime(m.scheduled_time)}</td>
               <td className="tabular-nums">
                 {m.administered_time
-                  ? new Date(m.administered_time).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+                  ? formatAgencyTime(m.administered_time)
                   : "—"}
               </td>
               <td>

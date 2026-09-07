@@ -1,6 +1,6 @@
 // lib/billing/__tests__/x12-837p.test.ts — interface contract for the 837P export
 import { describe, it, expect } from "vitest";
-import { exportClaim837P, type ClaimInput, type Submitter } from "../x12-837p";
+import { exportClaim837P, prettyPrint837P, validateSubmitter, type ClaimInput, type Submitter } from "../x12-837p";
 
 const submitter: Submitter = {
   name: "DURABLE LIFE SKILLS INC", id: "DLS0001", npi: "1234567890",
@@ -20,7 +20,22 @@ const claim: ClaimInput = {
 
 describe("exportClaim837P segment structure", () => {
   const out = exportClaim837P([claim], submitter, 42);
-  const segs = out.split("~").map((s) => s.trim()).filter(Boolean);
+  // Raw wire split: no trimming, no filtering — an empty element here is a defect.
+  const segs = out.slice(0, -1).split("~");
+
+  it("is wire-clean: one terminator per segment, no newlines, no empty segments", () => {
+    expect(out.endsWith("~")).toBe(true);
+    expect(out.endsWith("~~")).toBe(false);
+    expect(out).not.toMatch(/[\r\n]/);
+    expect(segs.every((s) => s.length > 0)).toBe(true);
+    expect(segs[0].length + 1).toBe(106); // ISA is fixed-width: 105 chars + terminator
+  });
+
+  it("prettyPrint is for humans only and round-trips to the wire form", () => {
+    const pretty = prettyPrint837P(out);
+    expect(pretty.split("\n").length).toBe(segs.length);
+    expect(pretty.replace(/\n/g, "")).toBe(out);
+  });
 
   it("opens ISA/GS/ST/BHT and closes SE/GE/IEA in order", () => {
     expect(segs[0]).toMatch(/^ISA\*/);
@@ -59,5 +74,22 @@ describe("exportClaim837P segment structure", () => {
     const stIdx = segs.findIndex((s) => s.startsWith("ST*"));
     const declared = Number(segs[seIdx].split("*")[1]);
     expect(declared).toBe(seIdx - stIdx + 1);
+  });
+});
+
+describe("validateSubmitter refuses placeholder configuration", () => {
+  it("accepts a fully configured submitter", () => {
+    expect(validateSubmitter(submitter)).toEqual([]);
+  });
+  it("rejects an all-zero NPI, a TODO address, and a zero tax id", () => {
+    const problems = validateSubmitter({
+      ...submitter, npi: "0000000000", taxId: "00-0000000", address1: "TODO STREET ADDRESS"
+    });
+    expect(problems.join(" ")).toMatch(/NPI/);
+    expect(problems.join(" ")).toMatch(/TAX_ID/);
+    expect(problems.join(" ")).toMatch(/ADDRESS1/);
+  });
+  it("rejects blank trading-partner ids", () => {
+    expect(validateSubmitter({ ...submitter, id: " ", receiverId: "" }).join(" ")).toMatch(/SUBMITTER_ID/);
   });
 });

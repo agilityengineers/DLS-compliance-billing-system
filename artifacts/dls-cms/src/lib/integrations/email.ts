@@ -3,6 +3,7 @@
 // days" at 30/14/3-day marks, deduped via notification_log. Live sending is
 // gated on the BAA flag; demo mode logs instead of sending.
 import "server-only";
+import { agencyDaysBetween, agencyTodayIso } from "@/lib/time/agency";
 
 import { isDemoMode } from "@/lib/demo/mode";
 import { assertBaaGate } from "./hipaaGate";
@@ -63,13 +64,12 @@ export async function runCredentialExpirySweep(): Promise<{
 }> {
   const users = await listUsers();
   const adapter = getEmailAdapter();
-  const today = new Date();
+  const today = agencyTodayIso();
   let sent = 0;
   let skipped = 0;
   const errors: string[] = [];
 
-  const daysUntil = (iso: string) =>
-    Math.ceil((new Date(`${iso}T12:00:00`).getTime() - today.getTime()) / 86400000);
+  const daysUntil = (iso: string) => agencyDaysBetween(today, iso);
 
   for (const user of users.filter((u) => u.status === "Active")) {
     const credentials: { kind: string; name: string; expires: string }[] = [];

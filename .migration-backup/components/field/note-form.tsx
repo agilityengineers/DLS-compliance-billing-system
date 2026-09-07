@@ -17,6 +17,7 @@ import { useAutoSave, loadDraft } from "@/lib/offline/useAutoSave";
 import { db, writeLocal, newLocalId } from "@/lib/offline/db";
 import { SyncEngine } from "@/lib/offline/syncEngine";
 import { calculateBillingUnits } from "@/lib/billing/units";
+import { agencyTodayIso } from "@/lib/time/agency";
 
 interface NoteState {
   date: string;
@@ -43,7 +44,7 @@ const DEFAULT_GOALS = [
 ];
 
 const initialState = (): NoteState => ({
-  date: new Date().toISOString().slice(0, 10),
+  date: agencyTodayIso(),
   start_time: "", end_time: "",
   goals: DEFAULT_GOALS.map((goal) => ({ goal, addressed: false, progress: "" })),
   narrative: "",

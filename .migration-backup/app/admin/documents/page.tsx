@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, THead, TBody } from "@/components/ui/table";
 import { MonthlyReportGenerator } from "@/components/admin/monthly-report-generator";
 import { DvrNoticeForm } from "@/components/admin/dvr-notice-form";
+import { formatAgencyDate } from "@/lib/time/agency";
 
 const KIND_LABEL: Record<string, string> = {
   field_upload: "Field upload",
@@ -53,7 +54,7 @@ export default async function DocumentsPage() {
                 <td><Badge variant="muted">{KIND_LABEL[d.kind] ?? d.kind}</Badge></td>
                 <td>{d.client_name ?? "—"}</td>
                 <td className="text-muted-foreground">{d.uploader_name ?? "—"}</td>
-                <td className="tabular-nums text-muted-foreground">{new Date(d.created_at).toLocaleDateString()}</td>
+                <td className="tabular-nums text-muted-foreground">{formatAgencyDate(d.created_at)}</td>
                 <td>
                   <Badge variant={d.status === "synced" ? "success" : d.status === "uploading" ? "warning" : "destructive"}>
                     {d.status === "synced" ? "Synced" : d.status === "uploading" ? "Uploading" : "Error"}

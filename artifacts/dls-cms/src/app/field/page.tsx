@@ -10,15 +10,11 @@ import { db } from "@/lib/offline/db";
 import { Badge } from "@/components/ui/badge";
 import { setFieldHome } from "./actions";
 import { cn } from "@/lib/utils";
+import { agencyTodayIso, formatAgencyCalendarDate, utcIsoToAgencyDate } from "@/lib/time/agency";
 
 const STATUS_VARIANT = {
   Scheduled: "muted", In_Progress: "warning", Completed: "success", Cancelled: "destructive", Billed: "default"
 } as const;
-
-function todayIso(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 
 function fmtTime(ts: string): string {
   return new Date(ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
@@ -29,7 +25,7 @@ type HomeStyle = "visits" | "dashboard";
 export default function FieldHome() {
   const [style, setStyle] = useState<HomeStyle>("visits");
   const [, startTransition] = useTransition();
-  const today = todayIso();
+  const today = agencyTodayIso();
 
   useEffect(() => {
     const saved = localStorage.getItem("dls_field_home");
@@ -40,7 +36,7 @@ export default function FieldHome() {
     const all = await db.visits.toArray();
     const clients = await db.clients.toArray();
     return all
-      .filter((v) => v.scheduled_start.slice(0, 10) === today && v.status !== "Cancelled")
+      .filter((v) => utcIsoToAgencyDate(v.scheduled_start) === today && v.status !== "Cancelled")
       .sort((a, b) => a.scheduled_start.localeCompare(b.scheduled_start))
       .map((v) => {
         const c = clients.find((x) => x.id === v.client_id);
@@ -51,15 +47,15 @@ export default function FieldHome() {
   const weekStats = useLiveQuery(async () => {
     const notes = await db.progress_notes.toArray();
     const meds = await db.medication_logs.toArray();
-    const pendingMeds = meds.filter((m) => m.scheduled_time.slice(0, 10) === today && m.status === "Missed").length;
+    const pendingMeds = meds.filter((m) => utcIsoToAgencyDate(m.scheduled_time) === today && m.status === "Missed").length;
     const notesToday = notes.filter((n) => n.date === today).length;
     const pendingSync = await db.sync_queue.count();
     return { notesToday, pendingMeds, pendingSync };
   }, [today]);
 
   const dateLabel = useMemo(
-    () => new Date().toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" }),
-    []
+    () => formatAgencyCalendarDate(today, { weekday: "long", month: "long", day: "numeric" }),
+    [today]
   );
 
   function switchStyle(next: HomeStyle) {

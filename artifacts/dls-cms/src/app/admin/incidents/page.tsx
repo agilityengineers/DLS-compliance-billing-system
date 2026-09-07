@@ -6,6 +6,7 @@ import { listIncidents } from "@/lib/data/repo-business";
 import { getClient, getUser } from "@/lib/data/repo-core";
 import { Badge } from "@/components/ui/badge";
 import { Table, THead, TBody } from "@/components/ui/table";
+import { formatAgencyDateTime } from "@/lib/time/agency";
 
 const TYPE_LABEL: Record<string, string> = {
   abuse_neglect: "Abuse / neglect",
@@ -50,7 +51,7 @@ export default async function IncidentsPage() {
         <TBody>
           {incidents.map((i) => (
             <tr key={i.id}>
-              <td className="whitespace-nowrap tabular-nums">{new Date(i.occurred_at).toLocaleString([], { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" })}</td>
+              <td className="whitespace-nowrap tabular-nums">{formatAgencyDateTime(i.occurred_at)}</td>
               <td>
                 <Badge variant={i.incident_type === "abuse_neglect" || i.incident_type === "critical" ? "destructive" : "warning"}>
                   {TYPE_LABEL[i.incident_type]}

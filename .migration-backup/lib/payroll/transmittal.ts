@@ -8,12 +8,9 @@ import "server-only";
 import { listFieldStaff } from "@/lib/data/repo-core";
 import { listTimesheetEntries, listTimesheets } from "@/lib/data/repo-field";
 import type { PayrollLine, PayrollPeriod } from "@/lib/supabase/types";
+import { agencyAddDays } from "@/lib/time/agency";
 
-function addDays(iso: string, n: number): string {
-  const d = new Date(`${iso}T12:00:00`);
-  d.setDate(d.getDate() + n);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
+const addDays = agencyAddDays;
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 

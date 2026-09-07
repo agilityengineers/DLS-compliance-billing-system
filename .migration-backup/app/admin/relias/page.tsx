@@ -9,12 +9,13 @@ import { getReliasSsoUrl } from "@/lib/integrations/relias";
 import { Badge } from "@/components/ui/badge";
 import { Table, THead, TBody } from "@/components/ui/table";
 import { ReliasSyncButton } from "@/components/admin/relias-sync-button";
+import { agencyTodayIso } from "@/lib/time/agency";
 
 export default async function ReliasPage() {
   const ctx = await getSessionContext();
   if (!ctx.effectiveUser) redirect("/login");
   const isAdmin = ctx.effectiveUser.role === "Admin";
-  const today = new Date().toISOString().slice(0, 10);
+  const today = agencyTodayIso();
 
   const [staff, courses, completions] = await Promise.all([
     listFieldStaff(),

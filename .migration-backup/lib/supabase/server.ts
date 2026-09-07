@@ -53,8 +53,9 @@ export function createDataClient() {
 /**
  * Service-role client. BYPASSES RLS — server-only, never import from client
  * code. Restricted to call sites that CANNOT run as the user (audit queries
- * across users, claim export ledger, payroll snapshot, notification job,
- * OAuth first-profile insert). Every other admin write goes through
+ * across users, notification job, OAuth first-profile insert). The claim
+ * export ledger runs as the Admin (RLS: claims_admin_all) so its audit rows
+ * carry performed_by/impersonating. Every other admin write goes through
  * createDataClient() so RLS + audit attribution hold
  * (PRODUCTION-READINESS.md §4.2).
  */

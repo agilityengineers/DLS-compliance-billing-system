@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { renewLicense, renewTraining, offboardStaff } from "@/app/admin/staff/actions";
+import { agencyTodayIso } from "@/lib/time/agency";
 
 export function StaffRowActions({
   user,
@@ -27,7 +28,7 @@ export function StaffRowActions({
   // renewal form state
   const [course, setCourse] = useState(expiredCourses[0] ?? "");
   const [licenseDate, setLicenseDate] = useState("");
-  const [completedOn, setCompletedOn] = useState(new Date().toISOString().slice(0, 10));
+  const [completedOn, setCompletedOn] = useState(agencyTodayIso());
   const [expiresOn, setExpiresOn] = useState("");
   const [reassignTo, setReassignTo] = useState(reassignTargets[0]?.id ?? "");
 

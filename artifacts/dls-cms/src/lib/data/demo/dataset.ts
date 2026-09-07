@@ -1,8 +1,9 @@
 // lib/data/demo/dataset.ts — DETERMINISTIC SYNTHETIC DEMO DATA. No PHI.
 // Mirrors supabase/seed.sql (same fixed UUIDs/names) so demo mode and a
 // seeded Supabase environment demo identically. Dates are relative to the
-// current week; times are timezone-naive local strings so every viewer sees
-// the schedule the prototype shows (9:00 AM Monday, etc.).
+// current AGENCY week; every timestamp is a UTC instant ("…Z"), exactly the
+// shape PostgREST returns for timestamptz columns — so code that mishandles
+// time zones fails in demo mode too, instead of only in production.
 
 import type {
   AuditRow, Client, DocumentRow, EvvLog, FeeScheduleRow, Incident,
@@ -10,6 +11,7 @@ import type {
   PhysicianOrder, ProgressNote, RecurringVisitTemplate, ReliasCompletion,
   ReliasCourse, StaffUser, Timesheet, TimesheetEntry, UserPrefs, Visit
 } from "@/lib/supabase/types";
+import { agencyAddDays, agencyMondayOf, agencyTodayIso, agencyToUtcIso } from "@/lib/time/agency";
 
 // ── ids (identical to supabase/seed.sql) ─────────────────────────────────
 export const UID = {
@@ -30,47 +32,28 @@ export const CID = {
   tran: "00000000-0000-4000-b000-000000000005"
 } as const;
 
-// ── date helpers ─────────────────────────────────────────────────────────
-export function isoDate(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+// ── date helpers (agency calendar; instants in UTC) ──────────────────────
+/** Monday (YYYY-MM-DD) of the agency week containing today. */
+export function mondayOfCurrentWeek(): string {
+  return agencyMondayOf(agencyTodayIso());
 }
 
-/** Monday of the week containing today (local). */
-export function mondayOfCurrentWeek(): Date {
-  const now = new Date();
-  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const shift = (d.getDay() + 6) % 7; // Mon=0 … Sun=6
-  d.setDate(d.getDate() - shift);
-  return d;
+function dateStr(baseIso: string, offsetDays: number): string {
+  return agencyAddDays(baseIso, offsetDays);
 }
 
-/** Sunday of the week containing `date` (authorization weeks run Sun–Sat). */
-export function sundayOfWeek(date: Date): Date {
-  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  d.setDate(d.getDate() - d.getDay());
-  return d;
-}
-
-export function addDays(d: Date, days: number): Date {
-  const n = new Date(d);
-  n.setDate(n.getDate() + days);
-  return n;
-}
-
-function dateStr(base: Date, offsetDays: number): string {
-  return isoDate(addDays(base, offsetDays));
-}
-
-/** Timezone-naive local timestamp "YYYY-MM-DDTHH:MM:00". */
-function ts(base: Date, offsetDays: number, time: string): string {
-  return `${dateStr(base, offsetDays)}T${time}:00`;
+/** Agency wall-clock "HH:MM" on (base + offset days) → UTC ISO instant. */
+function ts(baseIso: string, offsetDays: number, time: string): string {
+  return agencyToUtcIso(dateStr(baseIso, offsetDays), time);
 }
 
 function todayStr(offsetDays = 0): string {
-  return dateStr(new Date(), offsetDays);
+  return agencyAddDays(agencyTodayIso(), offsetDays);
+}
+
+/** Agency wall-clock "HH:MM" on today+offset → UTC ISO instant. */
+function todayTs(offsetDays: number, time: string): string {
+  return agencyToUtcIso(todayStr(offsetDays), time);
 }
 
 // ── dataset ──────────────────────────────────────────────────────────────
@@ -292,11 +275,11 @@ export function buildDemoDataset(): DemoDataset {
   ];
 
   const medicationLogs: MedicationLog[] = [
-    { id: "00000000-0000-4000-f300-000000000001", client_id: CID.reyes, medication_name: "Sertraline", dosage: "50 mg", route: "Oral", scheduled_time: `${todayStr()}T08:00:00`, administered_time: null, administered_by: null, status: "Missed", notes: null },
-    { id: "00000000-0000-4000-f300-000000000002", client_id: CID.ramirez, medication_name: "Levetiracetam", dosage: "500 mg", route: "Oral", scheduled_time: `${todayStr()}T09:00:00`, administered_time: null, administered_by: null, status: "Missed", notes: null },
+    { id: "00000000-0000-4000-f300-000000000001", client_id: CID.reyes, medication_name: "Sertraline", dosage: "50 mg", route: "Oral", scheduled_time: todayTs(0, "08:00"), administered_time: null, administered_by: null, status: "Missed", notes: null },
+    { id: "00000000-0000-4000-f300-000000000002", client_id: CID.ramirez, medication_name: "Levetiracetam", dosage: "500 mg", route: "Oral", scheduled_time: todayTs(0, "09:00"), administered_time: null, administered_by: null, status: "Missed", notes: null },
     // Administered yesterday with NO EVV overlap → QA flag demo
-    { id: "00000000-0000-4000-f300-000000000003", client_id: CID.whitfield, medication_name: "Lamotrigine", dosage: "100 mg", route: "Oral", scheduled_time: `${todayStr(-1)}T08:00:00`, administered_time: `${todayStr(-1)}T08:10:00`, administered_by: UID.martinez, status: "Administered", notes: null },
-    { id: "00000000-0000-4000-f300-000000000004", client_id: CID.reyes, medication_name: "Sertraline", dosage: "50 mg", route: "Oral", scheduled_time: `${todayStr(-1)}T08:00:00`, administered_time: null, administered_by: UID.vega, status: "Refused", notes: "Client declined; will retry per plan." }
+    { id: "00000000-0000-4000-f300-000000000003", client_id: CID.whitfield, medication_name: "Lamotrigine", dosage: "100 mg", route: "Oral", scheduled_time: todayTs(-1, "08:00"), administered_time: todayTs(-1, "08:10"), administered_by: UID.martinez, status: "Administered", notes: null },
+    { id: "00000000-0000-4000-f300-000000000004", client_id: CID.reyes, medication_name: "Sertraline", dosage: "50 mg", route: "Oral", scheduled_time: todayTs(-1, "08:00"), administered_time: null, administered_by: UID.vega, status: "Refused", notes: "Client declined; will retry per plan." }
   ];
 
   const nmtTrips: NmtTrip[] = [
@@ -391,10 +374,10 @@ export function buildDemoDataset(): DemoDataset {
   ];
 
   const reliasCompletions: ReliasCompletion[] = [
-    { id: "00000000-0000-4000-fa00-000000000001", user_id: UID.vega, course_id: RC(1), completed_on: todayStr(-335), expires_on: todayStr(30), source: "api", synced_at: `${todayStr(-1)}T02:00:00` },
-    { id: "00000000-0000-4000-fa00-000000000002", user_id: UID.vega, course_id: RC(2), completed_on: todayStr(-200), expires_on: todayStr(530), source: "api", synced_at: `${todayStr(-1)}T02:00:00` },
-    { id: "00000000-0000-4000-fa00-000000000003", user_id: UID.price, course_id: RC(1), completed_on: todayStr(-120), expires_on: todayStr(245), source: "api", synced_at: `${todayStr(-1)}T02:00:00` },
-    { id: "00000000-0000-4000-fa00-000000000004", user_id: UID.torres, course_id: RC(2), completed_on: todayStr(-400), expires_on: todayStr(-35), source: "api", synced_at: `${todayStr(-1)}T02:00:00` } // expired
+    { id: "00000000-0000-4000-fa00-000000000001", user_id: UID.vega, course_id: RC(1), completed_on: todayStr(-335), expires_on: todayStr(30), source: "api", synced_at: todayTs(-1, "02:00") },
+    { id: "00000000-0000-4000-fa00-000000000002", user_id: UID.vega, course_id: RC(2), completed_on: todayStr(-200), expires_on: todayStr(530), source: "api", synced_at: todayTs(-1, "02:00") },
+    { id: "00000000-0000-4000-fa00-000000000003", user_id: UID.price, course_id: RC(1), completed_on: todayStr(-120), expires_on: todayStr(245), source: "api", synced_at: todayTs(-1, "02:00") },
+    { id: "00000000-0000-4000-fa00-000000000004", user_id: UID.torres, course_id: RC(2), completed_on: todayStr(-400), expires_on: todayStr(-35), source: "api", synced_at: todayTs(-1, "02:00") } // expired
   ];
 
   const recurringTemplates: RecurringVisitTemplate[] = [
@@ -423,7 +406,7 @@ export function buildDemoDataset(): DemoDataset {
     {
       id: "00000000-0000-4000-fc00-000000000002", table_name: "medication_logs", record_id: "00000000-0000-4000-f300-000000000003",
       action: "UPDATE", performed_by: UID.martinez, impersonating: null,
-      timestamp: `${todayStr(-1)}T08:10:00`,
+      timestamp: todayTs(-1, "08:10"),
       old_values: { status: "Missed" }, new_values: { status: "Administered" }
     }
   ];

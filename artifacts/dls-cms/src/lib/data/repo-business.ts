@@ -34,18 +34,24 @@ export async function listClaimExports(): Promise<ClaimExport[]> {
   return (data ?? []) as ClaimExport[];
 }
 
-/** Persist an 837P export + mark its notes billed. Always audited. */
-export async function recordClaimExport(
-  input: {
-    noteIds: string[]; totalUnits: number; totalCharge: number;
-    fileContent: string; payer?: string;
-  },
+// Export is two-phase so a note is never marked billed without a wire file:
+//   openClaimExport      → ledger row, control number assigned, NOTHING billed
+//   finalizeClaimExport  → file attached AND notes marked billed
+//   discardClaimExport   → cleanup if phase 2 cannot complete
+// All three run as the signed-in Admin (RLS: claims_admin_all / notes_admin_all),
+// so the audit trigger records performed_by + impersonating — no service role.
+
+type DemoLedger = { claimExports?: ClaimExport[]; __ctrl?: number };
+
+/** Phase 1 — open the ledger row and reserve a control number. */
+export async function openClaimExport(
+  input: { noteIds: string[]; totalUnits: number; totalCharge: number; payer?: string },
   ctx: AuditContext
 ): Promise<{ ok: boolean; id?: string; controlNumber?: number; error?: string }> {
   const exportedAt = new Date().toISOString();
   if (isDemoMode()) {
     const store = getDemoStore();
-    const bag = store.data as unknown as { claimExports?: ClaimExport[]; __ctrl?: number };
+    const bag = store.data as unknown as DemoLedger;
     bag.claimExports = bag.claimExports ?? [];
     bag.__ctrl = (bag.__ctrl ?? 1000) + 1;
     const exp: ClaimExport = {
@@ -53,10 +59,40 @@ export async function recordClaimExport(
       format: "837P", payer: input.payer ?? "COLORADO_MEDICAID",
       control_number: bag.__ctrl, note_ids: input.noteIds,
       total_units: input.totalUnits, total_charge: input.totalCharge,
-      file_content: input.fileContent
+      file_content: ""
     };
     bag.claimExports.push(exp);
-    for (const id of input.noteIds) {
+    return { ok: true, id: exp.id, controlNumber: exp.control_number };
+  }
+  const { data, error } = await createDataClient()
+    .from("claim_exports")
+    .insert({
+      exported_by: ctx.performedBy, format: "837P",
+      payer: input.payer ?? "COLORADO_MEDICAID", note_ids: input.noteIds,
+      total_units: input.totalUnits, total_charge: input.totalCharge,
+      file_content: ""
+    })
+    .select("id, control_number")
+    .single();
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, id: data.id as string, controlNumber: data.control_number as number };
+}
+
+/** Phase 2 — attach the wire file, then mark the notes billed. Audited. */
+export async function finalizeClaimExport(
+  exportId: string,
+  fileContent: string,
+  noteIds: string[],
+  ctx: AuditContext
+): Promise<{ ok: boolean; error?: string }> {
+  const exportedAt = new Date().toISOString();
+  if (!fileContent) return { ok: false, error: "Refusing to finalize an export with an empty file." };
+  if (isDemoMode()) {
+    const store = getDemoStore();
+    const exp = (store.data as unknown as DemoLedger).claimExports?.find((e) => e.id === exportId);
+    if (!exp) return { ok: false, error: "Export ledger row not found." };
+    exp.file_content = fileContent;
+    for (const id of noteIds) {
       const n = store.data.progressNotes.find((x) => x.id === id);
       if (n) {
         n.billed_at = exportedAt;
@@ -64,41 +100,33 @@ export async function recordClaimExport(
       }
     }
     store.audit("claim_exports", "INSERT", exp.id, null,
-      { control_number: exp.control_number, notes: input.noteIds.length, total_charge: input.totalCharge }, ctx);
-    return { ok: true, id: exp.id, controlNumber: exp.control_number };
+      { control_number: exp.control_number, notes: noteIds.length, total_charge: exp.total_charge }, ctx);
+    return { ok: true };
   }
-
-  // Service-role by necessity (ledger insert + cross-note billed flags in one
-  // step); performed_by is recorded explicitly. PRODUCTION-READINESS.md §4.2.
-  const service = createServiceClient();
-  const { data, error } = await service
-    .from("claim_exports")
-    .insert({
-      exported_by: ctx.performedBy, format: "837P",
-      payer: input.payer ?? "COLORADO_MEDICAID", note_ids: input.noteIds,
-      total_units: input.totalUnits, total_charge: input.totalCharge,
-      file_content: input.fileContent
-    })
-    .select("id, control_number")
-    .single();
-  if (error) return { ok: false, error: error.message };
-  const { error: markErr } = await service
+  const db = createDataClient();
+  const { error: fileErr } = await db.from("claim_exports").update({ file_content: fileContent }).eq("id", exportId);
+  if (fileErr) return { ok: false, error: `Could not store the claim file: ${fileErr.message}` };
+  const { error: markErr } = await db
     .from("progress_notes")
-    .update({ billed_at: exportedAt, claim_export_id: data.id })
-    .in("id", input.noteIds);
-  if (markErr) return { ok: false, error: markErr.message };
-  return { ok: true, id: data.id as string, controlNumber: data.control_number as number };
+    .update({ billed_at: exportedAt, claim_export_id: exportId })
+    .in("id", noteIds);
+  if (markErr) return { ok: false, error: `Claim file stored but notes could not be marked billed: ${markErr.message}` };
+  return { ok: true };
 }
 
-/** Attach the final wire file to a persisted export (control number known). */
-export async function attachClaimExportFile(exportId: string, fileContent: string): Promise<void> {
+/**
+ * Remove an opened ledger row whose export did not complete. Safe by
+ * construction: notes are marked billed only after the file is stored, so a
+ * row that reached this point is referenced by no note (the FK would refuse
+ * the delete otherwise).
+ */
+export async function discardClaimExport(exportId: string): Promise<void> {
   if (isDemoMode()) {
-    const bag = getDemoStore().data as unknown as { claimExports?: ClaimExport[] };
-    const exp = bag.claimExports?.find((e) => e.id === exportId);
-    if (exp) exp.file_content = fileContent;
+    const bag = getDemoStore().data as unknown as DemoLedger;
+    bag.claimExports = (bag.claimExports ?? []).filter((e) => e.id !== exportId);
     return;
   }
-  await createServiceClient().from("claim_exports").update({ file_content: fileContent }).eq("id", exportId);
+  await createDataClient().from("claim_exports").delete().eq("id", exportId);
 }
 
 // ═══ payroll ══════════════════════════════════════════════════════════════
@@ -274,7 +302,8 @@ export async function listAuditTrail(filter: {
   const { data: users } = ids.length
     ? await service.from("users").select("id,full_name").in("id", ids)
     : { data: [] as { id: string; full_name: string }[] };
-  const name = (id: string | null) => users?.find((u) => u.id === id)?.full_name ?? null;
+  const name = (id: string | null) =>
+    users?.find((u: { id: string; full_name: string }) => u.id === id)?.full_name ?? null;
   return rows.map((a) => ({ ...a, performed_by_name: name(a.performed_by), impersonating_name: name(a.impersonating) }));
 }
 

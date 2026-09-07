@@ -6,6 +6,7 @@ import { requireRole } from "@/lib/auth/session";
 import { listAuditTrail } from "@/lib/data/repo-business";
 import { Badge } from "@/components/ui/badge";
 import { Table, THead, TBody } from "@/components/ui/table";
+import { formatAgencyDateTime } from "@/lib/time/agency";
 
 export default async function AuditTrailPage({ searchParams }: { searchParams: { table?: string } }) {
   try {
@@ -33,7 +34,7 @@ export default async function AuditTrailPage({ searchParams }: { searchParams: {
           {rows.map((a) => (
             <tr key={a.id}>
               <td className="whitespace-nowrap tabular-nums text-muted-foreground">
-                {new Date(a.timestamp).toLocaleString([], { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                {formatAgencyDateTime(a.timestamp)}
               </td>
               <td>{a.table_name}</td>
               <td>

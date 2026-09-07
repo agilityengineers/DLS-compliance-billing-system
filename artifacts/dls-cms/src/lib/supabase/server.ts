@@ -11,14 +11,26 @@ function unavailable(): never {
   );
 }
 
-export function createClient(): never {
-  return unavailable();
+export function createClient(): any {
+  return new Proxy({}, {
+    get() {
+      return unavailable();
+    },
+  });
 }
 
-export function createDataClient(): never {
-  return unavailable();
+export function createDataClient(): any {
+  return new Proxy({}, {
+    get() {
+      return unavailable();
+    },
+  });
 }
 
-export function createServiceClient(): never {
-  return unavailable();
+export function createServiceClient(): any {
+  return new Proxy({}, {
+    get() {
+      return unavailable();
+    },
+  });
 }

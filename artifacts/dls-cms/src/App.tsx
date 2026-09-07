@@ -115,10 +115,10 @@ function Router() {
       <Route path="/field/training">{() => <AsyncRoute loader={withLayout(FieldLayout, FieldTraining as AsyncComponent)} />}</Route>
       <Route path="/field/week">{() => <AsyncRoute loader={withLayoutElement(FieldLayout, <FieldWeek />)} />}</Route>
       <Route path="/field/visits/:id/note">
-        {(params) => <AsyncRoute loader={withLayoutElement(FieldLayout, <FieldVisitNote />)} params={params} />}
+        {(params) => <AsyncRoute loader={withLayoutElement(FieldLayout, <FieldVisitNote />)} params={params as Record<string, string>} />}
       </Route>
       <Route path="/field/visits/:id">
-        {(params) => <AsyncRoute loader={withLayoutElement(FieldLayout, <FieldVisit />)} params={params} />}
+        {(params) => <AsyncRoute loader={withLayoutElement(FieldLayout, <FieldVisit />)} params={params as Record<string, string>} />}
       </Route>
 
       {/* Fallback → role router */}

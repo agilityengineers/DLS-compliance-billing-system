@@ -18,7 +18,7 @@ export function useAutoSave<T extends Record<string, unknown>>(
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const latest = useRef(formState);
   latest.current = formState;
-  const debounce = useRef<ReturnType<typeof setTimeout>>();
+  const debounce = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const persist = async () => {
     try {

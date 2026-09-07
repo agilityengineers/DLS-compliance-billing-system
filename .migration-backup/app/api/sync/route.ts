@@ -15,8 +15,9 @@ import { getSessionContext } from "@/lib/auth/session";
 import {
   appendTimesheetEntry, getEvvLogForVisit, getNoteForVisit, getOrCreateTimesheet,
   createNmtTrip, serviceCodeForVisitType, updateMedication, upsertEvvLog,
-  upsertJobCoachingLog, upsertProgressNote, hoursBetween
+  upsertJobCoachingLog, upsertProgressNote
 } from "@/lib/data/repo-field";
+import { agencyMondayOf, hoursBetweenUtc, utcIsoToAgencyDate, utcIsoToAgencyTime } from "@/lib/time/agency";
 import { getVisit, updateVisitStatus } from "@/lib/data/repo-core";
 import type { EvvLog, JobCoachingLog, MedicationLog, NmtTrip, ProgressNote, VisitStatus } from "@/lib/supabase/types";
 
@@ -67,7 +68,13 @@ export async function POST(req: Request) {
         }
         result = await upsertEvvLog(log, ctx.auditCtx, { isAdmin });
         if (result.ok && log.clock_out_time && log.clock_in_time) {
-          await appendRouteRow(log, ctx.auditCtx);
+          // The route-record row is payroll evidence. If it cannot be written,
+          // fail the mutation (500 → the client retries; the EVV upsert and the
+          // append are both idempotent) instead of dropping hours silently.
+          const routeRow = await appendRouteRow(log, ctx.auditCtx);
+          if (!routeRow.ok) {
+            return NextResponse.json({ error: `TIMESHEET_APPEND_FAILED: ${routeRow.error}` }, { status: 500 });
+          }
           // Submit the completed, verified visit to the EVV aggregator
           // (Sandata in Colorado). Fire-and-forget: aggregator hiccups must
           // never fail the field sync; failures land in server logs for the
@@ -121,9 +128,9 @@ export async function POST(req: Request) {
         const trip = payload as unknown as NmtTrip;
         result = await createNmtTrip(trip, ctx.auditCtx);
         if (result.ok) {
-          const monday = mondayOf(trip.trip_date);
+          const monday = agencyMondayOf(trip.trip_date);
           const ts = await getOrCreateTimesheet(trip.staff_id, monday, ctx.auditCtx);
-          await appendTimesheetEntry(
+          const appended = await appendTimesheetEntry(
             {
               timesheet_id: ts.id, work_date: trip.trip_date, service_code: "T",
               client_id: trip.client_id, start_time: null, end_time: null,
@@ -132,6 +139,9 @@ export async function POST(req: Request) {
             },
             ctx.auditCtx
           );
+          if (!appended.ok) {
+            return NextResponse.json({ error: `TIMESHEET_APPEND_FAILED: ${appended.error}` }, { status: 500 });
+          }
         }
         break;
       }
@@ -149,23 +159,31 @@ export async function POST(req: Request) {
 }
 
 /** EVV clock-out → route-record row (codes SCC/JC/DH) + visit → Completed. */
-async function appendRouteRow(log: EvvLog, auditCtx: { performedBy: string | null; impersonating: string | null }) {
+async function appendRouteRow(
+  log: EvvLog,
+  auditCtx: { performedBy: string | null; impersonating: string | null }
+): Promise<{ ok: boolean; error?: string }> {
   const visit = await getVisit(log.visit_id);
-  if (!visit) return;
+  if (!visit) return { ok: false, error: `visit ${log.visit_id} not found` };
   if (visit.status === "Scheduled" || visit.status === "In_Progress") {
-    await updateVisitStatus(visit.id, "Completed", auditCtx);
+    const flipped = await updateVisitStatus(visit.id, "Completed", auditCtx);
+    if (!flipped.ok) return { ok: false, error: flipped.error ?? "could not mark the visit Completed" };
   }
-  const workDate = (log.clock_in_time ?? visit.scheduled_start).slice(0, 10);
-  const start = (log.clock_in_time ?? "").slice(11, 16) || null;
-  const end = (log.clock_out_time ?? "").slice(11, 16) || null;
-  const monday = mondayOf(workDate);
+  // Clock times are UTC instants; the route record is kept in AGENCY days
+  // and wall-clock times (an evening Denver visit is not "tomorrow").
+  const workDate = utcIsoToAgencyDate(log.clock_in_time ?? visit.scheduled_start);
+  const start = log.clock_in_time ? utcIsoToAgencyTime(log.clock_in_time) : null;
+  const end = log.clock_out_time ? utcIsoToAgencyTime(log.clock_out_time) : null;
+  const monday = agencyMondayOf(workDate);
   const ts = await getOrCreateTimesheet(visit.staff_id, monday, auditCtx);
-  await appendTimesheetEntry(
+  return appendTimesheetEntry(
     {
       timesheet_id: ts.id, work_date: workDate,
       service_code: serviceCodeForVisitType(visit.visit_type),
       client_id: visit.client_id, start_time: start, end_time: end,
-      hours: start && end ? Math.round(hoursBetween(start, end) * 4) / 4 : 0,
+      hours: log.clock_in_time && log.clock_out_time
+        ? Math.round(hoursBetweenUtc(log.clock_in_time, log.clock_out_time) * 4) / 4
+        : 0,
       source: "evv", source_id: log.id, notes: null
     },
     auditCtx
@@ -184,11 +202,3 @@ async function submitToAggregator(log: EvvLog) {
   }
 }
 
-function mondayOf(dateIso: string): string {
-  const d = new Date(`${dateIso}T12:00:00`);
-  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}

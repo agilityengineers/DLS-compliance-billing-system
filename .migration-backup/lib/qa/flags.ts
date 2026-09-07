@@ -5,6 +5,7 @@
 // Flags are computed from data; resolutions live in qa_resolutions keyed by
 // a deterministic flag_key.
 import "server-only";
+import { agencyAddDays, agencyTodayIso, formatAgencyTime, utcIsoToAgencyDate } from "@/lib/time/agency";
 
 import { listVisits } from "@/lib/data/repo-core";
 import { listEvvLogs, listMedications, listNotes } from "@/lib/data/repo-field";
@@ -24,18 +25,15 @@ export async function computeQaFlags(opts: { includeResolved?: boolean } = {}): 
   open: QaFlag[];
   resolvedKeys: Set<string>;
 }> {
-  const today = new Date();
-  const iso = (d: Date) =>
-    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  const todayIso = iso(today);
-  const from = iso(new Date(today.getFullYear(), today.getMonth(), today.getDate() - 45));
+  const todayIso = agencyTodayIso();
+  const from = agencyAddDays(todayIso, -45);
 
   const [meds, evvLogs, notes, clients, visits, resolutions] = await Promise.all([
     listMedications({ from, to: todayIso, status: "Administered" }),
     listEvvLogs({ from, to: todayIso }),
     listNotes({ from, to: todayIso }),
     listClients(),
-    listVisits({ from: iso(new Date(today.getFullYear(), today.getMonth(), today.getDate() - 7)), to: iso(new Date(today.getFullYear(), today.getMonth(), today.getDate() + 14)) }),
+    listVisits({ from: agencyAddDays(todayIso, -7), to: agencyAddDays(todayIso, 14) }),
     listQaResolutions()
   ]);
 
@@ -58,8 +56,8 @@ export async function computeQaFlags(opts: { includeResolved?: boolean } = {}): 
         kind: "med-no-evv",
         kindLabel: "Med log without EVV overlap",
         client: m.client_name,
-        date: m.administered_time.slice(0, 10),
-        detail: `${m.medication_name} ${m.dosage} administered at ${new Date(m.administered_time).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} with no clocked-in visit spanning that time.`
+        date: utcIsoToAgencyDate(m.administered_time),
+        detail: `${m.medication_name} ${m.dosage} administered at ${formatAgencyTime(m.administered_time)} with no clocked-in visit spanning that time.`
       });
     }
   }

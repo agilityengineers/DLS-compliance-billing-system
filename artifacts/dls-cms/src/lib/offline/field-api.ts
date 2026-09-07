@@ -6,7 +6,7 @@ import { getSessionContext } from "@/lib/auth/session";
 import { listVisits, getClient, getVisit, updateVisitStatus } from "@/lib/data/repo-core";
 import {
   appendTimesheetEntry, createDocument, createNmtTrip, getEvvLogForVisit,
-  getNoteForVisit, getOrCreateTimesheet, getUserPrefs, hoursBetween,
+  getNoteForVisit, getOrCreateTimesheet, getUserPrefs,
   listMedications, listNmtTripsForClientWeek, listNotes, serviceCodeForVisitType,
   updateDocumentStatus, updateMedication, upsertEvvLog, upsertJobCoachingLog,
   upsertProgressNote,
@@ -16,28 +16,23 @@ import type {
   EvvLog, JobCoachingLog, MedicationLog, NmtTrip, ProgressNote, VisitStatus,
 } from "@/lib/supabase/types";
 import type { AuditContext } from "@/lib/data/demo/store";
-
-function iso(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function mondayOf(dateIso: string): string {
-  const d = new Date(`${dateIso}T12:00:00`);
-  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
-  return iso(d);
-}
+import {
+  agencyAddDays,
+  agencyMondayOf,
+  agencyTodayIso,
+  hoursBetweenUtc,
+  utcIsoToAgencyDate,
+  utcIsoToAgencyTime,
+} from "@/lib/time/agency";
 
 // ── bootstrap (mirrors /api/field/bootstrap GET) ──────────────────────────
 export async function bootstrap() {
   const ctx = await getSessionContext();
   if (!ctx.effectiveUser) return null;
   const staffId = ctx.effectiveUser.id;
-  const today = new Date();
-  const from = iso(new Date(today.getFullYear(), today.getMonth(), today.getDate() - 7));
-  const to = iso(new Date(today.getFullYear(), today.getMonth(), today.getDate() + 14));
+  const today = agencyTodayIso();
+  const from = agencyAddDays(today, -7);
+  const to = agencyAddDays(today, 14);
 
   const visits = await listVisits({ staffId, from, to });
   const clientIds = Array.from(new Set(visits.map((v) => v.client_id)));
@@ -45,12 +40,12 @@ export async function bootstrap() {
   const evvLogs = (await Promise.all(visits.map((v) => getEvvLogForVisit(v.id)))).filter(Boolean);
   const notes = await listNotes({ staffId, from, to });
   const meds = await listMedications({
-    from: iso(new Date(today.getTime() - 86400000)),
-    to: iso(today),
+    from: agencyAddDays(today, -1),
+    to: today,
     clientIds,
   });
   const nmtTrips = (
-    await Promise.all(clientIds.map((id) => listNmtTripsForClientWeek(id, iso(today))))
+    await Promise.all(clientIds.map((id) => listNmtTripsForClientWeek(id, today)))
   ).flat();
   const prefs = await getUserPrefs(staffId);
 
@@ -99,7 +94,10 @@ export async function pushMutation(input: {
         }
         result = await upsertEvvLog(log, ctx.auditCtx, { isAdmin });
         if (result.ok && log.clock_out_time && log.clock_in_time) {
-          await appendRouteRow(log, ctx.auditCtx);
+          const routeRow = await appendRouteRow(log, ctx.auditCtx);
+          if (!routeRow.ok) {
+            return { kind: "transient", error: `TIMESHEET_APPEND_FAILED: ${routeRow.error}` };
+          }
         }
         break;
       }
@@ -142,9 +140,9 @@ export async function pushMutation(input: {
         const trip = payload as unknown as NmtTrip;
         result = await createNmtTrip(trip, ctx.auditCtx);
         if (result.ok) {
-          const monday = mondayOf(trip.trip_date);
+          const monday = agencyMondayOf(trip.trip_date);
           const ts = await getOrCreateTimesheet(trip.staff_id, monday, ctx.auditCtx);
-          await appendTimesheetEntry(
+          const appended = await appendTimesheetEntry(
             {
               timesheet_id: ts.id, work_date: trip.trip_date, service_code: "T",
               client_id: trip.client_id, start_time: null, end_time: null,
@@ -152,6 +150,9 @@ export async function pushMutation(input: {
             },
             ctx.auditCtx,
           );
+          if (!appended.ok) {
+            return { kind: "transient", error: `TIMESHEET_APPEND_FAILED: ${appended.error}` };
+          }
         }
         break;
       }
@@ -171,23 +172,31 @@ export async function pushMutation(input: {
   }
 }
 
-async function appendRouteRow(log: EvvLog, auditCtx: AuditContext) {
+async function appendRouteRow(
+  log: EvvLog,
+  auditCtx: AuditContext,
+): Promise<{ ok: boolean; error?: string }> {
   const visit = await getVisit(log.visit_id);
-  if (!visit) return;
+  if (!visit) return { ok: false, error: `visit ${log.visit_id} not found` };
   if (visit.status === "Scheduled" || visit.status === "In_Progress") {
-    await updateVisitStatus(visit.id, "Completed", auditCtx);
+    const flipped = await updateVisitStatus(visit.id, "Completed", auditCtx);
+    if (!flipped.ok) {
+      return { ok: false, error: flipped.error ?? "could not mark the visit Completed" };
+    }
   }
-  const workDate = (log.clock_in_time ?? visit.scheduled_start).slice(0, 10);
-  const start = (log.clock_in_time ?? "").slice(11, 16) || null;
-  const end = (log.clock_out_time ?? "").slice(11, 16) || null;
-  const monday = mondayOf(workDate);
+  const workDate = utcIsoToAgencyDate(log.clock_in_time ?? visit.scheduled_start);
+  const start = log.clock_in_time ? utcIsoToAgencyTime(log.clock_in_time) : null;
+  const end = log.clock_out_time ? utcIsoToAgencyTime(log.clock_out_time) : null;
+  const monday = agencyMondayOf(workDate);
   const ts = await getOrCreateTimesheet(visit.staff_id, monday, auditCtx);
-  await appendTimesheetEntry(
+  return appendTimesheetEntry(
     {
       timesheet_id: ts.id, work_date: workDate,
       service_code: serviceCodeForVisitType(visit.visit_type),
       client_id: visit.client_id, start_time: start, end_time: end,
-      hours: start && end ? Math.round(hoursBetween(start, end) * 4) / 4 : 0,
+      hours: log.clock_in_time && log.clock_out_time
+        ? Math.round(hoursBetweenUtc(log.clock_in_time, log.clock_out_time) * 4) / 4
+        : 0,
       source: "evv", source_id: log.id, notes: null,
     },
     auditCtx,

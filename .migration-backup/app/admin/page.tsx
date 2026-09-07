@@ -6,20 +6,16 @@ import { listClients, listVisits } from "@/lib/data/repo-core";
 import { computeQaFlags } from "@/lib/qa/flags";
 import { evaluateUnbilledNotes } from "@/lib/billing/readiness";
 import { Badge } from "@/components/ui/badge";
+import { agencyTodayIso, formatAgencyCalendarDate, formatAgencyTime } from "@/lib/time/agency";
 
 const STATUS_VARIANT = {
   Scheduled: "muted", In_Progress: "warning", Completed: "success", Cancelled: "destructive", Billed: "default"
 } as const;
 
-function todayIso(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
 export default async function AdminDashboard() {
   const ctx = await getSessionContext();
   if (!ctx.effectiveUser) redirect("/login");
-  const today = todayIso();
+  const today = agencyTodayIso();
 
   const [clients, todaysVisits, qa, readiness] = await Promise.all([
     listClients(),
@@ -64,13 +60,13 @@ export default async function AdminDashboard() {
 
       <section className="rounded-card border border-border bg-card">
         <h2 className="border-b border-border px-4 py-3 font-medium">
-          Today&rsquo;s visits — {new Date().toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" })}
+          Today&rsquo;s visits — {formatAgencyCalendarDate(today, { weekday: "long", month: "long", day: "numeric" })}
         </h2>
         <ul>
           {todaysVisits.map((v) => (
             <li key={v.id} className="flex items-center justify-between gap-4 border-b border-border px-4 py-3 text-sm last:border-0">
               <span className="w-14 tabular-nums text-muted-foreground">
-                {new Date(v.scheduled_start).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }).replace(" ", "")}
+                {formatAgencyTime(v.scheduled_start).replace(" ", "")}
               </span>
               <span className="flex-1 font-medium">{v.client_name}</span>
               <span className="text-muted-foreground">

@@ -10,11 +10,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { manualEvvAdjustment } from "@/lib/evv/manualAdjustment";
+import { agencyToUtcIso, agencyTodayIso } from "@/lib/time/agency";
 
 export function ManualAdjustmentForm({ visits }: { visits: { id: string; label: string }[] }) {
   const router = useRouter();
   const [visitId, setVisitId] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(agencyTodayIso());
   const [inTime, setInTime] = useState("09:00");
   const [outTime, setOutTime] = useState("11:00");
   const [reason, setReason] = useState("");
@@ -62,8 +63,9 @@ export function ManualAdjustmentForm({ visits }: { visits: { id: string; label: 
             setResult(null);
             const res = await manualEvvAdjustment({
               visitId,
-              clockInTime: `${date}T${inTime}:00`,
-              clockOutTime: `${date}T${outTime}:00`,
+              // Agency wall-clock → UTC instant (the column is timestamptz).
+              clockInTime: agencyToUtcIso(date, inTime),
+              clockOutTime: agencyToUtcIso(date, outTime),
               reason: reason.trim()
             });
             if (!res.ok) setError(res.error ?? "Rejected");

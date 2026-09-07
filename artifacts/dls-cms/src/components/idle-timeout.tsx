@@ -10,7 +10,7 @@ const IDLE_MINUTES = Number(process.env.NEXT_PUBLIC_SESSION_IDLE_MINUTES ?? 20);
 
 export function IdleTimeout() {
   const router = useRouter();
-  const timer = useRef<ReturnType<typeof setTimeout>>();
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     if (!IDLE_MINUTES || IDLE_MINUTES <= 0) return;

@@ -5,6 +5,7 @@ import { getSessionContext } from "@/lib/auth/session";
 import { listReliasCourses, listReliasCompletions } from "@/lib/data/repo-business";
 import { getReliasSsoUrl } from "@/lib/integrations/relias";
 import { Badge } from "@/components/ui/badge";
+import { agencyTodayIso } from "@/lib/time/agency";
 
 export default async function TrainingPage() {
   const ctx = await getSessionContext();
@@ -15,7 +16,7 @@ export default async function TrainingPage() {
     listReliasCourses(),
     listReliasCompletions(user.id)
   ]);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = agencyTodayIso();
 
   return (
     <div className="space-y-4">

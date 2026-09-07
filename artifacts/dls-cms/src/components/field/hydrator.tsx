@@ -17,9 +17,12 @@ async function hydrate() {
     [db.visits, db.clients, db.evv_logs, db.progress_notes, db.medication_logs, db.nmt_trips],
     async () => {
       for (const v of data.visits ?? []) await db.visits.put(v);
-      for (const c of data.clients ?? []) await db.clients.put(c);
+      for (const c of data.clients ?? []) {
+        if (c) await db.clients.put(c);
+      }
       for (const t of data.nmtTrips ?? []) await db.nmt_trips.put(t);
       for (const log of data.evvLogs ?? []) {
+        if (!log) continue;
         const local = await db.evv_logs.get(log.id);
         if (local && local.synced === 0) continue; // local unsynced wins
         await db.evv_logs.put({ ...log, synced: 1 });
