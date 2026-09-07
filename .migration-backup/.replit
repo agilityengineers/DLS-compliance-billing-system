@@ -1,0 +1,17 @@
+# Replit configuration — GitHub → Replit is the deployment path (dev + prod).
+# The app binds 0.0.0.0:$PORT (see package.json scripts).
+run = "npm run dev"
+entrypoint = "app/page.tsx"
+modules = ["nodejs-20"]
+
+[nix]
+channel = "stable-24_05"
+
+[deployment]
+build = ["sh", "-c", "npm ci && npm run build"]
+run = ["sh", "-c", "npm run start"]
+deploymentTarget = "cloudrun"
+
+[[ports]]
+localPort = 3000
+externalPort = 80

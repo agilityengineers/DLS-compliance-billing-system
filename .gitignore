@@ -1,29 +1,49 @@
-# Dependencies / build output
-node_modules/
-.next/
-out/
+# See https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
+
+# compiled output
+dist
+tmp
+out-tsc
 *.tsbuildinfo
-next-env.d.ts
+.expo
+.expo-shared
 
-# Environment & secrets — never commit credentials.
-# All .env variants are ignored; only the checked-in example is allowed.
-.env
-.env.*
-!.env.example
+# dependencies
+node_modules
 
-# Real client files (PHI) must never enter this repository.
-# Keep any real documents outside the repo entirely; this is a tripwire.
-client-files/
-phi/
-*.phi.*
+# IDEs and editors
+/.idea
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
 
-# OS / editor noise
+# IDE - VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# misc
+/.sass-cache
+/connect.lock
+/coverage
+/libpeerconnection.log
+npm-debug.log
+yarn-error.log
+testem.log
+/typings
+
+# System Files
 .DS_Store
 Thumbs.db
-.vscode/
-.idea/
 
-# Logs & test artifacts
-*.log
-coverage/
-playwright-report/
+.cursor/rules/nx-rules.mdc
+.github/instructions/nx.instructions.md
+
+# Replit
+.cache/
+.local/

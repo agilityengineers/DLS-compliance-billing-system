@@ -1,0 +1,152 @@
+// lib/billing/x12-837p.ts — X12 837P (Professional) claim export.
+//
+// Produces the correct SEGMENT STRUCTURE: ISA / GS / ST / BHT, loops
+// 2000A (billing provider HL), 2010AA (billing provider name/address),
+// 2000B/2010BA (subscriber), 2300 (claim), 2400 (service lines),
+// then SE / GE / IEA with correct counts.
+//
+// TODO (payer-specific — flagged inline):
+//  - Real payer/receiver IDs, interchange qualifiers per trading-partner
+//    agreement (Colorado interChange / Gainwell values differ from defaults)
+//  - Procedure codes (SV1) per service authorization (e.g. T2021 for SCC)
+//  - Rendering-provider loops (2310B) when the biller != renderer
+//  - CLIA / prior-auth REF segments where required
+//
+// Pure function; no I/O. Unit-tested in __tests__/x12-837p.test.ts.
+import { utcIsoToAgencyDate, utcIsoToAgencyTime } from "@/lib/time/agency";
+
+export interface ClaimServiceLine {
+  procedureCode: string;   // e.g. "T2021" — TODO confirm per payer contract
+  units: number;
+  chargeAmount: number;    // dollars
+  serviceDate: string;     // YYYYMMDD
+}
+
+export interface ClaimInput {
+  claimId: string;         // internal claim/visit reference
+  client: { lastName: string; firstName: string; medicaidId: string; dob: string /* YYYYMMDD */; gender?: "M" | "F" | "U" };
+  lines: ClaimServiceLine[];
+  diagnosisCodes: string[]; // ICD-10, no dots
+}
+
+export interface Submitter {
+  name: string; id: string; npi: string; taxId: string;
+  address1: string; city: string; state: string; zip: string;
+  receiverName: string; receiverId: string;
+}
+
+// Wire format: every segment ends with exactly one "~" and nothing else —
+// no newlines, no trailing empty segment. (A previous build emitted "~\n"
+// between segments and "~~" at the end; clearinghouses reject both.) Use
+// prettyPrint837P() for on-screen review only.
+const SEG = "~";    // segment terminator
+const EL = "*";     // element separator
+
+/** Human-readable rendering (one segment per line). NEVER send this to a payer. */
+export function prettyPrint837P(wire: string): string {
+  return wire.split(SEG).filter(Boolean).join(`${SEG}\n`) + SEG;
+}
+
+function pad(v: string, len: number) { return v.padEnd(len).slice(0, len); }
+// Interchange/transaction dates are the SUBMITTER's local date/time (agency zone),
+// not UTC — a 6 pm Denver export is not "tomorrow" to the payer.
+function ccyymmdd(d = new Date()) { return utcIsoToAgencyDate(d.toISOString()).replace(/-/g, ""); }
+function hhmm(d = new Date()) { return utcIsoToAgencyTime(d.toISOString()).replace(":", ""); }
+
+export function exportClaim837P(claims: ClaimInput[], submitter: Submitter, controlNumber = 1): string {
+  const icn = String(controlNumber).padStart(9, "0");
+  const segs: string[] = [];
+
+  // ── Interchange & functional group ──
+  segs.push(["ISA", "00", pad("", 10), "00", pad("", 10),
+    "ZZ", pad(submitter.id, 15), "ZZ", pad(submitter.receiverId, 15),
+    ccyymmdd().slice(2), hhmm(), "^", "00501", icn, "0", "P", ":"].join(EL));
+  segs.push(["GS", "HC", submitter.id, submitter.receiverId, ccyymmdd(), hhmm(), icn, "X", "005010X222A1"].join(EL));
+
+  const stIndex = segs.length;
+  segs.push(["ST", "837", "0001", "005010X222A1"].join(EL));
+  segs.push(["BHT", "0019", "00", icn, ccyymmdd(), hhmm(), "CH"].join(EL));
+
+  // 1000A submitter / 1000B receiver
+  segs.push(["NM1", "41", "2", submitter.name, "", "", "", "", "46", submitter.id].join(EL));
+  segs.push(["PER", "IC", submitter.name, "TE", "0000000000"].join(EL)); // TODO real contact
+  segs.push(["NM1", "40", "2", submitter.receiverName, "", "", "", "", "46", submitter.receiverId].join(EL));
+
+  // ── Loop 2000A: billing provider HL ──
+  let hl = 1;
+  segs.push(["HL", String(hl), "", "20", "1"].join(EL));
+  // Loop 2010AA
+  segs.push(["NM1", "85", "2", submitter.name, "", "", "", "", "XX", submitter.npi].join(EL));
+  segs.push(["N3", submitter.address1].join(EL));
+  segs.push(["N4", submitter.city, submitter.state, submitter.zip].join(EL));
+  segs.push(["REF", "EI", submitter.taxId.replace(/-/g, "")].join(EL));
+  const billingHl = hl;
+
+  for (const claim of claims) {
+    hl += 1;
+    // ── Loop 2000B: subscriber HL ──
+    segs.push(["HL", String(hl), String(billingHl), "22", "0"].join(EL));
+    segs.push(["SBR", "P", "18", "", "", "", "", "", "", "MC"].join(EL)); // MC = Medicaid
+    // Loop 2010BA
+    segs.push(["NM1", "IL", "1", claim.client.lastName, claim.client.firstName, "", "", "", "MI", claim.client.medicaidId].join(EL));
+    segs.push(["DMG", "D8", claim.client.dob, claim.client.gender ?? "U"].join(EL));
+    // Payer 2010BB — TODO: real payer name/ID from trading-partner agreement
+    segs.push(["NM1", "PR", "2", "COLORADO MEDICAID", "", "", "", "", "PI", submitter.receiverId].join(EL));
+
+    // ── Loop 2300: claim ──
+    const total = claim.lines.reduce((s, l) => s + l.chargeAmount, 0);
+    segs.push(["CLM", claim.claimId, total.toFixed(2), "", "", "12:B:1", "Y", "A", "Y", "Y"].join(EL));
+    const hi = claim.diagnosisCodes.map((c, i) => `${i === 0 ? "ABK" : "ABF"}:${c}`);
+    if (hi.length) segs.push(["HI", ...hi].join(EL));
+
+    // ── Loop 2400: service lines ──
+    claim.lines.forEach((line, i) => {
+      segs.push(["LX", String(i + 1)].join(EL));
+      segs.push(["SV1", `HC:${line.procedureCode}`, line.chargeAmount.toFixed(2), "UN", String(line.units), "12", "", "1"].join(EL));
+      segs.push(["DTP", "472", "D8", line.serviceDate].join(EL));
+    });
+  }
+
+  // ── Trailers with correct counts ──
+  const stSegCount = segs.length - stIndex + 1; // ST..SE inclusive
+  segs.push(["SE", String(stSegCount), "0001"].join(EL));
+  segs.push(["GE", "1", icn].join(EL));
+  segs.push(["IEA", "1", icn].join(EL));
+
+  return segs.join(SEG) + SEG;
+}
+
+/** Placeholder values that must never reach a payer. */
+const PLACEHOLDER_ADDRESS = "TODO STREET ADDRESS";
+
+export function submitterFromEnv(): Submitter {
+  return {
+    name: process.env.BILLING_PROVIDER_NAME ?? "DURABLE LIFE SKILLS INC",
+    id: process.env.BILLING_SUBMITTER_ID ?? "DLS0001",
+    npi: process.env.BILLING_NPI ?? "0000000000",
+    taxId: process.env.BILLING_TAX_ID ?? "000000000",
+    address1: process.env.BILLING_ADDRESS1 ?? PLACEHOLDER_ADDRESS,
+    city: process.env.BILLING_CITY ?? "GREELEY",
+    state: process.env.BILLING_STATE ?? "CO",
+    zip: process.env.BILLING_ZIP ?? "80631",
+    receiverName: process.env.BILLING_RECEIVER_NAME ?? "COLORADO MEDICAID",
+    receiverId: process.env.BILLING_RECEIVER_ID ?? "COMEDICAID"
+  };
+}
+
+/**
+ * Configuration problems that would put a syntactically valid but wrong
+ * claim on the wire (all-zero NPI, placeholder address, blank IDs). The
+ * export action refuses to run while any are present.
+ */
+export function validateSubmitter(s: Submitter): string[] {
+  const problems: string[] = [];
+  if (!/^\d{10}$/.test(s.npi) || /^0+$/.test(s.npi)) problems.push("BILLING_NPI must be a real 10-digit NPI.");
+  const tax = s.taxId.replace(/-/g, "");
+  if (!/^\d{9}$/.test(tax) || /^0+$/.test(tax)) problems.push("BILLING_TAX_ID must be a real 9-digit tax id.");
+  if (!s.address1.trim() || s.address1.toUpperCase().includes("TODO")) problems.push("BILLING_ADDRESS1 is not set.");
+  if (!s.city.trim() || !/^[A-Z]{2}$/i.test(s.state) || !/^\d{5}(\d{4})?$/.test(s.zip)) problems.push("BILLING_CITY / BILLING_STATE / BILLING_ZIP are incomplete.");
+  if (!s.id.trim() || !s.receiverId.trim()) problems.push("BILLING_SUBMITTER_ID and BILLING_RECEIVER_ID must be set from the trading-partner agreement.");
+  if (!s.name.trim()) problems.push("BILLING_PROVIDER_NAME is blank.");
+  return problems;
+}

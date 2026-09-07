@@ -1,0 +1,29 @@
+# Dependencies / build output
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+
+# Environment & secrets — never commit credentials.
+# All .env variants are ignored; only the checked-in example is allowed.
+.env
+.env.*
+!.env.example
+
+# Real client files (PHI) must never enter this repository.
+# Keep any real documents outside the repo entirely; this is a tripwire.
+client-files/
+phi/
+*.phi.*
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs & test artifacts
+*.log
+coverage/
+playwright-report/

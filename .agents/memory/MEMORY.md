@@ -1,0 +1,3 @@
+- [wouter Switch reuses child state across routes](wouter-async-route-state-reuse.md) — route-change redirects stuck? key `<Switch>` by location; it's React instance reuse, not a routing bug.
+- [Client-only session must avoid document.cookie in iframes](iframe-session-storage.md) — sign-in works in preview but not canvas iframe? Cross-site iframes block cookie writes; use in-memory + localStorage.
+- [GitHub updates after artifact migration](github-updates-after-artifact-migration.md) — a successful upstream merge may update only the archive; port runtime changes into the live artifact.
