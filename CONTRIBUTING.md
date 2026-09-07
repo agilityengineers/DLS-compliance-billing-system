@@ -13,6 +13,16 @@ Before a pull request can merge, it must:
 
 Force-pushes and branch deletion remain disabled for `main`.
 
+The reviewable source for these settings is
+`.github/main-branch-protection.json`. An authenticated repository
+administrator can reapply that exact policy with:
+
+```sh
+scripts/apply-main-branch-protection.sh
+```
+
+The script updates repository settings only; it does not modify branch history.
+
 ## Administrator recovery path
 
 Repository administrators retain a bypass path for genuine emergencies, such
