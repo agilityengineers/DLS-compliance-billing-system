@@ -1,0 +1,34 @@
+name: Branch Safeguard Audit
+
+on:
+  schedule:
+    - cron: "17 13 * * 1"
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/branch-safeguard-audit.yml"
+      - ".github/main-branch-protection.json"
+      - "scripts/audit-branch-safeguards.mjs"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Branch Safeguard Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Inspect live branch safeguards
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          MAIN_BRANCH: main
+          SAFETY_BRANCH: claude/dls-cms-design-review-s6prak
+          REQUIRED_CHECK: DLS-CMS Typecheck
+        run: node scripts/audit-branch-safeguards.mjs
