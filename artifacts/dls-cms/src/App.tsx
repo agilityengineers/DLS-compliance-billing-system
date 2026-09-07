@@ -90,6 +90,7 @@ function Router() {
       <Route path="/">{() => <AsyncRoute loader={Home as AsyncComponent} />}</Route>
       <Route path="/login">{() => <AsyncRoute loader={LoginPage as AsyncComponent} />}</Route>
       <Route path="/logout">{() => <LogoutPage />}</Route>
+      <Route path="/auth/logout">{() => <LogoutPage />}</Route>
       <Route path="/auth/reset">{() => <ResetPasswordPage />}</Route>
       <Route path="/auth/callback">{() => <AuthCallbackPage />}</Route>
 
