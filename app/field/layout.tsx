@@ -38,7 +38,7 @@ export default async function FieldLayout({ children }: { children: React.ReactN
       <TabBar />
       <SwRegister />
       <Hydrator />
-      <IdleTimeout />
+      <IdleTimeout wipe />
     </div>
   );
 }

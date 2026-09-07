@@ -1,46 +1,35 @@
 // app/api/sync/route.ts — THE server-side enforcement point for offline-
 // authored field writes. The SyncEngine posts every queued mutation here.
 //
-// - Auth: session required (demo cookie or Supabase). 401 → client wipes.
+// - Auth: session required (demo cookie or Supabase). 401 → the client
+//   PAUSES syncing and asks for sign-in (it never wipes on a 401).
+// - Payloads are validated PER TABLE (lib/api/sync-schemas.ts): unknown
+//   columns are stripped, identity columns come from the session, a note
+//   must agree with its visit, and a field session may only touch its own
+//   visits and assigned clients — so demo mode and real mode enforce the
+//   same thing before the database's RLS/triggers see the row (review #19).
 // - Writes go through the repo: in real mode the DATABASE triggers/RLS
 //   enforce geofence/NMT/order/manual rules; in demo mode the demo store
 //   enforces identical rules. Rule rejections return 409 with the rule code.
 // - Conflict rule: server wins for CLOSED records (both-signature notes,
-//   locked EVV, administered meds) when the server copy is newer.
+//   locked EVV) when the server copy is newer.
 // - Side effect: EVV clock-outs and NMT trips append route-record rows to
 //   the staff member's weekly timesheet (source-idempotent).
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { getSessionContext } from "@/lib/auth/session";
 import {
-  appendTimesheetEntry, getEvvLogForVisit, getNoteForVisit, getOrCreateTimesheet,
-  createNmtTrip, serviceCodeForVisitType, updateMedication, upsertEvvLog,
-  upsertJobCoachingLog, upsertProgressNote
+  appendTimesheetEntry, createNmtTrip, getEvvLogForVisit, getMedicationLog, getNoteForVisit,
+  getOrCreateTimesheet, getProgressNote, isClientAssignedToStaff, serviceCodeForVisitType,
+  updateMedication, upsertEvvLog, upsertJobCoachingLog, upsertProgressNote
 } from "@/lib/data/repo-field";
 import { agencyMondayOf, hoursBetweenUtc, utcIsoToAgencyDate, utcIsoToAgencyTime } from "@/lib/time/agency";
+import { logApiError, toPublicError } from "@/lib/api/errors";
+import { describeIssues, SyncBody } from "@/lib/api/sync-schemas";
 import { getVisit, updateVisitStatus } from "@/lib/data/repo-core";
-import type { EvvLog, JobCoachingLog, MedicationLog, NmtTrip, ProgressNote, VisitStatus } from "@/lib/supabase/types";
+import type { EvvLog, JobCoachingLog, MedicationLog, NmtTrip, ProgressNote } from "@/lib/supabase/types";
 
-const BodySchema = z.object({
-  table: z.enum(["progress_notes", "evv_logs", "medication_logs", "job_coaching_logs", "nmt_trips", "visits"]),
-  op: z.enum(["insert", "update"]),
-  payload: z.record(z.unknown()).and(z.object({ id: z.string().uuid() })),
-  client_created_at: z.string().optional()
-});
-
-const RULE_CODES = [
-  "EVV_GEOFENCE", "NMT_AUTHORIZATION_EXHAUSTED", "NMT_NOT_AUTHORIZED",
-  "PHYSICIAN_ORDER_REQUIRED", "PHYSICIAN_ORDER_INACTIVE",
-  "CHECK_VIOLATION", "UNIQUE_VIOLATION", "RLS_DENIED"
-];
-
-function ruleStatus(error: string | undefined): number | null {
-  if (!error) return null;
-  if (RULE_CODES.some((c) => error.includes(c))) return 409;
-  // Postgres codes surfaced by PostgREST for our constraints/policies
-  if (/violates row-level security|check constraint|duplicate key|new row violates/i.test(error)) return 409;
-  return null;
-}
+/** A rule rejection: terminal for this payload, shown to the user verbatim (no row data). */
+const deny = (text: string) => NextResponse.json({ error: text }, { status: 409 });
 
 export async function POST(req: Request) {
   const ctx = await getSessionContext();
@@ -48,23 +37,31 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401 });
   }
 
-  const parsed = BodySchema.safeParse(await req.json().catch(() => null));
+  const parsed = SyncBody.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
-    return NextResponse.json({ error: "Expected { table, op, payload }" }, { status: 400 });
+    // Paths only — the received values can be PHI.
+    return NextResponse.json({ error: `INVALID_PAYLOAD: ${describeIssues(parsed.error)}` }, { status: 400 });
   }
-  const { table, payload, client_created_at } = parsed.data;
+  const body = parsed.data;
+  const { table, client_created_at } = body;
+  const me = ctx.effectiveUser.id;
   const isAdmin = ctx.effectiveUser.role === "Admin";
+  const isField = ctx.effectiveUser.role === "Field_Staff";
 
   try {
     let result: { ok: boolean; error?: string };
 
-    switch (table) {
+    switch (body.table) {
       case "evv_logs": {
-        const log = payload as unknown as EvvLog;
+        const log = body.payload as EvvLog;
         // Server-wins for locked logs when the server copy is newer.
         const server = await getEvvLogForVisit(log.visit_id);
         if (server && server.id === log.id && server.offline_locked && client_created_at) {
           return NextResponse.json({ ok: true, dropped: "server-wins (locked EVV record)" });
+        }
+        if (isField) {
+          const visit = await getVisit(log.visit_id);
+          if (!visit || visit.staff_id !== me) return deny("RLS_DENIED: this visit is not assigned to you");
         }
         result = await upsertEvvLog(log, ctx.auditCtx, { isAdmin });
         if (result.ok && log.clock_out_time && log.clock_in_time) {
@@ -73,7 +70,8 @@ export async function POST(req: Request) {
           // append are both idempotent) instead of dropping hours silently.
           const routeRow = await appendRouteRow(log, ctx.auditCtx);
           if (!routeRow.ok) {
-            return NextResponse.json({ error: `TIMESHEET_APPEND_FAILED: ${routeRow.error}` }, { status: 500 });
+            logApiError("sync/evv_logs", routeRow.error, "TIMESHEET_APPEND_FAILED");
+            return NextResponse.json({ error: "TIMESHEET_APPEND_FAILED" }, { status: 500 });
           }
           // Submit the completed, verified visit to the EVV aggregator
           // (Sandata in Colorado). Fire-and-forget: aggregator hiccups must
@@ -84,7 +82,15 @@ export async function POST(req: Request) {
         break;
       }
       case "progress_notes": {
-        const note = payload as unknown as ProgressNote;
+        const p = body.payload;
+        // The note's author is the session user — a payload cannot name someone else.
+        if (p.staff_id && p.staff_id !== me) return deny("RLS_DENIED: note names another staff member");
+        // The note must agree with its visit (billing evidence).
+        const visit = await getVisit(p.visit_id);
+        if (!visit) return deny("RLS_DENIED: visit not found");
+        if (isField && visit.staff_id !== me) return deny("RLS_DENIED: this visit is not assigned to you");
+        if (visit.client_id !== p.client_id) return deny("RLS_DENIED: client does not match the visit");
+        const note = { ...p, staff_id: me } as ProgressNote;
         const server = await getNoteForVisit(note.visit_id);
         const serverClosed = server && server.id === note.id &&
           server.caregiver_signature_data && server.client_signature_data;
@@ -95,37 +101,56 @@ export async function POST(req: Request) {
         break;
       }
       case "medication_logs": {
-        const med = payload as unknown as MedicationLog;
-        // The acting (effective) user is the administrator of record; audit
-        // attribution separately records the real identity when impersonating.
-        if (med.status !== "Missed" && !med.administered_by) {
-          med.administered_by = ctx.effectiveUser.id;
+        // Only the OUTCOME of a scheduled dose comes from the device; the MAR
+        // definition (drug, dose, route, time, client) stays as the server has it.
+        const p = body.payload;
+        const current = await getMedicationLog(p.id);
+        if (!current) return deny("RLS_DENIED: medication record not found");
+        if (isField && !(await isClientAssignedToStaff(current.client_id, me))) {
+          return deny("RLS_DENIED: this client is not assigned to you");
         }
-        result = await updateMedication(med, ctx.auditCtx);
+        const merged: MedicationLog = {
+          ...current,
+          status: p.status,
+          administered_time: p.administered_time,
+          notes: p.notes === undefined ? current.notes : p.notes,
+          // The acting (effective) user is the administrator of record; audit
+          // attribution separately records the real identity when impersonating.
+          administered_by: p.status === "Missed" ? null : me
+        };
+        result = await updateMedication(merged, ctx.auditCtx);
         break;
       }
       case "job_coaching_logs": {
-        result = await upsertJobCoachingLog(payload as unknown as JobCoachingLog, ctx.auditCtx);
+        const p = body.payload;
+        if (isField) {
+          const parent = await getProgressNote(p.progress_note_id);
+          if (!parent || parent.staff_id !== me) return deny("RLS_DENIED: the parent note is not yours");
+        }
+        result = await upsertJobCoachingLog(p as JobCoachingLog, ctx.auditCtx);
         break;
       }
       case "visits": {
         // Field devices may only flip status (Cancelled with a reason, or
         // Completed after clock-out) — never re-schedule offline.
-        const status = payload.status as VisitStatus;
-        if (status !== "Cancelled" && status !== "Completed") {
-          return NextResponse.json({ error: "Field sync may only cancel or complete visits" }, { status: 403 });
+        const p = body.payload;
+        if (isField) {
+          const visit = await getVisit(p.id);
+          if (!visit || visit.staff_id !== me) return deny("RLS_DENIED: this visit is not assigned to you");
         }
-        if (status === "Cancelled" && !(payload.cancellation_reason as string | undefined)?.trim()) {
-          return NextResponse.json({ error: "CHECK_VIOLATION: cancellation requires a reason" }, { status: 409 });
+        if (p.status === "Cancelled" && !p.cancellation_reason?.trim()) {
+          return deny("CHECK_VIOLATION: cancellation requires a reason");
         }
-        result = await updateVisitStatus(
-          payload.id as string, status, ctx.auditCtx,
-          payload.cancellation_reason as string | undefined
-        );
+        result = await updateVisitStatus(p.id, p.status, ctx.auditCtx, p.cancellation_reason ?? undefined);
         break;
       }
       case "nmt_trips": {
-        const trip = payload as unknown as NmtTrip;
+        const p = body.payload;
+        if (p.staff_id && p.staff_id !== me) return deny("RLS_DENIED: trip names another staff member");
+        if (isField && !(await isClientAssignedToStaff(p.client_id, me))) {
+          return deny("RLS_DENIED: this client is not assigned to you");
+        }
+        const trip: NmtTrip = { ...p, staff_id: me };
         result = await createNmtTrip(trip, ctx.auditCtx);
         if (result.ok) {
           const monday = agencyMondayOf(trip.trip_date);
@@ -140,7 +165,8 @@ export async function POST(req: Request) {
             ctx.auditCtx
           );
           if (!appended.ok) {
-            return NextResponse.json({ error: `TIMESHEET_APPEND_FAILED: ${appended.error}` }, { status: 500 });
+            logApiError("sync/nmt_trips", appended.error, "TIMESHEET_APPEND_FAILED");
+            return NextResponse.json({ error: "TIMESHEET_APPEND_FAILED" }, { status: 500 });
           }
         }
         break;
@@ -148,13 +174,17 @@ export async function POST(req: Request) {
     }
 
     if (!result.ok) {
-      const status = ruleStatus(result.error) ?? 500;
-      return NextResponse.json({ error: result.error }, { status });
+      // Never echo database text (it can contain row values): rule codes only.
+      const pub = toPublicError(result.error);
+      if (pub.status >= 500) logApiError(`sync/${table}`, result.error, pub.error);
+      return NextResponse.json({ error: pub.error }, { status: pub.status });
     }
     return NextResponse.json({ ok: true });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    return NextResponse.json({ error: msg }, { status: ruleStatus(msg) ?? 500 });
+    const pub = toPublicError(msg);
+    if (pub.status >= 500) logApiError(`sync/${table}`, msg, pub.error);
+    return NextResponse.json({ error: pub.error }, { status: pub.status });
   }
 }
 
@@ -201,4 +231,3 @@ async function submitToAggregator(log: EvvLog) {
     console.error("[evv-aggregator]", e instanceof Error ? e.message : e);
   }
 }
-

@@ -1,8 +1,9 @@
 // lib/offline/wipe.ts — local device wipe (lost-device protocol).
-// Called on sign-out, on 401 from sync (server-side session revocation =
-// remote sign-out stage), and manually. Destroys the offline DB, the
-// encryption key, and SW caches. Admin-triggered per-device wipe is the
-// remaining 🔴 go-live item (PRODUCTION-READINESS.md §3).
+// Called on sign-out and on the field idle timeout. Destroys the offline DB,
+// the encryption key, and SW caches. A 401 from sync does NOT wipe: it pauses
+// syncing and asks for sign-in, so an expired token cannot destroy unsynced
+// work (review #16). Admin-triggered per-device wipe is the remaining 🔴
+// go-live item (PRODUCTION-READINESS.md §3).
 "use client";
 
 import { db } from "./db";

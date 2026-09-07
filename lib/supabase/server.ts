@@ -52,11 +52,17 @@ export function createDataClient() {
 
 /**
  * Service-role client. BYPASSES RLS — server-only, never import from client
- * code. Restricted to call sites that CANNOT run as the user (audit queries
- * across users, notification job, OAuth first-profile insert). The claim
- * export ledger runs as the Admin (RLS: claims_admin_all) so its audit rows
- * carry performed_by/impersonating. Every other admin write goes through
- * createDataClient() so RLS + audit attribution hold
+ * code. Restricted to call sites that CANNOT run as the user:
+ *   - audit-trail reads across users (lib/data/repo-business.ts)
+ *   - the notification job's log (lib/data/repo-notifications.ts)
+ *   - creating an auth account by invite (lib/data/repo-core.ts createUser —
+ *     the invitee has no session yet; the profile row is then inserted as
+ *     the Admin so RLS and audit attribution apply)
+ *   - impersonation start/stop audit rows (lib/auth/impersonation.ts —
+ *     audit_trails has no INSERT policy; performed_by is set explicitly)
+ * The claim export ledger runs as the Admin (RLS: claims_admin_all) so its
+ * audit rows carry performed_by/impersonating. Every other admin write goes
+ * through createDataClient() so RLS + audit attribution hold
  * (PRODUCTION-READINESS.md §4.2).
  */
 export function createServiceClient() {

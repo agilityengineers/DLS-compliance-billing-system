@@ -28,13 +28,22 @@ export default function NotePage() {
     );
   }
 
-  if (existing && existing.synced !== 0) {
+  if (existing) {
+    // One note per visit from this device. An unsynced note is still queued
+    // (its draft is kept until the server acknowledges it) — never re-submit.
     return (
       <div className="space-y-3">
         <h1 className="page-title">Progress note</h1>
-        <p className="rounded-card-m bg-pill-success p-4 text-sm text-pill-success-fg">
-          A note for this visit was already submitted and synced.
-        </p>
+        {existing.synced !== 0 ? (
+          <p className="rounded-card-m bg-pill-success p-4 text-sm text-pill-success-fg">
+            A note for this visit was already submitted and synced.
+          </p>
+        ) : (
+          <p className="rounded-card-m bg-pill-warning p-4 text-sm text-pill-warning-fg" role="status">
+            A note for this visit was submitted and is waiting to sync. It is kept on this device until the
+            server confirms it — check the sync indicator if it needs attention.
+          </p>
+        )}
       </div>
     );
   }

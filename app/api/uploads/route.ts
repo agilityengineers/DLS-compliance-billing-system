@@ -7,6 +7,7 @@ import { z } from "zod";
 import { getSessionContext } from "@/lib/auth/session";
 import { createDocument, updateDocumentStatus } from "@/lib/data/repo-field";
 import { getStorageAdapter } from "@/lib/integrations/storage";
+import { logApiError, toPublicError } from "@/lib/api/errors";
 
 const PostSchema = z.object({
   fileName: z.string().min(1).max(200),
@@ -50,7 +51,11 @@ export async function POST(req: Request) {
     },
     ctx.auditCtx
   );
-  if (!res.ok) return NextResponse.json({ error: res.error }, { status: 500 });
+  if (!res.ok) {
+    const pub = toPublicError(res.error);
+    logApiError("uploads/POST", res.error, pub.error);
+    return NextResponse.json({ error: pub.error }, { status: pub.status });
+  }
 
   return NextResponse.json({ documentId, uploadUrl: target.uploadUrl, provider: target.provider });
 }
@@ -68,6 +73,10 @@ export async function PATCH(req: Request) {
   if (!parsed.success) return NextResponse.json({ error: "Bad request" }, { status: 400 });
 
   const res = await updateDocumentStatus(parsed.data.documentId, parsed.data.status, ctx.auditCtx);
-  if (!res.ok) return NextResponse.json({ error: res.error }, { status: 500 });
+  if (!res.ok) {
+    const pub = toPublicError(res.error);
+    logApiError("uploads/PATCH", res.error, pub.error);
+    return NextResponse.json({ error: pub.error }, { status: pub.status });
+  }
   return NextResponse.json({ ok: true });
 }

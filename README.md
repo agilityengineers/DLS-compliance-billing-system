@@ -44,11 +44,17 @@ rejections, NMT-cap blocks, and physician-order failures demo truthfully.
 ## Real mode (Supabase)
 
 1. Create a Supabase project; run in order:
-   `supabase/migrations/0001…0005` → `supabase/policies/*.sql` → `supabase/seed.sql` (synthetic data).
-2. Auth → enable **Email** (no verification) and **Google** (callback `https://<host>/auth/callback`).
+   `supabase/migrations/0001…0008` → `supabase/policies/*.sql` → `supabase/seed.sql` (synthetic data).
+2. Auth → enable **Email** and **Google**; add `https://<host>/auth/callback` to the redirect
+   allow-list (invite and password-reset links land there too).
 3. Copy `.env.example` → `.env.local`; set the Supabase URL/keys, `SUPABASE_JWT_SECRET`
    (required for impersonation), and `NEXT_PUBLIC_DEMO_MODE=false`.
 4. `npm run dev`.
+
+**Onboarding is invite-only.** Settings → Add user sends a Supabase invite; the link opens
+`/auth/reset` where the employee sets a password. A Google account that was never invited is
+signed out again with "not set up" — no self-registration. "Forgot password?" on the sign-in
+page sends a reset link to the same page.
 
 ## Architecture
 
@@ -99,7 +105,12 @@ npm test                      # vitest (billing units + 837P)
 ## Deployment
 
 GitHub → **Replit** (`.replit` included; dev/staging/prod as separate
-deployments). Secrets go in Replit Secrets, never the repo. Keep
+deployments). **Deploy from `main`.** The branch
+`claude/dls-cms-design-review-s6prak` that Replit published in July 2026 is a
+client-only Vite preview fork produced by the Replit agent (no server, no
+`/api/sync`, no RLS, session state in localStorage; the Next.js tree sits in
+`.migration-backup/`). It is archived and receives no fixes — decided
+2026-09-07. Secrets go in Replit Secrets, never the repo. Keep
 `NEXT_PUBLIC_DEMO_MODE=true` everywhere until PRODUCTION-READINESS.md §1 is
 complete.
 

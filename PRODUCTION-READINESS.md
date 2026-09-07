@@ -42,7 +42,7 @@ continue" list:
 - [x] Session idle timeout (default 20 min, `NEXT_PUBLIC_SESSION_IDLE_MINUTES`) — shipped Phase 1.
 - [x] Local drafts purged after successful submit; synced queue items purged — shipped Phase 1.
 - [ ] 🔴 **App PIN or biometric (WebAuthn) lock** wrapping the local data key (KEK over DEK), so a stolen device — locked or unlocked — still challenges. Today the raw data key sits in its own IndexedDB database: encryption protects exported/backed-up data blobs, **not** an attacker with full same-origin device access. The PIN wrap closes exactly that gap.
-- [ ] 🔴 **Remote sign-out / remote wipe**: server-side session revocation (Supabase `auth.admin.signOut`) plus the client wipe hook (`lib/offline/wipe.ts` — triggered today on 401; must also be triggerable per-device by an Admin).
+- [ ] 🔴 **Remote sign-out / remote wipe**: server-side session revocation (Supabase `auth.admin.signOut`) plus the client wipe hook (`lib/offline/wipe.ts` — runs on sign-out and on the field idle timeout; a 401 from sync no longer wipes, it pauses sync and asks for sign-in so unsynced work survives an expired token; the Admin-triggered per-device wipe is still to build).
 - [ ] 🟡 MDM or device policy for agency-owned devices (screen lock enforced, OS updates).
 - [ ] 🟡 Document the lost-device runbook: who suspends, who wipes, notification timelines under the breach rule.
 
@@ -51,7 +51,7 @@ continue" list:
 Things the demo deliberately simplifies. Each is labeled in-code with `DEMO:`.
 
 1. 🔴 **Demo sign-in picker** (`/login` role cards) — remove/disable outside demo mode. It exists so the client can tour all three roles without auth setup.
-2. 🔴 **Service-role usage in admin server actions** is limited to: audit queries, payroll snapshot, notification job, OAuth first-profile insert. The claim export runs as the Admin (RLS `claims_admin_all`) so its audit rows carry `performed_by`/`impersonating`. Each remaining call site sets explicit `performed_by`; verify none regressed. All other admin writes use the user-session client so RLS + audit attribution hold.
+2. 🔴 **Service-role usage** is limited to four call sites (grep `createServiceClient()`): audit-trail reads across users, the notification job's log, creating an auth account by invite (`createUser` — the profile row is then inserted as the Admin), and impersonation start/stop audit rows (`performed_by` and `impersonating` set explicitly). Google sign-in no longer provisions profiles (invite-only). The claim export runs as the Admin (RLS `claims_admin_all`) so its audit rows carry `performed_by`/`impersonating`. All other admin writes use the user-session client so RLS + audit attribution hold; verify none regressed.
 3. 🔴 **Fee schedule contains synthetic rates** (`supabase/seed.sql` marks them). Load the real Colorado Medicaid fee schedule (+ DVR rates) before any claim leaves the building. The 837P generator refuses export when a note's rate is missing — do not weaken that check.
 4. 🔴 **837P payer specifics**: submitter/receiver IDs, NPI, taxonomy, and payer-specific loops are placeholders from `.env` — validate against the payer companion guide and test with a clearinghouse validation pass.
 5. 🔴 **Sandata adapter is an interface + mock transport.** Wire real credentials, run Sandata certification/UAT, and confirm visit acceptance before relying on EVV compliance.
@@ -79,7 +79,7 @@ the staging database (fake data) and confirm each rejection:
 
 ## 6. Infrastructure & operations — 🟡/🔵
 
-- [ ] 🟡 Environments: **dev / staging / prod** on Replit (three Repls or deployments from this repo). PHI only ever in prod. Staging runs `supabase/seed.sql`.
+- [ ] 🟡 Environments: **dev / staging / prod** on Replit (three Repls or deployments from this repo), all deployed from `main` — the July Replit branch is an archived preview fork (README → Deployment). PHI only ever in prod. Staging runs `supabase/seed.sql`.
 - [ ] 🟡 Secrets in Replit Secrets (never in repo); rotate the service-role key on any suspected exposure.
 - [ ] 🟡 Backups: Supabase PITR enabled; restore drill performed once.
 - [ ] 🟡 TLS-only access; Supabase network restrictions if available.

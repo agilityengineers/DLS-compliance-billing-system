@@ -21,6 +21,26 @@ export interface SyncQueueItem {
   created_at: string; // ISO — client timestamp, used for open-draft conflict wins
   attempts: number;
   last_error: string | null;
+  /** ISO instant before which the engine will not retry (exponential backoff). */
+  next_attempt_at?: string | null;
+}
+
+/**
+ * A queue item the engine gave up on — parked, never deleted. "rejected" =
+ * the server refused it under a business rule (geofence, cap, closed record);
+ * "exhausted" = SYNC_MAX_ATTEMPTS transient failures. Both stay on the device
+ * until the user retries or dismisses them from the sync pill.
+ */
+export interface FailedItem {
+  id?: number; // auto-increment
+  table: SyncQueueItem["table"];
+  op: SyncQueueItem["op"];
+  payload: Record<string, unknown>;
+  created_at: string;
+  attempts: number;
+  kind: "rejected" | "exhausted";
+  error: string;
+  failed_at: string;
 }
 
 export interface Draft {
@@ -39,7 +59,8 @@ const PLAINTEXT_FIELDS: Record<string, string[]> = {
   visits: ["id", "staff_id", "client_id", "scheduled_start", "status"],
   clients: ["id"],
   nmt_trips: ["id", "client_id", "trip_date"],
-  sync_queue: ["id", "table", "op", "created_at", "attempts", "last_error"],
+  sync_queue: ["id", "table", "op", "created_at", "attempts", "last_error", "next_attempt_at"],
+  sync_failed: ["id", "table", "op", "created_at", "attempts", "kind", "failed_at"],
   drafts: ["key", "updated_at"]
 };
 
@@ -75,6 +96,7 @@ export class DlsDb extends Dexie {
   clients!: Table<Client, string>;
   nmt_trips!: Table<NmtTrip, string>;
   sync_queue!: Table<SyncQueueItem, number>;
+  sync_failed!: Table<FailedItem, number>;
   drafts!: Table<Draft, string>;
 
   constructor() {
@@ -94,6 +116,11 @@ export class DlsDb extends Dexie {
     // v3: NMT trips mirror (per-client weekly cap shown offline)
     this.version(3).stores({
       nmt_trips: "id, client_id, trip_date"
+    });
+    // v4: parked sync items (rule rejections / exhausted retries) — durable,
+    // so a failed write is never silently lost (review #15).
+    this.version(4).stores({
+      sync_failed: "++id, table, failed_at"
     });
 
     // Load the PHI key before any encrypted operation runs.
