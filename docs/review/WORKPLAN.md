@@ -20,7 +20,7 @@ Sources: [launch-readiness review](./2026-09-launch-readiness-review.md) (defect
 | D-04 | Authorizations in hours or units; rounding rule under HCPF; authorization week Sun–Sat | Roadmap q.4 | DLS owner | Open | Drives roadmap 3.6 |
 | D-05 | Attendance and person-centered-profile samples: build generic v1 now or wait | Roadmap q.5 | DLS owner | Open | Linked to BL-002 |
 | D-06 | Incident review: who reviews, statuses and timelines, in-app tracking of county/state reporting | Roadmap q.6 | DLS owner | Open | Drives roadmap 2.3 |
-| D-07 | Hosting: Replit or Vercel | Roadmap q.7 | DLS owner + architect | Open | Decides cron mechanism (roadmap 2.7) and image optimizer |
+| D-07 | Hosting: Replit or Vercel | Roadmap q.7 | DLS owner + architect | In progress | Decided 2026-09-07: whichever host, **deploy from `main`**; the July Replit branch `claude/dls-cms-design-review-s6prak` is an archived client-only preview fork and receives no fixes (README → Deployment). Replit vs Vercel still decides the cron mechanism (roadmap 2.7) and the image optimizer |
 | D-08 | Relias: API credentials, completion payload contract, SSO method | Roadmap q.8 | DLS owner (obtain from Relias) | Open | Blocks roadmap 2.8 |
 | D-09 | Schedule board and physician-order management ship ON at launch | Roadmap q.9 · [BL-001](./BACKLOG.md#bl-001) | DLS owner | Open | Notes need visits; visits need physician orders |
 | D-10 | Written owner feedback and the two samples supplied and filed | Roadmap q.10 · [BL-002](./BACKLOG.md#bl-002) | DLS owner (supply) · PM (file) | Open | Review Part D re-checked afterwards |

@@ -79,7 +79,7 @@ the staging database (fake data) and confirm each rejection:
 
 ## 6. Infrastructure & operations — 🟡/🔵
 
-- [ ] 🟡 Environments: **dev / staging / prod** on Replit (three Repls or deployments from this repo). PHI only ever in prod. Staging runs `supabase/seed.sql`.
+- [ ] 🟡 Environments: **dev / staging / prod** on Replit (three Repls or deployments from this repo), all deployed from `main` — the July Replit branch is an archived preview fork (README → Deployment). PHI only ever in prod. Staging runs `supabase/seed.sql`.
 - [ ] 🟡 Secrets in Replit Secrets (never in repo); rotate the service-role key on any suspected exposure.
 - [ ] 🟡 Backups: Supabase PITR enabled; restore drill performed once.
 - [ ] 🟡 TLS-only access; Supabase network restrictions if available.

@@ -105,7 +105,12 @@ npm test                      # vitest (billing units + 837P)
 ## Deployment
 
 GitHub → **Replit** (`.replit` included; dev/staging/prod as separate
-deployments). Secrets go in Replit Secrets, never the repo. Keep
+deployments). **Deploy from `main`.** The branch
+`claude/dls-cms-design-review-s6prak` that Replit published in July 2026 is a
+client-only Vite preview fork produced by the Replit agent (no server, no
+`/api/sync`, no RLS, session state in localStorage; the Next.js tree sits in
+`.migration-backup/`). It is archived and receives no fixes — decided
+2026-09-07. Secrets go in Replit Secrets, never the repo. Keep
 `NEXT_PUBLIC_DEMO_MODE=true` everywhere until PRODUCTION-READINESS.md §1 is
 complete.
 
