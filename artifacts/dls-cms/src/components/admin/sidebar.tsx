@@ -132,9 +132,9 @@ export function AdminSidebar({
           <Image
             src="/brand/dls-mascot.png"
             alt=""
-            width={32}
-            height={32}
-            className="h-8 w-8 shrink-0 rounded-full border border-white/20 object-cover"
+            width={38}
+            height={38}
+            className="h-[38px] w-[38px] shrink-0 rounded-full border border-white/20 object-contain"
           />
           {!collapsed && (
             <div className="min-w-0">
