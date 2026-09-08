@@ -47,6 +47,15 @@ on every request. A Super Admin comes only from the deployment
 screen; support accounts are cut by a Super Admin from the console. No account
 manages another Super Admin, not even its own peer.
 
+View-as never creates a session for the target or exposes target credentials.
+The existing session keeps its real owner and records only an effective-user
+reference. Self-view, suspended targets and nested view-as are rejected; the
+actor must stop the current view first. Provider support sessions also require
+an active, time-boxed organization window after hand-over, while Admins remain
+limited to active, lower-ranked users in their own organization and require the
+organization impersonation feature. While view-as is active, all ordinary
+authorization and feature checks use the effective identity.
+
 ## Two-tier feature switches
 
 Every switchable capability is one entry in `FEATURE_CATALOG`

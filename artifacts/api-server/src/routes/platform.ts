@@ -257,6 +257,7 @@ export function platformRouter(db: Db, config: AppConfig, deps: { mailer: Mailer
     await recordAudit(db, {
       orgId: null,
       actorUserId: auth.realUser.id,
+      impersonatingUserId: auth.impersonating ? auth.effectiveUser.id : null,
       action: "platform.feature_toggled",
       targetType: "feature",
       targetId: key,
@@ -324,6 +325,7 @@ export function platformRouter(db: Db, config: AppConfig, deps: { mailer: Mailer
     await recordAudit(db, {
       orgId: org!.id,
       actorUserId: auth.realUser.id,
+      impersonatingUserId: auth.impersonating ? auth.effectiveUser.id : null,
       action: "org.created",
       targetType: "organization",
       targetId: org!.id,
@@ -362,6 +364,7 @@ export function platformRouter(db: Db, config: AppConfig, deps: { mailer: Mailer
     await recordAudit(db, {
       orgId: org.id,
       actorUserId: auth.realUser.id,
+      impersonatingUserId: auth.impersonating ? auth.effectiveUser.id : null,
       action: "org.updated",
       targetType: "organization",
       targetId: org.id,
