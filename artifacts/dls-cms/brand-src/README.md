@@ -1,32 +1,26 @@
 # Brand source — DLS mascot head
 
-Vector source for every app icon. The monkey head is traced from the Durable
-Life Skills logo mark, with the wordmark, vine and body removed so only the
-head remains.
+Approved transparent mascot artwork used for every head-only placement. The
+complete DLS logo remains a separate asset and must not be replaced by this
+head artwork.
 
 | File | Role |
 | --- | --- |
-| `monkey-head.svg` | The head alone, tight viewBox, transparent background |
-| `favicon.svg` | Head on the brand plum circle — shipped as `public/favicon.svg` |
-| `apple-touch-icon.svg` | Full-bleed plum square, head at 86% (iOS rounds the corners itself) |
-| `icon-maskable.svg` | Full-bleed plum square, head at 78% so it survives Android's mask |
+| `monkey-head.png` | Approved head artwork with a transparent background |
+| `public/favicon.png` / `.ico` | Browser favicon |
+| `public/brand/dls-mascot.png` | Default profile image |
+| `public/icons/*` | PWA and install icons |
 
 ## Colors
 
 | Token | Hex | Used for |
 | --- | --- | --- |
-| Brand plum | `#4A3D63` | Favicon / PWA badge, `manifest.json` `theme_color` |
-| Avatar purple | `#685582` | `brand/dls-mascot.png`, the in-app avatar — unchanged |
-| Straw | `#C29A56` / `#CBA660` | Hat |
-| Hat band | `#4E2C7C` | Hat band |
-| Fur | `#B09781` | Head |
-| Muzzle | `#C4AC96` | Muzzle |
-| Tongue | `#EA6D96` | Tongue |
+| Brand plum | `#4A3D63` | Maskable and Apple icon backgrounds |
 
 ## Regenerating the raster icons
 
-Edit `monkey-head.svg`, then re-run the generator. It rewrites the other
-source SVGs and every PNG/ICO under `public/`:
+Replace `monkey-head.png` with the approved transparent artwork, then re-run
+the generator. It rewrites every derived PNG/ICO under `public/`:
 
 ```bash
 cd artifacts/dls-cms/brand-src

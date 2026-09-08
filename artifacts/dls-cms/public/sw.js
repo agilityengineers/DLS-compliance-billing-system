@@ -7,7 +7,7 @@
  *  - Network-only, NO CACHE, for API/data requests: PHI must never land in
  *    the SW cache. Offline data lives in IndexedDB, managed by lib/offline.
  */
-const SHELL_CACHE = "dls-shell-v4";
+const SHELL_CACHE = "dls-shell-v5";
 const SHELL_URLS = [
   "/field",
   "/field/week",

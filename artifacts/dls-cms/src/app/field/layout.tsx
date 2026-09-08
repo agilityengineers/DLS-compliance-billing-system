@@ -38,9 +38,9 @@ export default async function FieldLayout({ children }: { children: React.ReactN
             <Image
               src="/brand/dls-mascot.png"
               alt=""
-              width={28}
-              height={28}
-              className="h-7 w-7 rounded-full border border-border object-cover"
+              width={33}
+              height={33}
+              className="h-[33px] w-[33px] rounded-full border border-border object-contain"
             />
             <span className="font-serif text-base font-semibold text-plum">DLS Field</span>
           </span>

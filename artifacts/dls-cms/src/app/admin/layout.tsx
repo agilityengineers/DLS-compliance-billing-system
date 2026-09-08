@@ -68,9 +68,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
                   <Image
                     src="/brand/dls-mascot.png"
                     alt=""
-                    width={34}
-                    height={34}
-                    className="h-[34px] w-[34px] rounded-full border border-border object-cover"
+                    width={40}
+                    height={40}
+                    className="h-10 w-10 rounded-full border border-border object-contain"
                   />
                   <div className="leading-tight">
                     <div className="font-serif text-sm font-semibold text-plum">Durable Life Skills</div>
