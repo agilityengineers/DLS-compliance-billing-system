@@ -4,6 +4,7 @@
 import "server-only";
 
 import { isDemoMode } from "@/lib/demo/mode";
+import { listAccountDirectory } from "@/lib/auth/directory";
 import { agencyAddDays, agencyDayRangeUtc, agencyToUtcIso, utcIsoToAgencyDate } from "@/lib/time/agency";
 import { getDemoStore, type AuditContext } from "@/lib/data/demo/store";
 import { createDataClient, createServiceClient } from "@/lib/supabase/server";
@@ -36,14 +37,28 @@ function mapClientRow(row: Record<string, unknown>): Client {
 
 // ═══ users ═══════════════════════════════════════════════════════════════
 
+/**
+ * Everyone who can appear in a staff list: the organization's REAL accounts
+ * (from the API) first, then the synthetic demo staff that have no account
+ * yet. A demo entry whose email now belongs to a real account is hidden.
+ */
 export async function listUsers(): Promise<StaffUser[]> {
-  if (isDemoMode()) return [...getDemoStore().data.users];
-  const { data, error } = await createDataClient().from("users").select("*").order("full_name");
-  if (error) throw new Error(error.message);
-  return (data ?? []) as StaffUser[];
+  const accounts = await listAccountDirectory();
+  let staff: StaffUser[];
+  if (isDemoMode()) {
+    staff = [...getDemoStore().data.users];
+  } else {
+    const { data, error } = await createDataClient().from("users").select("*").order("full_name");
+    if (error) throw new Error(error.message);
+    staff = (data ?? []) as StaffUser[];
+  }
+  const taken = new Set(accounts.map((a) => a.email.toLowerCase()));
+  return [...accounts, ...staff.filter((u) => !taken.has(u.email.toLowerCase()))];
 }
 
 export async function getUser(id: string): Promise<StaffUser | null> {
+  const account = (await listAccountDirectory()).find((u) => u.id === id);
+  if (account) return account;
   if (isDemoMode()) return getDemoStore().data.users.find((u) => u.id === id) ?? null;
   const { data } = await createDataClient().from("users").select("*").eq("id", id).maybeSingle();
   return (data as StaffUser) ?? null;

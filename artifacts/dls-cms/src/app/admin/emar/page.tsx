@@ -1,7 +1,6 @@
 // app/admin/emar/page.tsx — eMAR oversight (agency-wide, status filters).
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { requireRole } from "@/lib/auth/session";
+import { checkAccess } from "@/lib/rbac/access";
 import { listMedications } from "@/lib/data/repo-field";
 import { Badge } from "@/components/ui/badge";
 import { Table, THead, TBody } from "@/components/ui/table";
@@ -11,11 +10,8 @@ import { agencyAddDays, agencyTodayIso, formatAgencyDateTime, formatAgencyTime }
 const STATUSES = ["All", "Administered", "Refused", "Missed"] as const;
 
 export default async function EmarOversightPage({ searchParams = {} }: { searchParams?: { status?: string } }) {
-  try {
-    await requireRole("Admin", "Scheduler");
-  } catch {
-    redirect("/admin");
-  }
+  const { denied } = await checkAccess({ feature: "emar.medications" });
+  if (denied) return denied;
   const filter = STATUSES.includes(searchParams.status as (typeof STATUSES)[number])
     ? (searchParams.status as (typeof STATUSES)[number])
     : "All";

@@ -1,8 +1,7 @@
 // app/admin/staff/page.tsx — Staff & credentials (ADMIN-ONLY).
 // Expired license/training = claim blocker; "Record renewal" clears it.
 // Offboarding = suspend + reassign caseload in one flow.
-import { redirect } from "next/navigation";
-import { requireRole } from "@/lib/auth/session";
+import { checkAccess } from "@/lib/rbac/access";
 import { listUsers } from "@/lib/data/repo-core";
 import { Badge } from "@/components/ui/badge";
 import { Table, THead, TBody } from "@/components/ui/table";
@@ -10,13 +9,8 @@ import { StaffRowActions } from "@/components/admin/staff-row-actions";
 import { agencyTodayIso } from "@/lib/time/agency";
 
 export default async function StaffPage() {
-  let ctx;
-  try {
-    ctx = await requireRole("Admin");
-  } catch {
-    redirect("/admin");
-  }
-  void ctx;
+  const { denied } = await checkAccess({ feature: "staff.credentials", roles: ["Admin"] });
+  if (denied) return denied;
 
   const staff = await listUsers();
   const today = agencyTodayIso();

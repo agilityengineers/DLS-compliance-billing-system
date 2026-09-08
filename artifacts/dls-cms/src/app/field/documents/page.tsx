@@ -1,13 +1,12 @@
 // app/field/documents/page.tsx — my visit uploads (mirrors desktop Documents).
-import { redirect } from "next/navigation";
-import { getSessionContext } from "@/lib/auth/session";
+import { checkAccess } from "@/lib/rbac/access";
 import { listDocuments } from "@/lib/data/repo-field";
 import { Badge } from "@/components/ui/badge";
 import { formatAgencyDate } from "@/lib/time/agency";
 
 export default async function FieldDocumentsPage() {
-  const ctx = await getSessionContext();
-  if (!ctx.effectiveUser) redirect("/login");
+  const { ctx, denied } = await checkAccess({ feature: "documents.files", roles: ["Field_Staff"] });
+  if (denied) return denied;
 
   const docs = await listDocuments({ uploadedBy: ctx.effectiveUser!.id });
 

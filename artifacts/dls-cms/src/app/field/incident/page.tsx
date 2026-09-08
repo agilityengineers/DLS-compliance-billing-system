@@ -1,13 +1,12 @@
 // app/field/incident/page.tsx — mandatory abuse/neglect & critical-incident
 // reporting (MVP workflow: draft → submit; Admin sees all reports).
-import { redirect } from "next/navigation";
-import { getSessionContext } from "@/lib/auth/session";
+import { checkAccess } from "@/lib/rbac/access";
 import { listClients } from "@/lib/data/repo-core";
 import { IncidentForm } from "@/components/field/incident-form";
 
 export default async function IncidentPage() {
-  const ctx = await getSessionContext();
-  if (!ctx.effectiveUser) redirect("/login");
+  const { denied } = await checkAccess({ feature: "incidents.reporting", roles: ["Field_Staff"] });
+  if (denied) return denied;
   const clients = await listClients();
 
   return (

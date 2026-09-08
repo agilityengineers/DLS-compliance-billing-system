@@ -1,6 +1,6 @@
 "use server";
 
-import { requireSession } from "@/lib/auth/session";
+import { requireFeature } from "@/lib/auth/session";
 import { createIncident } from "@/lib/data/repo-business";
 import type { IncidentType } from "@/lib/supabase/types";
 
@@ -10,7 +10,7 @@ export async function submitIncident(input: {
   description: string;
   immediateAction: string | null;
 }): Promise<{ ok: boolean; error?: string }> {
-  const ctx = await requireSession();
+  const ctx = await requireFeature("incidents.reporting");
   return createIncident(
     {
       client_id: input.clientId,

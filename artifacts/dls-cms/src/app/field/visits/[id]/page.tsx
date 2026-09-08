@@ -11,11 +11,16 @@ import { ClockPanel } from "@/components/field/clock-panel";
 import { NmtPanel } from "@/components/field/nmt-panel";
 import { UploadPanel } from "@/components/field/upload-panel";
 import { CancelVisitPanel } from "@/components/field/cancel-visit-panel";
+import { useSessionInfo } from "@/components/session-context";
 
 export default function VisitDetail() {
   const params = useParams<{ id: string }>();
   const visitId = params.id;
   const [showInfo, setShowInfo] = useState(false);
+  const { features } = useSessionInfo();
+  const evvOn = features.includes("evv.clock");
+  const nmtOn = features.includes("field.nmt");
+  const uploadsOn = features.includes("documents.files");
 
   const data = useLiveQuery(async () => {
     const visit = await db.visits.get(visitId);
@@ -75,13 +80,19 @@ export default function VisitDetail() {
         </div>
       )}
 
-      <ClockPanel visitId={visit.id} residence={residence} visitType={visit.visit_type} />
+      {evvOn ? (
+        <ClockPanel visitId={visit.id} residence={residence} visitType={visit.visit_type} />
+      ) : (
+        <p className="rounded-card-m border border-dashed border-border p-3 text-center text-xs text-muted-foreground">
+          Clock-in is not switched on for your role — the visit is marked Completed when you submit the note.
+        </p>
+      )}
 
-      {client && client.authorized_nmt_trips_per_week > 0 && (
+      {nmtOn && client && client.authorized_nmt_trips_per_week > 0 && (
         <NmtPanel visit={visit} client={client} />
       )}
 
-      <UploadPanel visitId={visit.id} clientId={visit.client_id} />
+      {uploadsOn && <UploadPanel visitId={visit.id} clientId={visit.client_id} />}
 
       {visit.status !== "Cancelled" && <CancelVisitPanel visit={visit} />}
     </div>

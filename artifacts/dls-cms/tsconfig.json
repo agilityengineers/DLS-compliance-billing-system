@@ -1,28 +1,59 @@
 {
   "extends": "../../tsconfig.base.json",
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "build", "dist", "**/*.test.ts"],
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "build",
+    "dist",
+    "**/*.test.ts"
+  ],
   "compilerOptions": {
     "incremental": true,
     "tsBuildInfoFile": ".tsbuildinfo",
     "noEmit": true,
     "jsx": "preserve",
-    "lib": ["esnext", "dom", "dom.iterable"],
+    "lib": [
+      "esnext",
+      "dom",
+      "dom.iterable"
+    ],
     "resolveJsonModule": true,
     "allowImportingTsExtensions": true,
     "moduleResolution": "bundler",
-    "types": ["node", "vite/client"],
+    "types": [
+      "node",
+      "vite/client"
+    ],
     "paths": {
-      "@/*": ["./src/*"],
-      "server-only": ["./src/shims/empty.ts"],
-      "next/navigation": ["./src/shims/next-navigation.tsx"],
-      "next/link": ["./src/shims/next-link.tsx"],
-      "next/image": ["./src/shims/next-image.tsx"],
-      "next/headers": ["./src/shims/next-headers.ts"],
-      "next/cache": ["./src/shims/next-cache.ts"]
+      "@/*": [
+        "./src/*"
+      ],
+      "server-only": [
+        "./src/shims/empty.ts"
+      ],
+      "next/navigation": [
+        "./src/shims/next-navigation.tsx"
+      ],
+      "next/link": [
+        "./src/shims/next-link.tsx"
+      ],
+      "next/image": [
+        "./src/shims/next-image.tsx"
+      ],
+      "next/headers": [
+        "./src/shims/next-headers.ts"
+      ],
+      "next/cache": [
+        "./src/shims/next-cache.ts"
+      ]
     }
   },
   "references": [
+    {
+      "path": "../../lib/features"
+    },
     {
       "path": "../../lib/api-client-react"
     }

@@ -34,6 +34,7 @@ import AdminReports from "@/app/admin/reports/page";
 import AdminSchedule from "@/app/admin/schedule/page";
 import AdminSettings from "@/app/admin/settings/page";
 import AdminStaff from "@/app/admin/staff/page";
+import AdminPlatform from "@/app/admin/platform/page";
 
 // ── Field pages ───────────────────────────────────────────────────────────
 import FieldToday from "@/app/field/page";
@@ -99,7 +100,7 @@ function Router() {
       <Route path="/admin/audit">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminAudit as AsyncComponent)} />}</Route>
       <Route path="/admin/billing">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminBilling as AsyncComponent)} />}</Route>
       <Route path="/admin/clients">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminClients as AsyncComponent)} />}</Route>
-      <Route path="/admin/clients/new">{() => <AsyncRoute loader={withLayoutElement(AdminLayout, <AdminClientNew />)} />}</Route>
+      <Route path="/admin/clients/new">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminClientNew as AsyncComponent)} />}</Route>
       <Route path="/admin/documents">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminDocuments as AsyncComponent)} />}</Route>
       <Route path="/admin/emar">{() => <AsyncRoute loader={withLayoutElement(AdminLayout, <AdminEmar />)} />}</Route>
       <Route path="/admin/evv">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminEvv as AsyncComponent)} />}</Route>
@@ -111,6 +112,7 @@ function Router() {
       <Route path="/admin/schedule">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminSchedule as AsyncComponent)} />}</Route>
       <Route path="/admin/settings">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminSettings as AsyncComponent)} />}</Route>
       <Route path="/admin/staff">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminStaff as AsyncComponent)} />}</Route>
+      <Route path="/admin/platform">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminPlatform as AsyncComponent)} />}</Route>
 
       {/* Field app */}
       <Route path="/field">{() => <AsyncRoute loader={withLayoutElement(FieldLayout, <FieldToday />)} />}</Route>

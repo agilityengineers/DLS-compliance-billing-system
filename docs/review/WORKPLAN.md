@@ -14,8 +14,8 @@ Sources: [launch-readiness review](./2026-09-launch-readiness-review.md) (defect
 
 | ID | Decision | Detail | Approver | Status | Notes |
 |---|---|---|---|---|---|
-| D-01 | Role mapping: add `Super_Admin` above `Admin`; keep `Scheduler` and `Field_Staff` as the two employee roles | Roadmap q.1 | DLS owner | In progress | Decided by the architect 2026-09-05; owner confirmation pending |
-| D-02 | Vendor access: Super Admin has no standing PHI access; PHI only inside an Admin-granted, time-boxed, audited support window | Roadmap q.2 | DLS owner | In progress | Decided by the architect 2026-09-05; owner confirmation pending |
+| D-01 | Role mapping: add `Super_Admin` above `Admin`; keep `Scheduler` and `Field_Staff` as the two employee roles | Roadmap q.1 | DLS owner | In progress | Decided by the architect 2026-09-05; implemented 2026-09-08 (`lib/features`); owner confirmation pending |
+| D-02 | Vendor access: Super Admin has no standing PHI access; PHI only inside an Admin-granted, time-boxed, audited support window | Roadmap q.2 | DLS owner | In progress | Decided by the architect 2026-09-05; implemented 2026-09-08 as audited "view as" from the platform console (the Admin-granted, time-boxed window is not yet enforced); owner confirmation pending |
 | D-03 | Intake paperwork in launch scope; contents of the intake packet and the yearly renewal packet | Roadmap q.3 | DLS owner | Open | Drives roadmap 2.2 |
 | D-04 | Authorizations in hours or units; rounding rule under HCPF; authorization week Sun–Sat | Roadmap q.4 | DLS owner | Open | Drives roadmap 3.6 |
 | D-05 | Attendance and person-centered-profile samples: build generic v1 now or wait | Roadmap q.5 | DLS owner | Open | Linked to BL-002 |
@@ -40,10 +40,10 @@ Sources: [launch-readiness review](./2026-09-launch-readiness-review.md) (defect
 | ID | Item | Fixes (review Part A) | Depends on | Effort | Owner | Approver | Status |
 |---|---|---|---|---|---|---|---|
 | 0.1 | Time-zone helper and all date/time call sites; demo data emits UTC | #3, #4 | — | 3 d | Dev | Architect | In progress (PR-B) |
-| 0.2 | `Super_Admin` role at every enum site | — | D-01 | 2 d | Dev | Architect | Open |
-| 0.3 | Feature flags: table, guard trigger, `fn_feature_enabled`, RLS, migration 0006, demo parity | — | 0.2, A-01 | 5 d | Dev | Architect | Open |
-| 0.4 | `requireFeature` at every gate, nav rewrite, two-tier Settings editor, Super Admin console; `Completed` on note submit when EVV is off | — | 0.3, A-03 | 5 d | Dev | Architect | Open |
-| 0.5 | Employee onboarding: invite-based Add User, invite-only Google sign-in, password reset | #1, #22 | — | 2 d | Dev | Architect | Open |
+| 0.2 | `Super_Admin` role at every enum site | — | D-01 | 2 d | Dev | Architect | Done (2026-09-08, `@workspace/features` roles shared by API + web) |
+| 0.3 | Feature flags: table, guard trigger, `fn_feature_enabled`, RLS, migration 0006, demo parity | — | 0.2, A-01 | 5 d | Dev | Architect | Done (2026-09-08 — implemented in the API server + PostgreSQL (`platform_features`, `org_features`, tier rules in `validateOrgChange`) instead of Supabase RLS; see `docs/access-model.md`) |
+| 0.4 | `requireFeature` at every gate, nav rewrite, two-tier Settings editor, Super Admin console; `Completed` on note submit when EVV is off | — | 0.3, A-03 | 5 d | Dev | Architect | Done (2026-09-08) |
+| 0.5 | Employee onboarding: invite-based Add User, invite-only Google sign-in, password reset | #1, #22 | — | 2 d | Dev | Architect | In progress (2026-09-08: password accounts with admin-issued one-time passwords and forced first-sign-in change; email invites and Google sign-in not wired — no mail/OAuth provider yet) |
 | 0.6 | Real-database breakers: timesheet index and result checks; notes query limit; eMAR "Missed" policy; geofence trigger repair; seed runs | #2, #9, #6, #38, #39 | — | 3 d | Dev | Architect | In progress (PR-A) |
 | 0.7 | Demo-mode guard at startup; deployment notes | #7 | — | 0.5 d | Dev | Architect | In progress (PR-A) |
 | 0.8 | HIPAA blockers: service-worker cache, idle-timeout wipe, impersonation audit, roster search off the URL, Scheduler column guard, error-string mapping, security headers | #20, #21, #23, #24, #25, #27 (headers), #28 (idle) | — | 3 d | Dev | Architect | Open |

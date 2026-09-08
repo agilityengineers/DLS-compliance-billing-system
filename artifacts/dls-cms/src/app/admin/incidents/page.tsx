@@ -1,7 +1,6 @@
 // app/admin/incidents/page.tsx — incident reports (abuse/neglect & critical
 // incidents) submitted from the field.
-import { redirect } from "next/navigation";
-import { requireRole } from "@/lib/auth/session";
+import { checkAccess } from "@/lib/rbac/access";
 import { listIncidents } from "@/lib/data/repo-business";
 import { getClient, getUser } from "@/lib/data/repo-core";
 import { Badge } from "@/components/ui/badge";
@@ -17,11 +16,8 @@ const TYPE_LABEL: Record<string, string> = {
 };
 
 export default async function IncidentsPage() {
-  try {
-    await requireRole("Admin");
-  } catch {
-    redirect("/admin");
-  }
+  const { denied } = await checkAccess({ feature: "incidents.reporting", roles: ["Admin"] });
+  if (denied) return denied;
   const incidents = await listIncidents();
   const names = new Map<string, string>();
   for (const i of incidents) {

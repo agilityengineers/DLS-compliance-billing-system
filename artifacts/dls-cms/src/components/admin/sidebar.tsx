@@ -8,16 +8,17 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import {
-  AlertTriangle, Banknote, BarChart3, CalendarDays, ChevronsLeft, ChevronsRight,
+  AlertTriangle, Banknote, BarChart3, Building2, CalendarDays, ChevronsLeft, ChevronsRight,
   FolderOpen, GraduationCap, LayoutDashboard, Lock, MapPin, Pill, Receipt,
-  ScrollText, Settings, ShieldCheck, UserCog, Users, type LucideIcon
+  ScrollText, Settings, ShieldCheck, SlidersHorizontal, UserCog, Users, type LucideIcon
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { NavSection } from "./nav-config";
 
 const ICONS: Record<string, LucideIcon> = {
   AlertTriangle, LayoutDashboard, Users, CalendarDays, UserCog, ShieldCheck, MapPin, Pill,
-  ScrollText, Receipt, Banknote, BarChart3, FolderOpen, GraduationCap, Settings
+  ScrollText, Receipt, Banknote, BarChart3, FolderOpen, GraduationCap, Settings,
+  SlidersHorizontal, Building2
 };
 
 export function AdminSidebar({
@@ -33,7 +34,7 @@ export function AdminSidebar({
 }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
-  const [open, setOpen] = useState<Record<string, boolean>>({ CORE: true });
+  const [open, setOpen] = useState<Record<string, boolean>>({ CORE: true, PLATFORM: true });
 
   useEffect(() => {
     try {
@@ -140,6 +141,7 @@ export function AdminSidebar({
               <div className="truncate text-sm font-medium text-white">{userName}</div>
               <div className="flex items-center gap-2 text-xs text-plum-text">
                 {userRole}
+                <a href="/auth/reset" className="underline hover:text-white">Password</a>
                 {/* plain <a>: Link would PREFETCH the logout route handler,
                     executing it and silently killing the session */}
                 <a href="/logout" className="underline hover:text-white">Sign out</a>

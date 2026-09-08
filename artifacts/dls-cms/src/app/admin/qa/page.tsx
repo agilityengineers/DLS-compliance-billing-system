@@ -1,7 +1,6 @@
 // app/admin/qa/page.tsx — QA review queue (resolvable inconsistency flags):
 // med log w/o EVV overlap · missing signature · expired ITD authorization.
-import { redirect } from "next/navigation";
-import { requireRole, getSessionContext } from "@/lib/auth/session";
+import { checkAccess } from "@/lib/rbac/access";
 import { computeQaFlags } from "@/lib/qa/flags";
 import { Badge } from "@/components/ui/badge";
 import { Table, THead, TBody } from "@/components/ui/table";
@@ -14,12 +13,8 @@ const KIND_VARIANT = {
 } as const;
 
 export default async function QaPage() {
-  try {
-    await requireRole("Admin", "Scheduler");
-  } catch {
-    redirect("/admin");
-  }
-  const ctx = await getSessionContext();
+  const { ctx, denied } = await checkAccess({ feature: "qa.flags" });
+  if (denied) return denied;
   const canResolve = ctx.effectiveUser?.role === "Admin";
   const { open } = await computeQaFlags();
 
