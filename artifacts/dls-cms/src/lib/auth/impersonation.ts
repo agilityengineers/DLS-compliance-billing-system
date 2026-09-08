@@ -1,21 +1,20 @@
-// lib/auth/impersonation.ts — Admin-only "view as user" (client priority).
+// lib/auth/impersonation.ts — "view as user" (Admin, and the provider for support).
 //
-// Design (see DECISIONS.md): the admin's identity is PRESERVED.
-//  - Demo mode: an httpOnly cookie holds the target id; honored only for a
-//    real Admin session; audit rows record performed_by=admin + impersonating.
-//  - Real mode: we mint a JWT with sub = ADMIN id + an `impersonating` claim,
-//    signed with SUPABASE_JWT_SECRET (1 h expiry, httpOnly cookie). Data
-//    requests carry it, so auth.uid() stays the admin for RLS and the audit
-//    trigger reads the claim (migration 0002). Fails closed without the secret.
+// The acting identity is PRESERVED: every action is audit-attributed to the
+// real user with the target recorded.
+//  - Real accounts: the API server stores the target on the session
+//    (POST/DELETE /api/auth/impersonate) and audits start/stop.
+//  - DEMO staff (synthetic, no account): an Admin's target id lives in the
+//    cookie shim and the demo store audits it, exactly as before.
 "use server";
 
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { SignJWT } from "jose";
 import { isDemoMode, DEMO_IMPERSONATE_COOKIE, IMPERSONATION_JWT_COOKIE } from "@/lib/demo/mode";
-import { requireRealAdmin } from "@/lib/auth/session";
+import { isApiAuth } from "@/lib/auth/mode";
+import { apiFetch, errorMessage } from "@/lib/api/client";
+import { getSessionContext, invalidateSession, requireRealAdmin } from "@/lib/auth/session";
 import { getDemoStore } from "@/lib/data/demo/store";
-import { createClient, createServiceClient } from "@/lib/supabase/server";
 
 const COOKIE_OPTS = {
   httpOnly: true,
@@ -30,80 +29,55 @@ export async function startImpersonation(targetUserId: string): Promise<{ ok: bo
   if (targetUserId === ctx.realUser!.id) {
     return { ok: false, error: "You are already yourself." };
   }
+  if (!ctx.features.has("platform.impersonation") && ctx.realUser!.role !== "Super_Admin") {
+    return { ok: false, error: "Impersonation is not enabled for your organization." };
+  }
 
-  if (isDemoMode()) {
-    const target = getDemoStore().data.users.find((u) => u.id === targetUserId && u.status === "Active");
-    if (!target) return { ok: false, error: "User not found or suspended." };
+  const demoTarget = isDemoMode()
+    ? getDemoStore().data.users.find((u) => u.id === targetUserId && u.status === "Active")
+    : undefined;
+
+  if (demoTarget && (!isApiAuth() || !demoTarget.is_account)) {
+    if (ctx.realUser!.role !== "Admin") return { ok: false, error: "Only an organization Admin can view as demo staff." };
     cookies().set(DEMO_IMPERSONATE_COOKIE, targetUserId, COOKIE_OPTS);
     getDemoStore().audit("impersonation", "INSERT", targetUserId, null,
-      { event: "impersonation_started", target: target.full_name }, ctx.auditCtx);
+      { event: "impersonation_started", target: demoTarget.full_name }, ctx.auditCtx);
+    invalidateSession();
     revalidatePath("/", "layout");
     return { ok: true };
   }
 
-  const secret = process.env.SUPABASE_JWT_SECRET;
-  if (!secret) {
-    return { ok: false, error: "Impersonation unavailable: SUPABASE_JWT_SECRET is not configured (see PRODUCTION-READINESS.md §2)." };
+  if (!isApiAuth()) return { ok: false, error: "User not found or suspended." };
+  try {
+    await apiFetch("/auth/impersonate", { method: "POST", json: { userId: targetUserId } });
+  } catch (e) {
+    return { ok: false, error: errorMessage(e, "Could not start viewing as that user.") };
   }
-  const supabase = createClient();
-  const { data: target } = await supabase
-    .from("users").select("id,status,full_name").eq("id", targetUserId).single();
-  if (!target || target.status !== "Active") return { ok: false, error: "User not found or suspended." };
-
-  const jwt = await new SignJWT({
-    role: "authenticated",
-    impersonating: targetUserId
-  })
-    .setProtectedHeader({ alg: "HS256" })
-    .setSubject(ctx.realUser!.id)
-    .setIssuedAt()
-    .setExpirationTime("1h")
-    .setAudience("authenticated")
-    .sign(new TextEncoder().encode(secret));
-
-  cookies().set(IMPERSONATION_JWT_COOKIE, jwt, COOKIE_OPTS);
-  const audited = await recordImpersonationEvent(
-    "impersonation_started", ctx.realUser!.id, targetUserId, target.full_name as string,
-  );
-  if (!audited.ok) {
-    cookies().delete(IMPERSONATION_JWT_COOKIE);
-    return { ok: false, error: `Impersonation not started: audit write failed (${audited.error}).` };
-  }
+  invalidateSession();
   revalidatePath("/", "layout");
   return { ok: true };
 }
 
-async function recordImpersonationEvent(
-  event: "impersonation_started" | "impersonation_stopped",
-  adminId: string,
-  targetId: string,
-  targetName: string | null,
-): Promise<{ ok: boolean; error?: string }> {
-  const { error } = await createServiceClient().from("audit_trails").insert({
-    table_name: "impersonation", record_id: targetId, action: "INSERT",
-    performed_by: adminId, impersonating: targetId, old_values: null,
-    new_values: { event, target: targetName },
-  });
-  return error ? { ok: false, error: error.message } : { ok: true };
-}
-
 export async function stopImpersonation(): Promise<{ ok: boolean }> {
-  const ctx = await import("@/lib/auth/session").then(({ getSessionContext }) => getSessionContext());
-  if (ctx.impersonating && ctx.realUser && ctx.effectiveUser) {
-    if (isDemoMode()) {
-      getDemoStore().audit(
-        "impersonation", "INSERT", ctx.effectiveUser.id, null,
-        { event: "impersonation_stopped", target: ctx.effectiveUser.full_name }, ctx.auditCtx,
-      );
-    } else {
-      await recordImpersonationEvent(
-        "impersonation_stopped", ctx.realUser.id, ctx.effectiveUser.id, ctx.effectiveUser.full_name,
-      );
-    }
-  }
+  const ctx = await getSessionContext();
   const jar = cookies();
+  const demoTargetId = jar.get(DEMO_IMPERSONATE_COOKIE)?.value;
+  if (demoTargetId && ctx.impersonating && ctx.realUser && ctx.effectiveUser && !ctx.effectiveUser.is_account) {
+    getDemoStore().audit(
+      "impersonation", "INSERT", ctx.effectiveUser.id, null,
+      { event: "impersonation_stopped", target: ctx.effectiveUser.full_name }, ctx.auditCtx,
+    );
+  }
   jar.delete(DEMO_IMPERSONATE_COOKIE);
   jar.delete(IMPERSONATION_JWT_COOKIE);
+  if (isApiAuth() && ctx.realUser) {
+    try {
+      await apiFetch("/auth/impersonate", { method: "DELETE" });
+    } catch {
+      // nothing to stop, or the API is unreachable — the local state is cleared regardless
+    }
+  }
+  invalidateSession();
   revalidatePath("/", "layout");
   return { ok: true };
 }

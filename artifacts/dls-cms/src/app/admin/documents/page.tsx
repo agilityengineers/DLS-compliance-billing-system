@@ -1,8 +1,7 @@
 // app/admin/documents/page.tsx — Documents & notices:
 // monthly report generation · field uploads (S3) · DVR employment notices ·
 // agency documents (Google Drive adapter stub).
-import { redirect } from "next/navigation";
-import { requireRole } from "@/lib/auth/session";
+import { checkAccess } from "@/lib/rbac/access";
 import { listClients } from "@/lib/data/repo-core";
 import { listDocuments } from "@/lib/data/repo-field";
 import { Badge } from "@/components/ui/badge";
@@ -20,11 +19,8 @@ const KIND_LABEL: Record<string, string> = {
 };
 
 export default async function DocumentsPage() {
-  try {
-    await requireRole("Admin", "Scheduler");
-  } catch {
-    redirect("/admin");
-  }
+  const { ctx, denied } = await checkAccess({ feature: "documents.files" });
+  if (denied) return denied;
 
   const [docs, clients] = await Promise.all([listDocuments({}), listClients()]);
   const clientOptions = clients.map((c) => ({ id: c.id, name: `${c.first_name} ${c.last_name}` }));
@@ -38,8 +34,8 @@ export default async function DocumentsPage() {
         </p>
       </div>
 
-      <MonthlyReportGenerator clients={clientOptions} />
-      <DvrNoticeForm clients={clientOptions} />
+      {ctx.features.has("reports.monthly") && <MonthlyReportGenerator clients={clientOptions} />}
+      {ctx.features.has("documents.dvr_notices") && <DvrNoticeForm clients={clientOptions} />}
 
       <section className="space-y-2">
         <h2 className="font-serif text-lg font-semibold text-plum">All documents</h2>

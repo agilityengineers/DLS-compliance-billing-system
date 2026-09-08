@@ -1,7 +1,6 @@
 // app/admin/evv/page.tsx — EVV review: log table + ADMIN-ONLY manual
 // adjustment that REQUIRES a documented reason (DB CHECK + RLS enforced).
-import { redirect } from "next/navigation";
-import { requireRole, getSessionContext } from "@/lib/auth/session";
+import { checkAccess } from "@/lib/rbac/access";
 import { listEvvLogs } from "@/lib/data/repo-field";
 import { listVisits } from "@/lib/data/repo-core";
 import { Badge } from "@/components/ui/badge";
@@ -10,12 +9,8 @@ import { ManualAdjustmentForm } from "@/components/admin/manual-adjustment-form"
 import { agencyAddDays, agencyTodayIso, formatAgencyDate, formatAgencyDateTime, formatAgencyTime } from "@/lib/time/agency";
 
 export default async function EvvReviewPage() {
-  try {
-    await requireRole("Admin", "Scheduler");
-  } catch {
-    redirect("/admin");
-  }
-  const ctx = await getSessionContext();
+  const { ctx, denied } = await checkAccess({ feature: "evv.clock" });
+  if (denied) return denied;
   const isAdmin = ctx.effectiveUser?.role === "Admin";
 
   const [logs, recentVisits] = await Promise.all([

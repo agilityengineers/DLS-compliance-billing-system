@@ -10,12 +10,13 @@ import { Button } from "@/components/ui/button";
 import { db, writeLocal } from "@/lib/offline/db";
 import { SyncEngine } from "@/lib/offline/syncEngine";
 import type { MedicationLog, MedStatus } from "@/lib/supabase/types";
+import { FeatureGate } from "@/components/feature-gate";
 
 const VARIANT: Record<MedStatus, "success" | "warning" | "destructive"> = {
   Administered: "success", Refused: "warning", Missed: "destructive"
 };
 
-export default function EmarPage() {
+function EmarScreen() {
   const meds = useLiveQuery(async () => {
     const from = new Date(Date.now() - 12 * 3600_000);
     const to = new Date(Date.now() + 4 * 3600_000);
@@ -81,5 +82,13 @@ export default function EmarPage() {
         {!meds && <p className="p-4 text-sm text-muted-foreground">Loading medication list…</p>}
       </div>
     </div>
+  );
+}
+
+export default function EmarPage() {
+  return (
+    <FeatureGate feature="emar.medications">
+      <EmarScreen />
+    </FeatureGate>
   );
 }

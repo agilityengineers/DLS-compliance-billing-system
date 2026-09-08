@@ -1,13 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireRole } from "@/lib/auth/session";
+import { requireFeature } from "@/lib/auth/session";
 import { getCurrentPayrollPeriod, submitPayroll } from "@/lib/data/repo-business";
 import { computePayrollLines } from "@/lib/payroll/transmittal";
 
 /** Certify + submit the transmittal. BLOCKED while any notes are outstanding. */
 export async function certifyAndSubmitPayroll(periodId: string): Promise<{ ok: boolean; error?: string }> {
-  const ctx = await requireRole("Admin");
+  const ctx = await requireFeature("payroll.transmittal", "Admin");
 
   const period = await getCurrentPayrollPeriod();
   if (!period || period.id !== periodId) return { ok: false, error: "Payroll period not found." };

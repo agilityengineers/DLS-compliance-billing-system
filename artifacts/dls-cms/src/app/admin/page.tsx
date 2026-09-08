@@ -15,6 +15,8 @@ const STATUS_VARIANT = {
 export default async function AdminDashboard() {
   const ctx = await getSessionContext();
   if (!ctx.effectiveUser) redirect("/login");
+  // The provider account has no client-facing dashboard.
+  if (ctx.effectiveUser.role === "Super_Admin") redirect("/admin/platform");
   const today = agencyTodayIso();
 
   const [clients, todaysVisits, qa, readiness] = await Promise.all([
@@ -29,17 +31,19 @@ export default async function AdminDashboard() {
   const ready = readiness.filter((r) => r.ok);
   const readyUnits = ready.reduce((s, r) => s + (r.note.calculated_billing_units ?? 0), 0);
 
+  // Stat cards follow the feature switches: a switched-off capability has no card.
   const stats = [
     {
       label: "Active clients",
       value: clients.length,
       sub: expiredPlans === 0 ? "All plans current" : `${expiredPlans} plan${expiredPlans > 1 ? "s" : ""} expired`,
-      href: "/admin/clients"
+      href: "/admin/clients",
+      show: ctx.features.has("clients.core")
     },
-    { label: "Visits today", value: todaysVisits.length, sub: `${staffToday} staff scheduled`, href: "/admin/schedule" },
-    { label: "Open QA flags", value: qa.open.length, sub: "Resolve before export", href: "/admin/qa" },
-    { label: "Claim-ready notes", value: ready.length, sub: `${readyUnits} units unbilled`, href: "/admin/billing" }
-  ];
+    { label: "Visits today", value: todaysVisits.length, sub: `${staffToday} staff scheduled`, href: "/admin/schedule", show: ctx.features.has("schedule.board") },
+    { label: "Open QA flags", value: qa.open.length, sub: "Resolve before export", href: "/admin/qa", show: ctx.features.has("qa.flags") },
+    { label: "Claim-ready notes", value: ready.length, sub: `${readyUnits} units unbilled`, href: "/admin/billing", show: ctx.features.has("billing.claims") }
+  ].filter((s) => s.show);
 
   return (
     <div className="space-y-6">

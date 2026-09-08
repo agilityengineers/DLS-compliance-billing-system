@@ -10,6 +10,7 @@ import { db } from "@/lib/offline/db";
 import { Badge } from "@/components/ui/badge";
 import { setFieldHome } from "./actions";
 import { cn } from "@/lib/utils";
+import { useFeature } from "@/components/session-context";
 import { agencyTodayIso, formatAgencyCalendarDate, utcIsoToAgencyDate } from "@/lib/time/agency";
 
 const STATUS_VARIANT = {
@@ -26,6 +27,7 @@ export default function FieldHome() {
   const [style, setStyle] = useState<HomeStyle>("visits");
   const [, startTransition] = useTransition();
   const today = agencyTodayIso();
+  const emar = useFeature("emar.medications");
 
   useEffect(() => {
     const saved = localStorage.getItem("dls_field_home");
@@ -123,12 +125,14 @@ export default function FieldHome() {
         {!visits && <p className="p-4 text-center text-sm text-muted-foreground">Loading…</p>}
       </div>
 
-      <Link
-        href="/field/emar"
-        className="flex min-h-touch items-center justify-center rounded-card-m border border-border bg-card p-4 font-medium active:bg-muted"
-      >
-        eMAR — medication list
-      </Link>
+      {emar && (
+        <Link
+          href="/field/emar"
+          className="flex min-h-touch items-center justify-center rounded-card-m border border-border bg-card p-4 font-medium active:bg-muted"
+        >
+          eMAR — medication list
+        </Link>
+      )}
     </div>
   );
 }

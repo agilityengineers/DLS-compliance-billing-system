@@ -1,9 +1,8 @@
 // app/admin/billing/page.tsx — claim readiness with named blockers + bulk
 // 837P export. ADMIN-ONLY workspace; the Scheduler sees a locked
 // explanation card (README: "Billing visible but locked").
-import { redirect } from "next/navigation";
 import { Lock } from "lucide-react";
-import { getSessionContext } from "@/lib/auth/session";
+import { checkAccess } from "@/lib/rbac/access";
 import { evaluateUnbilledNotes } from "@/lib/billing/readiness";
 import { listClaimExports } from "@/lib/data/repo-business";
 import { BillingTable, type BillingRow } from "@/components/admin/billing-table";
@@ -11,11 +10,11 @@ import { DesktopWorkspace } from "@/components/admin/desktop-workspace";
 import { formatAgencyDateTime } from "@/lib/time/agency";
 
 export default async function BillingPage() {
-  const ctx = await getSessionContext();
-  if (!ctx.effectiveUser) redirect("/login");
+  const { ctx, denied } = await checkAccess({ roles: ["Admin", "Scheduler"] });
+  if (denied) return denied;
 
   // Scheduler: visible but LOCKED, with an explanation (not a 500).
-  if (ctx.effectiveUser.role !== "Admin") {
+  if (ctx.effectiveUser!.role !== "Admin") {
     return (
       <div className="mx-auto max-w-lg space-y-4 pt-10">
         <div className="rounded-card border border-border bg-card p-6 text-center">
@@ -31,6 +30,9 @@ export default async function BillingPage() {
       </div>
     );
   }
+
+  const gate = await checkAccess({ feature: "billing.claims", roles: ["Admin"] });
+  if (gate.denied) return gate.denied;
 
   const [readiness, exports] = await Promise.all([evaluateUnbilledNotes(), listClaimExports()]);
 

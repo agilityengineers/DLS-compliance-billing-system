@@ -3,7 +3,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireRole } from "@/lib/auth/session";
+import { requireFeature } from "@/lib/auth/session";
 import { createClientRecord as repoCreateClient } from "@/lib/data/repo-core";
 
 const ClientSchema = z.object({
@@ -22,7 +22,7 @@ const ClientSchema = z.object({
 });
 
 export async function createClientRecord(input: unknown): Promise<{ ok: boolean; error?: string; id?: string }> {
-  const ctx = await requireRole("Admin", "Scheduler");
+  const ctx = await requireFeature("clients.core", "Admin", "Scheduler");
   const parsed = ClientSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues.map((i) => i.message).join("; ") };
   const d = parsed.data;

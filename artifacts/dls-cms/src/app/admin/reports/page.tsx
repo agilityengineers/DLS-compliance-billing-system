@@ -1,7 +1,6 @@
 // app/admin/reports/page.tsx — units delivered vs authorized, current week.
 // Over-authorization is highlighted (the same condition that blocks claims).
-import { redirect } from "next/navigation";
-import { requireRole } from "@/lib/auth/session";
+import { checkAccess } from "@/lib/rbac/access";
 import { listClients } from "@/lib/data/repo-core";
 import { listNotes } from "@/lib/data/repo-field";
 import type { Client, VisitType } from "@/lib/supabase/types";
@@ -15,11 +14,8 @@ const SERVICES: { type: VisitType; label: string; field: keyof Client }[] = [
 ];
 
 export default async function ReportsPage() {
-  try {
-    await requireRole("Admin", "Scheduler");
-  } catch {
-    redirect("/admin");
-  }
+  const { denied } = await checkAccess({ feature: "reports.utilization" });
+  if (denied) return denied;
 
   const weekStart = agencySundayOf(agencyTodayIso());
   const weekEnd = agencyAddDays(weekStart, 6);

@@ -2,19 +2,19 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireRole } from "@/lib/auth/session";
+import { requireFeature } from "@/lib/auth/session";
 import { listVisits, recordCredentialRenewal, saveVisit, updateUser } from "@/lib/data/repo-core";
 import { agencyTodayIso } from "@/lib/time/agency";
 
 export async function renewLicense(userId: string, expirationDate: string) {
-  const ctx = await requireRole("Admin");
+  const ctx = await requireFeature("staff.credentials", "Admin");
   const res = await recordCredentialRenewal(userId, { kind: "license", expiration_date: expirationDate }, ctx.auditCtx);
   revalidatePath("/admin/staff");
   return res;
 }
 
 export async function renewTraining(userId: string, course: string, completedOn: string, expiresOn: string | null) {
-  const ctx = await requireRole("Admin");
+  const ctx = await requireFeature("staff.credentials", "Admin");
   const res = await recordCredentialRenewal(
     userId,
     { kind: "training", record: { course, completed_on: completedOn, expires_on: expiresOn, required: true } },
@@ -29,7 +29,7 @@ export async function renewTraining(userId: string, course: string, completedOn:
  * to another staff member (open documentation follows the caseload).
  */
 export async function offboardStaff(userId: string, reassignToId: string): Promise<{ ok: boolean; moved?: number; error?: string }> {
-  const ctx = await requireRole("Admin");
+  const ctx = await requireFeature("staff.credentials", "Admin");
   if (userId === reassignToId) return { ok: false, error: "Cannot reassign to the same person." };
 
   const today = agencyTodayIso();

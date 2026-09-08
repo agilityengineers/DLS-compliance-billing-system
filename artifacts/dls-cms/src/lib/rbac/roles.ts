@@ -1,39 +1,42 @@
 // lib/rbac/roles.ts — role constants + the permission matrix shown in
-// Settings. Enforcement lives in RLS (supabase/policies) and
-// lib/auth/session.ts (requireRole/requireRealAdmin); this matrix mirrors it
-// for UI gating and the Settings → permission matrix screen.
-import type { Role } from "@/lib/supabase/types";
+// Settings. Roles and the feature catalog come from @workspace/features (one
+// source shared with the API server); enforcement lives in the API server
+// (accounts, features) and lib/auth/session.ts (page/action gates).
+import { ROLES as ALL_ROLES, ROLE_LABELS as LABELS, type Role } from "@workspace/features";
 
-export const ROLES: Role[] = ["Admin", "Scheduler", "Field_Staff"];
+export const ROLES: Role[] = [...ALL_ROLES];
+export const ROLE_LABELS: Record<Role, string> = LABELS;
 
-export const ROLE_LABELS: Record<Role, string> = {
-  Admin: "Admin",
-  Scheduler: "Scheduler",
-  Field_Staff: "Field Staff"
-};
-
-/** UI mirror of the RLS matrix — the database is the source of truth. */
+/**
+ * Hierarchy at a glance. The provider (Super Admin) configures the platform
+ * and never touches client records; everything below it is per organization
+ * and additionally subject to the feature switches in Settings.
+ */
 export const PERMISSION_MATRIX: {
   capability: string;
+  Super_Admin: boolean;
   Admin: boolean;
   Scheduler: boolean;
   Field_Staff: boolean;
 }[] = [
-  { capability: "View own visits & write progress notes", Admin: true, Scheduler: false, Field_Staff: true },
-  { capability: "View all clients", Admin: true, Scheduler: true, Field_Staff: false },
-  { capability: "View assigned clients only", Admin: false, Scheduler: false, Field_Staff: true },
-  { capability: "Schedule / reassign visits", Admin: true, Scheduler: true, Field_Staff: false },
-  { capability: "Manage physician orders", Admin: true, Scheduler: true, Field_Staff: false },
-  { capability: "eMAR administration (own clients)", Admin: true, Scheduler: false, Field_Staff: true },
-  { capability: "QA review & flag resolution", Admin: true, Scheduler: false, Field_Staff: false },
-  { capability: "EVV review & manual adjustment (reason required)", Admin: true, Scheduler: false, Field_Staff: false },
-  { capability: "Billing & 837P export", Admin: true, Scheduler: false, Field_Staff: false },
-  { capability: "Payroll transmittal", Admin: true, Scheduler: false, Field_Staff: false },
-  { capability: "Staff & credentials management", Admin: true, Scheduler: false, Field_Staff: false },
-  { capability: "Settings, users & menu configuration", Admin: true, Scheduler: false, Field_Staff: false },
-  { capability: "Impersonation (view as user)", Admin: true, Scheduler: false, Field_Staff: false },
-  { capability: "Audit trail (read-only)", Admin: true, Scheduler: false, Field_Staff: false }
+  { capability: "Platform console: make features available, create organizations & their Admins", Super_Admin: true, Admin: false, Scheduler: false, Field_Staff: false },
+  { capability: "Turn features on/off for the organization and grant them to roles", Super_Admin: false, Admin: true, Scheduler: false, Field_Staff: false },
+  { capability: "Create employee accounts, reset passwords, suspend", Super_Admin: false, Admin: true, Scheduler: false, Field_Staff: false },
+  { capability: "View own visits & write progress notes", Super_Admin: false, Admin: true, Scheduler: false, Field_Staff: true },
+  { capability: "View all clients", Super_Admin: false, Admin: true, Scheduler: true, Field_Staff: false },
+  { capability: "View assigned clients only", Super_Admin: false, Admin: false, Scheduler: false, Field_Staff: true },
+  { capability: "Schedule / reassign visits", Super_Admin: false, Admin: true, Scheduler: true, Field_Staff: false },
+  { capability: "Manage physician orders", Super_Admin: false, Admin: true, Scheduler: true, Field_Staff: false },
+  { capability: "eMAR administration (own clients) — when enabled", Super_Admin: false, Admin: true, Scheduler: false, Field_Staff: true },
+  { capability: "QA review & flag resolution — when enabled", Super_Admin: false, Admin: true, Scheduler: false, Field_Staff: false },
+  { capability: "EVV review & manual adjustment (reason required) — when enabled", Super_Admin: false, Admin: true, Scheduler: false, Field_Staff: false },
+  { capability: "Billing & 837P export", Super_Admin: false, Admin: true, Scheduler: false, Field_Staff: false },
+  { capability: "Payroll transmittal — when enabled", Super_Admin: false, Admin: true, Scheduler: false, Field_Staff: false },
+  { capability: "Staff & credentials management", Super_Admin: false, Admin: true, Scheduler: false, Field_Staff: false },
+  { capability: "View as user (impersonation), always audited", Super_Admin: true, Admin: true, Scheduler: false, Field_Staff: false },
+  { capability: "Audit trail (read-only)", Super_Admin: false, Admin: true, Scheduler: false, Field_Staff: false },
+  { capability: "Client records (PHI)", Super_Admin: false, Admin: true, Scheduler: true, Field_Staff: true }
 ];
 
 // Back-compat re-exports: the session module owns auth gating now.
-export { requireRole, requireSession, requireRealAdmin } from "@/lib/auth/session";
+export { requireRole, requireSession, requireRealAdmin, requireFeature, hasFeature } from "@/lib/auth/session";

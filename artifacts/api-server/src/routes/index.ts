@@ -1,8 +1,16 @@
 import { Router, type IRouter } from "express";
+import type { Db } from "@workspace/db";
+import type { AppConfig } from "../lib/config";
+import { authRouter } from "./auth";
 import healthRouter from "./health";
+import { orgRouter } from "./org";
+import { platformRouter } from "./platform";
 
-const router: IRouter = Router();
-
-router.use(healthRouter);
-
-export default router;
+export function apiRouter(db: Db, config: AppConfig): IRouter {
+  const router: IRouter = Router();
+  router.use(healthRouter);
+  router.use(authRouter(db, config));
+  router.use(platformRouter(db));
+  router.use(orgRouter(db));
+  return router;
+}

@@ -1,8 +1,7 @@
 // app/admin/relias/page.tsx — Training & Learning: agency-wide course
 // matrix (staff × required courses) + SSO launch + completion sync.
 // Overdue REQUIRED courses become claim blockers (lib/billing/readiness).
-import { redirect } from "next/navigation";
-import { getSessionContext } from "@/lib/auth/session";
+import { checkAccess } from "@/lib/rbac/access";
 import { listFieldStaff } from "@/lib/data/repo-core";
 import { listReliasCompletions, listReliasCourses } from "@/lib/data/repo-business";
 import { getReliasSsoUrl } from "@/lib/integrations/relias";
@@ -12,9 +11,10 @@ import { ReliasSyncButton } from "@/components/admin/relias-sync-button";
 import { agencyTodayIso } from "@/lib/time/agency";
 
 export default async function ReliasPage() {
-  const ctx = await getSessionContext();
-  if (!ctx.effectiveUser) redirect("/login");
-  const isAdmin = ctx.effectiveUser.role === "Admin";
+  const { ctx, denied } = await checkAccess({ feature: "relias.training" });
+  if (denied) return denied;
+  const isAdmin = ctx.effectiveUser!.role === "Admin";
+  const ssoOn = ctx.features.has("relias.sso");
   const today = agencyTodayIso();
 
   const [staff, courses, completions] = await Promise.all([
@@ -34,14 +34,16 @@ export default async function ReliasPage() {
         </div>
         <div className="flex items-center gap-3">
           {isAdmin && <ReliasSyncButton />}
-          <a
-            href={getReliasSsoUrl(ctx.effectiveUser.email)}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex h-10 items-center rounded-btn bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-          >
-            Launch Relias (SSO)
-          </a>
+          {ssoOn && (
+            <a
+              href={getReliasSsoUrl(ctx.effectiveUser!.email)}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex h-10 items-center rounded-btn bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            >
+              Launch Relias (SSO)
+            </a>
+          )}
         </div>
       </div>
 

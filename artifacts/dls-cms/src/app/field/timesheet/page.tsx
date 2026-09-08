@@ -1,8 +1,7 @@
 // app/field/timesheet/page.tsx — weekly route record (codes SCC/JC/DH/T).
 // Rows append automatically from EVV clock-outs and NMT trips (server-side
 // in /api/sync); submitting flips the payroll "all notes in?" input.
-import { redirect } from "next/navigation";
-import { getSessionContext } from "@/lib/auth/session";
+import { checkAccess } from "@/lib/rbac/access";
 import { getOrCreateTimesheet, listTimesheetEntries } from "@/lib/data/repo-field";
 import { getClient } from "@/lib/data/repo-core";
 import { SubmitTimesheetButton } from "@/components/field/submit-timesheet-button";
@@ -12,8 +11,8 @@ import { agencyMondayOf, agencyTodayIso, formatAgencyCalendarDate, formatAgencyD
 const mondayIso = () => agencyMondayOf(agencyTodayIso());
 
 export default async function TimesheetPage() {
-  const ctx = await getSessionContext();
-  if (!ctx.effectiveUser) redirect("/login");
+  const { ctx, denied } = await checkAccess({ feature: "timesheets.route_record", roles: ["Field_Staff"] });
+  if (denied) return denied;
 
   const monday = mondayIso();
   const timesheet = await getOrCreateTimesheet(ctx.effectiveUser!.id, monday, ctx.auditCtx);

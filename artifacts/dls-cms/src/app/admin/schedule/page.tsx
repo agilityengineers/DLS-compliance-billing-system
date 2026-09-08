@@ -1,8 +1,7 @@
 // app/admin/schedule/page.tsx — staff × weekday grid.
 // Visits without an active physician order are flagged red and cannot be
 // saved (DB-enforced). Recurring templates generate this week's instances.
-import { redirect } from "next/navigation";
-import { requireRole } from "@/lib/auth/session";
+import { checkAccess } from "@/lib/rbac/access";
 import { listClients, listFieldStaff, listPhysicianOrders, listVisits } from "@/lib/data/repo-core";
 import { ScheduleBoard } from "@/components/admin/schedule-board";
 import { GenerateRecurringButton } from "@/components/admin/generate-recurring-button";
@@ -10,11 +9,8 @@ import { DesktopWorkspace } from "@/components/admin/desktop-workspace";
 import { agencyAddDays, agencyMondayOf, agencyTodayIso, formatAgencyCalendarDate } from "@/lib/time/agency";
 
 export default async function SchedulePage({ searchParams }: { searchParams: { week?: string } }) {
-  try {
-    await requireRole("Admin", "Scheduler");
-  } catch {
-    redirect("/admin");
-  }
+  const { ctx, denied } = await checkAccess({ feature: "schedule.board" });
+  if (denied) return denied;
 
   const weekMonday = agencyMondayOf(/^\d{4}-\d{2}-\d{2}$/.test(searchParams.week ?? "") ? searchParams.week! : agencyTodayIso());
   const weekEnd = agencyAddDays(weekMonday, 6);
@@ -37,7 +33,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: { w
             <strong className="text-foreground">cannot be saved</strong>.
           </p>
         </div>
-        <GenerateRecurringButton weekMonday={weekMonday} />
+        {ctx.features.has("schedule.recurring") && <GenerateRecurringButton weekMonday={weekMonday} />}
       </div>
 
       <DesktopWorkspace title="Schedule">

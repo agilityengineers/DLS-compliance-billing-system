@@ -16,6 +16,7 @@ import type {
   EvvLog, JobCoachingLog, MedicationLog, NmtTrip, ProgressNote, VisitStatus,
 } from "@/lib/supabase/types";
 import type { AuditContext } from "@/lib/data/demo/store";
+import type { FeatureKey } from "@workspace/features";
 import {
   agencyAddDays,
   agencyMondayOf,
@@ -78,6 +79,20 @@ export async function pushMutation(input: {
   const isAdmin = ctx.effectiveUser.role === "Admin";
   const isField = ctx.effectiveUser.role === "Field_Staff";
 
+  // Feature switches are enforced HERE too, not only in the UI: a queued
+  // write for a capability that is off for this role is rejected (terminal),
+  // exactly as the production sync route returns 403.
+  const gate: Partial<Record<typeof table, FeatureKey>> = {
+    evv_logs: "evv.clock",
+    medication_logs: "emar.medications",
+    nmt_trips: "field.nmt",
+    progress_notes: "notes.progress",
+  };
+  const required = gate[table];
+  if (required && !ctx.features.has(required)) {
+    return { kind: "rejected", error: `FEATURE_DISABLED: ${required} is not enabled for your role` };
+  }
+
   try {
     let result: { ok: boolean; error?: string } = { ok: true };
 
@@ -122,6 +137,16 @@ export async function pushMutation(input: {
           server.caregiver_signature_data && server.client_signature_data;
         if (serverClosed) return { kind: "ok" };
         result = await upsertProgressNote(note, ctx.auditCtx);
+        // With EVV clock-in switched off there is no clock-out to complete the
+        // visit, so a signed note completes it instead.
+        if (
+          result.ok && !ctx.features.has("evv.clock") &&
+          note.caregiver_signature_data && note.client_signature_data &&
+          (visit.status === "Scheduled" || visit.status === "In_Progress")
+        ) {
+          const flipped = await updateVisitStatus(visit.id, "Completed", ctx.auditCtx);
+          if (!flipped.ok) return { kind: "transient", error: flipped.error ?? "could not mark the visit Completed" };
+        }
         break;
       }
       case "medication_logs": {

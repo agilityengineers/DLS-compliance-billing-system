@@ -1,19 +1,15 @@
 // app/admin/audit/page.tsx — read-only audit trail (grows with every PHI
 // mutation via the DB trigger / demo store). Shows impersonation
 // attribution: performed_by is ALWAYS the real identity.
-import { redirect } from "next/navigation";
-import { requireRole } from "@/lib/auth/session";
+import { checkAccess } from "@/lib/rbac/access";
 import { listAuditTrail } from "@/lib/data/repo-business";
 import { Badge } from "@/components/ui/badge";
 import { Table, THead, TBody } from "@/components/ui/table";
 import { formatAgencyDateTime } from "@/lib/time/agency";
 
 export default async function AuditTrailPage({ searchParams }: { searchParams: { table?: string } }) {
-  try {
-    await requireRole("Admin");
-  } catch {
-    redirect("/admin");
-  }
+  const { denied } = await checkAccess({ feature: "audit.trail", roles: ["Admin"] });
+  if (denied) return denied;
   const rows = await listAuditTrail({ table: searchParams.table, limit: 150 });
 
   return (
