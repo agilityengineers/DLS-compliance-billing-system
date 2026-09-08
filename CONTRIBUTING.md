@@ -7,7 +7,14 @@ request targeting `main`.
 
 Before a pull request can merge, it must:
 
-1. Receive at least one approving review.
+1. Receive the number of approving reviews set in the versioned policy
+   (`required_approving_review_count`). This is **0 while the repository has a
+   single collaborator**: GitHub never lets an author approve their own pull
+   request, so a one-person repository with a one-review rule cannot merge
+   anything, administrators included. A pull request is still required and
+   direct pushes to `main` stay blocked. Raise the count back to 1 and
+   `require_last_push_approval` back to `true` as soon as a second reviewer
+   account is a collaborator.
 2. Pass the required **DLS-CMS Typecheck** check.
 3. Resolve any review conversations required by the repository rules.
 
