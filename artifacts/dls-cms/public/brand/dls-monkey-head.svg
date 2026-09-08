@@ -1,7 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Durable Life Skills monkey mascot">
-  <title>Durable Life Skills</title>
-  <circle cx="256" cy="256" r="256" fill="#4A3D63"/>
-  <g transform="translate(256 256) scale(0.94) translate(-259.75 -256.75)">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="51 54 417.5 405.5" width="418" height="418" role="img" aria-label="Durable Life Skills monkey mascot">
+  <title>Durable Life Skills mascot</title>
 <g id="monkey" stroke="#141210" stroke-linejoin="round" stroke-linecap="round">
 
     <!-- EARS -->
@@ -58,6 +56,5 @@
         <path d="M88 172 q160 38 320 0"/>
       </g>
     </g>
-  </g>
   </g>
 </svg>
