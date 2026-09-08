@@ -1,4 +1,5 @@
 import { getDb, runMigrations } from "@workspace/db";
+import { sql } from "drizzle-orm";
 import { createApp } from "./app";
 import { bootstrapPlatform } from "./lib/bootstrap";
 import { loadConfig } from "./lib/config";
@@ -19,11 +20,30 @@ if (Number.isNaN(port) || port <= 0) {
 }
 
 async function main(): Promise<void> {
+  let phase = "configuration";
+  const startupDeadline = setTimeout(() => {
+    logger.fatal({ phase }, "API startup exceeded 45 seconds; refusing to serve an uninitialized application");
+    process.exit(1);
+  }, 45_000);
+  startupDeadline.unref();
+
   const config = loadConfig();
   const db = getDb();
 
-  // Schema first, then the rows the app cannot run without.
-  await runMigrations(db);
+  phase = "database_connection";
+  logger.info({ phase }, "Checking database connectivity");
+  await db.execute(sql`SELECT 1`);
+
+  // Replit Publish applies the development schema to production. Replaying
+  // local migrations at runtime can conflict with that managed schema.
+  if (process.env.NODE_ENV !== "production") {
+    phase = "development_migrations";
+    logger.info({ phase }, "Applying development database migrations");
+    await runMigrations(db);
+  }
+
+  phase = "platform_bootstrap";
+  logger.info({ phase }, "Initializing platform data");
   const boot = await bootstrapPlatform(db, config);
   logger.info(
     {
@@ -49,11 +69,13 @@ async function main(): Promise<void> {
   }
 
   const app = createApp({ db, config, mailer });
-  app.listen(port, (err) => {
+  phase = "listen";
+  app.listen(port, "0.0.0.0", (err) => {
     if (err) {
       logger.error({ err }, "Error listening on port");
       process.exit(1);
     }
+    clearTimeout(startupDeadline);
     logger.info({ port }, "Server listening");
   });
 }

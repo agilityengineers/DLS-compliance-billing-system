@@ -18,7 +18,14 @@ export interface DbHandle {
 
 /** Open a connection pool for `connectionString`. Callers own the handle. */
 export function createDb(connectionString: string): DbHandle {
-  const pool = new Pool({ connectionString });
+  const pool = new Pool({
+    connectionString,
+    // Fail before the publishing startup probe expires instead of waiting
+    // indefinitely on an unavailable database or a blocked statement.
+    connectionTimeoutMillis: 10_000,
+    statement_timeout: 15_000,
+    query_timeout: 15_000,
+  });
   return { db: drizzle(pool, { schema }), pool };
 }
 
