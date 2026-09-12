@@ -28,6 +28,9 @@ export interface BootstrapResult {
   orgCreated: boolean;
   superAdminId: string;
   superAdminCreated: boolean;
+  /** The second provider account, when the deployment supplies one. */
+  breakGlassId: string | null;
+  breakGlassCreated: boolean;
   requirementsSeeded: number;
 }
 
@@ -95,12 +98,61 @@ export async function bootstrapPlatform(db: Db, config: AppConfig): Promise<Boot
     logger.warn({ email: config.superAdminEmail }, "Super Admin password reset from SUPER_ADMIN_PASSWORD — unset SUPER_ADMIN_FORCE_RESET now");
   }
 
+  // ── The break-glass account ─────────────────────────────────────────────
+  // One provider password is a single point of failure: lose it, and the only
+  // way back in is a deployment change made by whoever holds the secrets. A
+  // second provider account, created from its own environment variables and
+  // used almost never, turns that lockout into a sign-in. It is deliberately
+  // not creatable from any screen — a key kept in the building is not a spare
+  // key.
+  let breakGlassId: string | null = null;
+  let breakGlassCreated = false;
+  if (config.breakGlassEmail && config.breakGlassPassword) {
+    if (config.breakGlassEmail === config.superAdminEmail) {
+      logger.warn("SUPER_ADMIN_BREAKGLASS_EMAIL matches the primary provider account; skipping");
+    } else {
+      const existing = await findUserByEmail(db, config.breakGlassEmail);
+      if (existing) {
+        breakGlassId = existing.id;
+      } else {
+        const [created] = await db
+          .insert(usersTable)
+          .values({
+            orgId: null,
+            email: config.breakGlassEmail,
+            fullName: config.breakGlassName,
+            role: "Super_Admin",
+            status: "Active",
+            passwordHash: await hashPassword(config.breakGlassPassword),
+            mustChangePassword: false,
+          })
+          .returning();
+        breakGlassId = created!.id;
+        breakGlassCreated = true;
+        await recordAudit(db, {
+          orgId: null,
+          actorUserId: null,
+          action: "platform.breakglass_created",
+          targetType: "user",
+          targetId: created!.id,
+          details: { email: config.breakGlassEmail },
+        });
+        logger.warn(
+          { email: config.breakGlassEmail },
+          "Break-glass provider account created — store its password where the primary account's holder cannot lose both"
+        );
+      }
+    }
+  }
+
   return {
     platformRowsAdded,
     orgId: org!.id,
     orgCreated,
     superAdminId: admin!.id,
     superAdminCreated,
+    breakGlassId,
+    breakGlassCreated,
     requirementsSeeded,
   };
 }

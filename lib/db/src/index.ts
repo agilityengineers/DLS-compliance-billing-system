@@ -40,4 +40,4 @@ export function getDb(): Db {
 }
 
 export * from "./schema";
-export { runMigrations } from "./migrate";
+export { migrationStatus, resolveMigrationsDir, runMigrations, type MigrationStatus } from "./migrate";

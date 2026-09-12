@@ -37,7 +37,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         .map((u) => ({ id: u.id, name: u.full_name, role: u.role }))
     : [];
 
-  const orgName = role === "Super_Admin" ? "Platform console" : ctx.org?.name ?? "Durable Life Skills";
+  const orgName = role === "Super_Admin" || role === "Platform_Support" ? "Platform console" : ctx.org?.name ?? "Durable Life Skills";
 
   return (
     <SessionProvider
@@ -48,6 +48,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         impersonating: ctx.impersonating,
         userName: ctx.effectiveUser.full_name,
         orgName: ctx.org?.name ?? null,
+        mfa: ctx.mfa,
       }}
     >
       <div className="flex min-h-screen flex-col">

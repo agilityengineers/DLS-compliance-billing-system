@@ -9,9 +9,11 @@ import { Table, THead, TBody } from "@/components/ui/table";
 import { AccountsPanel } from "@/components/admin/accounts-panel";
 import { FeatureAccessPanel } from "@/components/admin/feature-access-panel";
 import { ConfigAudit } from "@/components/admin/config-audit";
+import { SupportAccessPanel } from "@/components/admin/support-access-panel";
+import { MfaPanel } from "@/components/admin/mfa-panel";
 import { Check, Minus } from "lucide-react";
 
-const MATRIX_ROLES = ["Super_Admin", "Admin", "Scheduler", "Field_Staff"] as const;
+const MATRIX_ROLES = ["Super_Admin", "Platform_Support", "Admin", "Scheduler", "Field_Staff"] as const;
 
 export default async function SettingsPage() {
   const { ctx, denied } = await checkAccess({ roles: ["Admin"] });
@@ -59,6 +61,35 @@ export default async function SettingsPage() {
         )}
       </section>
 
+      {/* ── Support access (the organization's side of review decision D-02) ── */}
+      <section className="space-y-3">
+        <div>
+          <h2 className="font-serif text-lg font-semibold text-plum">Support access</h2>
+          <p className="text-sm text-muted-foreground">
+            Let your provider see the app as one of your people, for a set time, when you need help. They cannot open
+            your records any other way, and cannot open this door themselves.
+          </p>
+        </div>
+        {apiAuth ? (
+          <SupportAccessPanel />
+        ) : (
+          <p className="text-sm text-muted-foreground">Support windows need the API server (real sign-in mode).</p>
+        )}
+      </section>
+
+      {/* ── Your own sign-in ──────────────────────────────────────────── */}
+      {apiAuth && (
+        <section className="space-y-3">
+          <div>
+            <h2 className="font-serif text-lg font-semibold text-plum">Your sign-in</h2>
+            <p className="text-sm text-muted-foreground">
+              Your account can run the whole organization, so it is worth more than a password alone.
+            </p>
+          </div>
+          <MfaPanel enabled={ctx.mfa.enabled} required={ctx.mfa.required} />
+        </section>
+      )}
+
       {/* ── Permission matrix ─────────────────────────────────────────── */}
       <section className="space-y-3">
         <h2 className="font-serif text-lg font-semibold text-plum">Permission matrix</h2>
@@ -81,7 +112,7 @@ export default async function SettingsPage() {
                 <td>{row.capability}</td>
                 {MATRIX_ROLES.map((r) => (
                   <td key={r} className="text-center">
-                    {row[r] ? (
+                    {row.roles.includes(r) ? (
                       <Check className="mx-auto h-4 w-4 text-pill-success-fg" aria-label="allowed" />
                     ) : (
                       <Minus className="mx-auto h-4 w-4 text-muted-foreground/50" aria-label="not allowed" />

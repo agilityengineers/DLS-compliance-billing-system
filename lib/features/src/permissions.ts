@@ -9,7 +9,7 @@
 // catalog entry's `employeeRoles`.
 
 import { FEATURE_CATALOG, getFeature, type FeatureDef, type FeatureKey } from "./catalog";
-import { EMPLOYEE_ROLES, type EmployeeRole, type Role } from "./roles";
+import { EMPLOYEE_ROLES, isPlatformRole, type EmployeeRole, type Role } from "./roles";
 
 export type RoleGrants = Partial<Record<EmployeeRole, boolean>>;
 
@@ -82,7 +82,7 @@ export function resolveFeatureStates(platformRows: readonly PlatformRow[], orgRo
 export function isFeatureEnabledFor(state: FeatureState, role: Role): boolean {
   if (!state.platformEnabled) return false;
   // The provider's own console never depends on an organization's switches.
-  if (role === "Super_Admin") return true;
+  if (isPlatformRole(role)) return true;
   if (!state.orgEnabled) return false;
   if (role === "Admin") return true;
   const def = getFeature(state.key);

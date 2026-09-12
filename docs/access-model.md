@@ -14,6 +14,7 @@ shared catalog:
 
 ```
 Super Admin (provider — Agility Engineers)
+├── Support (provider support engineer)
 └── Organization: Durable Life Skills, Inc.
     ├── Admin (owner — e.g. Lisa Torres)
     ├── Scheduler (office / desktop console)
@@ -22,9 +23,16 @@ Super Admin (provider — Agility Engineers)
 
 * **Super Admin** owns the *platform*. It decides which capabilities are
   available to an organization, creates organizations and their Admins, can
-  reset any organization user's password, and can open an audited "view as"
-  support session. It has **no standing access to client records**: its only
-  screen is the platform console.
+  reset any organization user's password or end their sessions, and can open
+  an audited "view as" support session. It has **no standing access to client
+  records**: its only screens are the platform console (below).
+* **Support** is a provider support engineer. It reads the console, opens a
+  granted support session, ends sessions, and reads the audit log and system
+  status — and changes no configuration, creates no accounts and cuts no other
+  keys. What each provider role may do is one list,
+  `platformCapabilitiesFor()` in `lib/features/src/platform.ts`, read by the
+  API's route gates, the page gates and the menu, so a screen a role cannot
+  use is never offered to it.
 * **Admin** owns the *organization*. Creates Schedulers, Field Staff and other
   Admins, resets their passwords, suspends them, and decides which of the
   provider-enabled capabilities the organization uses and which employee roles
@@ -34,7 +42,10 @@ Super Admin (provider — Agility Engineers)
 
 Nobody can create or change a role above their own. The rules are in
 `canManageRole()` in `lib/features/src/roles.ts` and are re-checked by the API
-on every request.
+on every request. A Super Admin comes only from the deployment
+(`SUPER_ADMIN_*`) and can never be created, changed or recovered from a
+screen; support accounts are cut by a Super Admin from the console. No account
+manages another Super Admin, not even its own peer.
 
 ## Two-tier feature switches
 
@@ -72,6 +83,31 @@ Every gated screen calls `checkAccess({ feature, roles })`
 Menus simply hide what a person may not use. A switched-off screen shows an
 explanation card that says who can turn it on.
 
+## The platform console
+
+The provider's screens, all under `/admin/platform` and all gated on the
+`Super_Admin` role (`artifacts/dls-cms/src/components/admin/nav-config.ts`,
+`artifacts/api-server/src/routes/platform.ts`):
+
+| Group | Screen | What it does |
+|---|---|---|
+| Overview | Platform overview | Attention list (organizations without an administrator, pending hand-overs, stale one-time passwords, running support sessions), 7-day activity, counts, console map |
+| Organizations & people | Organizations | Create, rename, suspend; the hand-over checklist; the organization's administrators |
+| Organizations & people | Accounts | Every account across organizations: role, one-time password reset, sign out everywhere, suspend, view as |
+| Capabilities | Feature switchboard | Tier 1 switches |
+| Capabilities | Feature adoption | Tier 1 ∧ tier 2 ∧ role grants for every organization, read-only |
+| Security & compliance | Support access | The support policy, ask an organization for a window, start a view-as session, sessions in progress, full history |
+| Security & compliance | Security | Second factor, provider accounts, support windows across organizations, failed sign-ins |
+| Security & compliance | Active sessions | Live sessions with device and address; end one, or all of a person's |
+| Security & compliance | Audit log | Platform-wide log with filters (kind, organization, since), chain verification and CSV export |
+| System | System status | Process, database and migration status, sign-in and support policy, mail, scheduled jobs, configuration warnings. Secrets are never shown |
+
+Each screen is gated on the capability its menu entry names
+(`checkAccess({ capability })`), so the menu and the page can never disagree
+about who may open it. `docs/review/2026-09-super-admin-console.md` records how
+the console is organized; `docs/review/2026-09-platform-hardening.md` records
+the security work and what an operator must configure.
+
 ## Accounts and sign-in
 
 * Passwords are hashed with scrypt (Node built-in) and verified only by the API
@@ -79,15 +115,38 @@ explanation card that says who can turn it on.
 * The session is an httpOnly, SameSite=Lax cookie (`dls_session`) whose token is
   stored hashed. Sessions idle out after 12 hours and end after 7 days; both are
   configurable (`SESSION_IDLE_MINUTES`, `SESSION_MAX_DAYS`).
+* **Two-factor sign-in (TOTP)** is available to every account and can be
+  required of provider accounts (`REQUIRE_MFA_FOR_PLATFORM`). The password step
+  returns a short-lived, single-use handle rather than a session, so nothing is
+  signed in until the code is proven; a code is accepted one 30-second step
+  either side of now and never twice. Ten single-use recovery codes are issued
+  at enrolment, shown once and stored only as hashes.
 * Ten failed sign-ins per email + address in 15 minutes trigger a cool-down.
+  The counter lives in `login_attempts`, so it survives a restart and works
+  across instances. Every attempt is recorded; a failure against an existing
+  account is also audited. An address matching no account is counted but never
+  named in the audit log or on a screen — a list of misses is a list of
+  addresses worth trying.
+* New accounts get a single-use **invitation link**; "Forgot password?" sends a
+  reset link and always answers the same way whether or not the address exists.
+  Both are checked before the page renders a form. Until a mail provider is
+  configured the links are recorded and written to the log, and the on-screen
+  one-time password remains the fallback.
 * New accounts get either a password typed by the administrator or a generated
   one-time password shown exactly once; the person must choose their own
   password on first sign-in (`/auth/reset`).
 * Suspending an account or resetting its password signs it out everywhere.
+  The provider can also end one session or all of a person's sessions from
+  the platform console (lost device, off-boarding); both are audited.
 * There is no email-based self-service reset yet (no mail provider is
   configured). Administrators issue resets.
 
-### The provider account
+### The provider accounts
+
+A second, rarely used **break-glass** Super Admin is created on boot when
+`SUPER_ADMIN_BREAKGLASS_EMAIL` and `SUPER_ADMIN_BREAKGLASS_PASSWORD` are both
+set. It exists so that a lost or compromised primary password is a sign-in
+rather than a lockout, and no screen can create, change or recover it.
 
 On first boot the API creates the platform owner from `SUPER_ADMIN_EMAIL`
 (default `emailme@clarencewilliams.com`) with the agreed bootstrap password
@@ -96,12 +155,51 @@ secret store to bootstrap with a different one; `SUPER_ADMIN_FORCE_RESET=true`
 rotates an existing account to it once. Change the password from the app after
 the first sign-in.
 
+## Support access (review decision D-02)
+
+The provider has **no standing access to client records**, and cannot give
+itself any. An organization's Admin opens a time-boxed window from
+Settings → Support access, with a stated reason and a length up to
+`SUPPORT_WINDOW_MAX_HOURS`. Only while a window is open may a provider account
+start a view-as session into that organization; outside one the API refuses it
+(`NO_SUPPORT_WINDOW`). The window closes at its end time or when the Admin
+closes it, and grant, revocation and expiry are all audited.
+
+One exception, deliberately narrow: an organization whose administrators have
+never signed in can still be opened, because there is nobody inside who could
+grant a window and no client records in it yet. The audit entry records which
+case applied. The rules are pure and tested in
+`artifacts/api-server/src/lib/support-access.ts`.
+
 ## Audit
 
 Every configuration change — sign-ins, switch flips, account changes, password
-resets, view-as start/stop — is written to `audit_log` with the **real** actor
-and, when applicable, the impersonated user. The platform console shows the
-platform-wide log; Settings shows the organization's.
+resets, sessions ended by the provider, view-as start/stop — is written to
+`audit_log` with the **real** actor and, when applicable, the impersonated
+user. Actions are namespaced `<category>.<event>` (`auth`, `platform`, `org`,
+`user`, `session`, `support`). The platform console's Audit log screen shows the
+platform-wide log with filters and a CSV export; Settings shows the
+organization's.
+
+**Tamper evidence.** Each entry carries the hash of the entry before it,
+written by the `audit_log_chain` trigger rather than by the application, so
+nothing can append without linking. A second trigger refuses `UPDATE` and
+`DELETE` outright. Rewriting history therefore takes table ownership *and*
+disabling a trigger, and even then the chain no longer computes from that row
+on: `audit_log_verify()` reports the first break, the Audit log screen has a
+**Verify the chain** button, and the nightly `audit.verify_chain` job raises a
+warning on System status when it fails. Entries are kept for
+`AUDIT_RETENTION_YEARS` (six by default, matching the HIPAA documentation
+rule); nothing in the application deletes one.
+
+## Scheduled work
+
+Expiry reminders, pruning and chain verification are driven by a small
+scheduler in the API server (`SCHEDULER_INTERVAL_MINUTES`), and by
+`POST /api/jobs/:name/run` with an `x-cron-secret` header for hosts that sleep
+idle instances. Both claim the run through the same table, so the work happens
+once. System status lists every job with its last run, and `GET /api/readyz`
+reports whether the database answers and the migrations are applied.
 
 ## Demo data vs. real accounts
 

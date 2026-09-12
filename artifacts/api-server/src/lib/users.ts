@@ -1,6 +1,6 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 import { organizationsTable, usersTable, type Db, type User } from "@workspace/db";
-import { canManageRole, isRole, type Role } from "@workspace/features";
+import { canManageRole, isPlatformRole, isRole, type Role } from "@workspace/features";
 import { recordAudit } from "./audit";
 import { badRequest, conflict, forbidden, notFound } from "./errors";
 import { generateTemporaryPassword, hashPassword, passwordProblem } from "./password";
@@ -17,6 +17,8 @@ export interface PublicUser {
   mustChangePassword: boolean;
   lastLoginAt: string | null;
   createdAt: string;
+  /** Has this person finished enrolling a second factor? */
+  mfaEnabled: boolean;
 }
 
 export function toPublicUser(u: User): PublicUser {
@@ -30,6 +32,7 @@ export function toPublicUser(u: User): PublicUser {
     mustChangePassword: u.mustChangePassword,
     lastLoginAt: u.lastLoginAt ? u.lastLoginAt.toISOString() : null,
     createdAt: u.createdAt.toISOString(),
+    mfaEnabled: u.totpEnabledAt !== null,
   };
 }
 
@@ -66,8 +69,8 @@ export async function createUserAccount(
   input: { orgId: string | null; email: string; fullName: string; role: Role; password?: string }
 ): Promise<{ user: PublicUser; temporaryPassword: string | null }> {
   if (!canManageRole(actor.role, input.role)) throw forbidden(`Your role cannot create a ${input.role.replace("_", " ")} account.`);
-  if (input.role === "Super_Admin" && input.orgId) throw badRequest("Platform accounts do not belong to an organization.");
-  if (input.role !== "Super_Admin" && !input.orgId) throw badRequest("An organization is required.");
+  if (isPlatformRole(input.role) && input.orgId) throw badRequest("Provider accounts do not belong to an organization.");
+  if (!isPlatformRole(input.role) && !input.orgId) throw badRequest("An organization is required.");
   const email = normalizeEmail(input.email);
   const fullName = input.fullName.trim();
   if (!fullName) throw badRequest("A full name is required.");
@@ -136,7 +139,7 @@ export async function updateUserAccount(
   }
   if (patch.role && patch.role !== targetRole) {
     if (!canManageRole(actor.role, patch.role)) throw forbidden(`Your role cannot assign ${patch.role.replace("_", " ")}.`);
-    if (patch.role === "Super_Admin" || targetRole === "Super_Admin") throw badRequest("Platform accounts cannot change role.");
+    if (isPlatformRole(patch.role) || isPlatformRole(targetRole)) throw badRequest("Provider accounts cannot change role.");
   }
   const set: Partial<typeof usersTable.$inferInsert> = { updatedAt: new Date() };
   if (patch.fullName !== undefined) {
@@ -217,4 +220,35 @@ export async function findActiveOrgUser(db: Db, orgId: string, userId: string): 
     .where(and(eq(usersTable.id, userId), eq(usersTable.orgId, orgId), eq(usersTable.status, "Active")))
     .limit(1);
   return rows[0];
+}
+
+/**
+ * Has this organization taken delivery of itself?
+ *
+ * True once an Admin inside it has signed in at least once. Before that there
+ * is nobody who could grant the provider a support window, which is the one
+ * case where support access does not require one (see support-access.ts).
+ */
+export async function hasCompletedHandover(db: Db, orgId: string): Promise<boolean> {
+  const rows = await db
+    .select({ id: usersTable.id })
+    .from(usersTable)
+    .where(
+      and(
+        eq(usersTable.orgId, orgId),
+        eq(usersTable.role, "Admin"),
+        eq(usersTable.status, "Active"),
+        isNotNull(usersTable.lastLoginAt)
+      )
+    )
+    .limit(1);
+  return rows.length > 0;
+}
+
+/** Active administrators of an organization — who a notice about it goes to. */
+export async function listOrgAdmins(db: Db, orgId: string): Promise<User[]> {
+  return db
+    .select()
+    .from(usersTable)
+    .where(and(eq(usersTable.orgId, orgId), eq(usersTable.role, "Admin"), eq(usersTable.status, "Active")));
 }

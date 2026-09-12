@@ -1,9 +1,18 @@
 import type { NextFunction, Request, RequestHandler, Response } from "express";
 import { eq } from "drizzle-orm";
 import { organizationsTable, type Db, type Organization, type Session, type User } from "@workspace/db";
-import { effectiveFeatureKeys, isRole, type FeatureKey, type FeatureState, type Role } from "@workspace/features";
+import {
+  effectiveFeatureKeys,
+  hasPlatformCapability,
+  isPlatformRole,
+  isRole,
+  type FeatureKey,
+  type FeatureState,
+  type PlatformCapability,
+  type Role,
+} from "@workspace/features";
 import type { AppConfig } from "../lib/config";
-import { forbidden, unauthorized } from "../lib/errors";
+import { HttpError, forbidden, unauthorized } from "../lib/errors";
 import { loadFeatureStates } from "../lib/features";
 import { loadSession } from "../lib/session";
 import type { Actor } from "../lib/users";
@@ -100,6 +109,45 @@ export function requireRealRole(...roles: Role[]): RequestHandler {
     if (!auth) return next(unauthorized());
     if (!roles.includes(roleOf(auth.realUser))) return next(forbidden());
     next();
+  };
+}
+
+/**
+ * Gate a provider route on what that provider role may do, rather than on the
+ * role itself. Reads the EFFECTIVE role, so a provider who is in the middle of
+ * a support session is treated as the person they are viewing as — and the
+ * console is closed to them until they exit, which is the point.
+ */
+export function requirePlatformCapability(capability: PlatformCapability): RequestHandler {
+  return (_req: Request, res: Response, next: NextFunction) => {
+    const auth = getAuth(res);
+    if (!auth) return next(unauthorized());
+    if (!hasPlatformCapability(roleOf(auth.effectiveUser), capability)) return next(forbidden());
+    next();
+  };
+}
+
+/**
+ * When the deployment requires a second factor on provider accounts, an
+ * un-enrolled provider can sign in and enrol but can do nothing else. Failing
+ * closed here rather than at sign-in is deliberate: locking someone out of the
+ * screen that would let them comply is how a security control gets switched
+ * off again.
+ */
+export function requireMfaEnrolled(required: boolean): RequestHandler {
+  return (_req: Request, res: Response, next: NextFunction) => {
+    if (!required) return next();
+    const auth = getAuth(res);
+    if (!auth) return next(unauthorized());
+    if (!isPlatformRole(roleOf(auth.realUser))) return next();
+    if (auth.realUser.totpEnabledAt) return next();
+    return next(
+      new HttpError(
+        403,
+        "MFA_ENROLMENT_REQUIRED",
+        "This deployment requires two-factor sign-in on provider accounts. Set it up under Security to continue."
+      )
+    );
   };
 }
 

@@ -1,6 +1,7 @@
 // components/admin/sidebar.tsx — the Duet plum sidebar.
 // Collapsible to a 64px icon rail («/» toggle); sections individually
-// collapsible (▼/▶) with CORE expanded by default; user card pinned bottom.
+// collapsible (▼/▶), each open by its own default until the user decides;
+// user card pinned bottom.
 "use client";
 
 import Image from "next/image";
@@ -8,17 +9,18 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import {
-  AlertTriangle, Banknote, BarChart3, Building2, CalendarDays, ChevronsLeft, ChevronsRight,
-  FolderOpen, GraduationCap, LayoutDashboard, ListChecks, Lock, MapPin, Pill, Receipt,
-  ScrollText, Settings, ShieldCheck, SlidersHorizontal, UserCog, Users, type LucideIcon
+  Activity, AlertTriangle, Banknote, BarChart3, Building2, CalendarDays, ChevronsLeft, ChevronsRight,
+  FolderOpen, GraduationCap, Grid3x3, LayoutDashboard, LifeBuoy, ListChecks, Lock, MapPin,
+  MonitorSmartphone, Pill, Receipt, ScrollText, Settings, ShieldCheck, SlidersHorizontal, UserCog,
+  Users, type LucideIcon
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { NavSection } from "./nav-config";
+import { activeHref, type NavSection } from "./nav-config";
 
 const ICONS: Record<string, LucideIcon> = {
   AlertTriangle, LayoutDashboard, Users, CalendarDays, UserCog, ShieldCheck, MapPin, Pill,
   ScrollText, Receipt, Banknote, BarChart3, FolderOpen, GraduationCap, Settings,
-  SlidersHorizontal, Building2, ListChecks
+  SlidersHorizontal, Building2, ListChecks, Grid3x3, LifeBuoy, MonitorSmartphone, Activity
 };
 
 export function AdminSidebar({
@@ -34,7 +36,10 @@ export function AdminSidebar({
 }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
-  const [open, setOpen] = useState<Record<string, boolean>>({ CORE: true, PLATFORM: true });
+  // Sections the user has explicitly opened or closed; anything else follows
+  // the section's own default, so a newly added section shows up expanded
+  // even for someone with a saved preference from before it existed.
+  const [open, setOpen] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     try {
@@ -53,7 +58,7 @@ export function AdminSidebar({
     } catch { /* private mode */ }
   }
 
-  const isActive = (href: string) => (href === "/admin" ? pathname === href : pathname.startsWith(href));
+  const current = activeHref(sections, pathname);
 
   return (
     <aside
@@ -79,7 +84,7 @@ export function AdminSidebar({
 
       <nav className="flex-1 overflow-y-auto px-2 pb-4">
         {sections.map((section) => {
-          const expanded = open[section.key] ?? false;
+          const expanded = open[section.key] ?? section.defaultOpen ?? false;
           return (
             <div key={section.key} className="mb-1">
               {!collapsed && (
@@ -100,7 +105,7 @@ export function AdminSidebar({
                 <div className="space-y-0.5">
                   {section.items.map((item) => {
                     const Icon = ICONS[item.icon] ?? LayoutDashboard;
-                    const active = isActive(item.href);
+                    const active = item.href === current;
                     const locked = item.lockedForNonAdmin && !isAdmin;
                     return (
                       <Link
@@ -139,7 +144,7 @@ export function AdminSidebar({
           {!collapsed && (
             <div className="min-w-0">
               <div className="truncate text-sm font-medium text-white">{userName}</div>
-              <div className="flex items-center gap-2 text-xs text-plum-text">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-plum-text">
                 {userRole}
                 <a href="/auth/reset" className="underline hover:text-white">Password</a>
                 {/* plain <a>: Link would PREFETCH the logout route handler,

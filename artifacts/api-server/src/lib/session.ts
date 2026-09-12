@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, gt, isNull } from "drizzle-orm";
 import type { Response } from "express";
 import { sessionsTable, usersTable, type Db, type Session, type User } from "@workspace/db";
 import type { AppConfig } from "./config";
@@ -77,12 +77,38 @@ export async function revokeSession(db: Db, sessionId: string): Promise<void> {
   await db.update(sessionsTable).set({ revokedAt: new Date() }).where(eq(sessionsTable.id, sessionId));
 }
 
-/** Sign out every device for a user — used when an account is suspended or its password reset. */
-export async function revokeAllSessions(db: Db, userId: string): Promise<void> {
-  await db
+/**
+ * Sign out every device for a user — used when an account is suspended or its
+ * password reset, and by the provider's "sign out everywhere" control.
+ * Returns how many live sessions were ended.
+ */
+export async function revokeAllSessions(db: Db, userId: string): Promise<number> {
+  const revoked = await db
     .update(sessionsTable)
     .set({ revokedAt: new Date() })
-    .where(and(eq(sessionsTable.userId, userId), isNull(sessionsTable.revokedAt)));
+    .where(and(eq(sessionsTable.userId, userId), isNull(sessionsTable.revokedAt)))
+    .returning({ id: sessionsTable.id });
+  return revoked.length;
+}
+
+/**
+ * Every session that could still be presented right now: not revoked, inside
+ * its idle window and inside its absolute lifetime. Most recently active first.
+ * The absolute cut-off lives in config rather than in the row, so it is
+ * applied here exactly as loadSession() applies it.
+ */
+export async function listActiveSessions(db: Db, config: AppConfig, now: Date = new Date()): Promise<Session[]> {
+  const rows = await db
+    .select()
+    .from(sessionsTable)
+    .where(and(isNull(sessionsTable.revokedAt), gt(sessionsTable.expiresAt, now)))
+    .orderBy(desc(sessionsTable.lastSeenAt));
+  return rows.filter((s) => s.createdAt.getTime() + config.sessionAbsoluteMs > now.getTime());
+}
+
+export async function findSessionById(db: Db, id: string): Promise<Session | undefined> {
+  const rows = await db.select().from(sessionsTable).where(eq(sessionsTable.id, id)).limit(1);
+  return rows[0];
 }
 
 export async function setImpersonation(db: Db, sessionId: string, targetUserId: string | null): Promise<void> {
