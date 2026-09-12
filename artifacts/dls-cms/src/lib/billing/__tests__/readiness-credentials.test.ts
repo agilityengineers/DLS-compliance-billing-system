@@ -13,7 +13,7 @@ import { evaluateUnbilledNotes } from "../readiness";
 import { listRequirements, listStaffCredentials } from "@/lib/data/repo-credentialing";
 import { listUsers } from "@/lib/data/repo-core";
 import { listReliasCompletions, listReliasCourses } from "@/lib/data/repo-business";
-import { evaluateAndSummarize } from "@/lib/credentialing/registry";
+import { evaluateAndSummarize } from "@workspace/credentialing";
 import { agencyTodayIso } from "@/lib/time/agency";
 
 /** Credential blockers per staff member, straight from the demo dataset. */
@@ -26,7 +26,7 @@ async function blockersByStaff(): Promise<Map<string, string[]>> {
     users.map((staff) => [
       staff.full_name,
       evaluateAndSummarize({
-        requirements, staff, credentials, reliasCourses: courses, reliasCompletions: completions, today
+        requirements, staff, credentials, courses, completions, today
       }).summary.claimBlockers
     ])
   );
@@ -40,13 +40,17 @@ async function summaryFor(fullName: string) {
   const staff = users.find((u) => u.full_name === fullName);
   if (!staff) throw new Error(`No demo staff member named ${fullName}`);
   return evaluateAndSummarize({
-    requirements, staff, credentials, reliasCourses: courses, reliasCompletions: completions,
+    requirements, staff, credentials, courses, completions,
     today: agencyTodayIso()
   }).summary;
 }
 
 describe("demo dataset — who is blocked from billing", () => {
   it("blocks exactly the two staff the dataset stages as blockers", async () => {
+    // Colorado does not license DSPs, so `professional_license` is agency
+    // policy rather than a mandate — but it ships Required precisely so this
+    // blocker keeps firing. Turning it off is the agency's call, not a silent
+    // consequence of grounding the registry in real citations.
     const blocked = [...(await blockersByStaff())].filter(([, b]) => b.length > 0).map(([name]) => name);
     // Martinez: lapsed licence. Torres: lapsed CPR / First Aid.
     expect(blocked.sort()).toEqual(["Celine Torres", "Lesley Martinez"]);
@@ -55,7 +59,7 @@ describe("demo dataset — who is blocked from billing", () => {
   it("blocks Lesley Martinez on the lapsed licence, and only that", async () => {
     const blockers = (await blockersByStaff()).get("Lesley Martinez") ?? [];
     expect(blockers).toHaveLength(1);
-    expect(blockers[0]).toMatch(/DSP license expired/i);
+    expect(blockers[0]).toMatch(/Professional license expired/i);
   });
 
   it("blocks Celine Torres on the lapsed CPR record, and only that", async () => {

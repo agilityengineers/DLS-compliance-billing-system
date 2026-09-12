@@ -1,96 +1,31 @@
-// lib/credentialing/registry.ts — the credentialing engine.
+// lib/credentialing/src/engine.ts — the credentialing engine.
 //
-// A pure function over the requirements registry. No I/O, no server-only
-// import: the same evaluation runs in claim readiness, on the staff screen,
-// and in tests.
-//
-// The registry replaces three hand-written credential checks that used to live
-// in lib/billing/readiness.ts (license expiry, training_completed[], overdue
-// required Relias courses). Those were a code change every time agency policy
-// moved; this is a row update.
+// A pure function over the requirements registry: no I/O, no framework, no
+// database. The same evaluation runs in claim readiness, on the staff screen,
+// in the API server and in tests, which is what stops those surfaces drifting.
 //
 // BACKWARD COMPATIBILITY. Each requirement names where its evidence lives
-// (`source`), so existing data keeps working untouched: license requirements
-// read users.license_expiration_date, training requirements read
-// users.training_completed[] and Relias completions by course name. An explicit
-// staff_credentials row, once the table exists, always wins over the fallback.
-import type { Role, ReliasCompletion, ReliasCourse, StaffUser } from "@/lib/supabase/types";
+// (`source`), so data predating the registry keeps working: licence
+// requirements read the licence column, training requirements read training
+// records and LMS completions by course name. An explicit credential record
+// always wins over the fallback.
+import type {
+  CredentialState, CredentialStatus, CredentialSubject, CredentialSummary,
+  Requirement, Role, StaffCredentialRecord, TrainingCompletion, TrainingCourse
+} from "./types";
 
-// ── Registry shape ────────────────────────────────────────────────────────
-
-/** Where the engine looks for evidence. See lib/db/src/schema/requirements.ts. */
-export type CredentialSource =
-  | { kind: "license" }
-  | { kind: "training"; courseNames: string[] }
-  | { kind: "manual" };
-
-export interface Requirement {
-  id: string;
-  label: string;
-  category: string;
-  /** Admin toggle — on every matching staff member's checklist. */
-  required: boolean;
-  /** Admin toggle — must be held (or waived) before the account goes Active. */
-  gating: boolean;
-  automated: boolean;
-  vendor: string | null;
-  appliesTo: Role[];
-  /** Renewal interval in months; null = does not expire. */
-  renewsMonths: number | null;
-  source: CredentialSource;
-  note: string;
-  sortOrder: number;
-}
-
-/** A recorded credential. Absence of a row means "not started", never "held". */
-export interface StaffCredentialRecord {
-  staff_id: string;
-  requirement_id: string;
-  status: "verified" | "in_progress" | "not_started" | "failed" | "waived";
-  completed_on: string | null;
-  expires_on: string | null;
-  note: string | null;
-  waived_by: string | null;
-  waive_reason: string | null;
-}
-
-// ── Evaluated state ───────────────────────────────────────────────────────
-
-/**
- * `expiring` and `expired` are derived from the date at read time — a stored
- * date cannot go stale, a stored status can.
- */
-export type CredentialStatus =
-  | "verified"
-  | "expiring"
-  | "expired"
-  | "in_progress"
-  | "not_started"
-  | "failed"
-  | "waived";
-
-/** Statuses that mean the staff member currently holds the credential. */
-const SATISFIED: ReadonlySet<CredentialStatus> = new Set<CredentialStatus>(["verified", "expiring", "waived"]);
-
-export interface CredentialState {
-  requirement: Requirement;
-  status: CredentialStatus;
-  completedOn: string | null;
-  expiresOn: string | null;
-  /** Where the evidence came from — shown on the staff screen. */
-  evidence: "credential-record" | "license" | "training-record" | "relias" | "none";
-  /** One sentence, suitable for a claim blocker or a checklist row. */
-  detail: string;
-  /** True when this state must stop a claim going out. */
-  blocksClaims: boolean;
-}
+/** Statuses that mean the subject currently holds the credential. */
+const SATISFIED: ReadonlySet<CredentialStatus> = new Set<CredentialStatus>([
+  "verified", "expiring", "waived"
+]);
 
 export interface EvaluateOptions {
   requirements: Requirement[];
-  staff: StaffUser;
+  staff: CredentialSubject;
   credentials?: StaffCredentialRecord[];
-  reliasCourses?: ReliasCourse[];
-  reliasCompletions?: ReliasCompletion[];
+  /** LMS course catalogue (Relias), used to resolve completions by name. */
+  courses?: TrainingCourse[];
+  completions?: TrainingCompletion[];
   /** Agency-local today, YYYY-MM-DD. */
   today: string;
   /** A held credential inside this window is flagged `expiring` (warning only). */
@@ -157,23 +92,29 @@ function dateStatus(
   return daysLeft <= expiringWithinDays ? "expiring" : "verified";
 }
 
+function describe(r: Requirement, status: CredentialStatus, expiresOn: string | null): string {
+  if (status === "expired" && expiresOn) return `${r.label} expired ${fmt(expiresOn)}.`;
+  if (status === "expiring" && expiresOn) return `${r.label} expires ${fmt(expiresOn)} — renewal needed.`;
+  return expiresOn ? `${r.label} current through ${fmt(expiresOn)}.` : `${r.label} on file.`;
+}
+
 /**
- * Evaluate every requirement that applies to this staff member.
+ * Evaluate every requirement that applies to this subject.
  *
  * Resolution order per requirement:
- *   1. an explicit staff_credentials row (waivers and failures included)
- *   2. the requirement's `source` — license column, training records, Relias
+ *   1. an explicit credential record (waivers and failures included)
+ *   2. the requirement's `source` — licence, training records, LMS
  *   3. nothing → not_started
  */
 export function evaluateCredentials(opts: EvaluateOptions): CredentialState[] {
   const {
-    requirements, staff, credentials = [], reliasCourses = [], reliasCompletions = [],
+    requirements, staff, credentials = [], courses = [], completions = [],
     today, expiringWithinDays = DEFAULT_EXPIRING_DAYS, blockOnMissing = false
   } = opts;
 
   const mine = credentials.filter((c) => c.staff_id === staff.id);
-  const myCompletions = reliasCompletions.filter((c) => c.user_id === staff.id);
-  const courseById = new Map(reliasCourses.map((c) => [c.id, c]));
+  const myCompletions = completions.filter((c) => c.user_id === staff.id);
+  const courseById = new Map(courses.map((c) => [c.id, c]));
 
   return requirementsForRole(requirements, staff.role).map((requirement) => {
     const state = resolve(requirement);
@@ -240,7 +181,7 @@ export function evaluateCredentials(opts: EvaluateOptions): CredentialState[] {
           staff.training_completed.filter((t) => matches(t.course)),
           (t) => t.completed_on
         );
-        const relias = latestBy(
+        const lms = latestBy(
           myCompletions.filter((c) => {
             const course = courseById.get(c.course_id);
             return !!course && matches(course.name);
@@ -250,14 +191,14 @@ export function evaluateCredentials(opts: EvaluateOptions): CredentialState[] {
 
         // Either source can satisfy the requirement; take whichever is newer.
         const best =
-          training && relias
-            ? training.completed_on >= relias.completed_on
+          training && lms
+            ? training.completed_on >= lms.completed_on
               ? { on: training.completed_on, exp: training.expires_on, ev: "training-record" as const }
-              : { on: relias.completed_on, exp: relias.expires_on, ev: "relias" as const }
+              : { on: lms.completed_on, exp: lms.expires_on, ev: "lms" as const }
             : training
               ? { on: training.completed_on, exp: training.expires_on, ev: "training-record" as const }
-              : relias
-                ? { on: relias.completed_on, exp: relias.expires_on, ev: "relias" as const }
+              : lms
+                ? { on: lms.completed_on, exp: lms.expires_on, ev: "lms" as const }
                 : null;
 
         if (!best) {
@@ -274,29 +215,6 @@ export function evaluateCredentials(opts: EvaluateOptions): CredentialState[] {
         detail: `${r.label} has not been started.` };
     }
   });
-}
-
-function describe(r: Requirement, status: CredentialStatus, expiresOn: string | null): string {
-  if (status === "expired" && expiresOn) return `${r.label} expired ${fmt(expiresOn)}.`;
-  if (status === "expiring" && expiresOn) return `${r.label} expires ${fmt(expiresOn)} — renewal needed.`;
-  return expiresOn ? `${r.label} current through ${fmt(expiresOn)}.` : `${r.label} on file.`;
-}
-
-// ── Summary ───────────────────────────────────────────────────────────────
-
-export interface CredentialSummary {
-  /** Gating items satisfied. */
-  done: number;
-  /** Gating items that apply. */
-  total: number;
-  /** Every gating item satisfied — the account may be activated. */
-  ready: boolean;
-  /** Gating items not yet satisfied. */
-  outstanding: CredentialState[];
-  /** Held but inside the renewal window — a warning, not a block. */
-  expiring: CredentialState[];
-  /** Reasons a claim for this staff member must not go out. */
-  claimBlockers: string[];
 }
 
 export function summarize(states: CredentialState[]): CredentialSummary {

@@ -12,8 +12,7 @@ import type {
   ReliasCourse, StaffUser, Timesheet, TimesheetEntry, UserPrefs, Visit
 } from "@/lib/supabase/types";
 import { agencyAddDays, agencyMondayOf, agencyTodayIso, agencyToUtcIso } from "@/lib/time/agency";
-import type { Requirement, StaffCredentialRecord } from "@/lib/credentialing/registry";
-import { DEFAULT_REQUIREMENTS } from "@/lib/credentialing/defaults";
+import { DEFAULT_REQUIREMENTS, type Requirement, type StaffCredentialRecord } from "@workspace/credentialing";
 
 // ── ids (identical to supabase/seed.sql) ─────────────────────────────────
 export const UID = {

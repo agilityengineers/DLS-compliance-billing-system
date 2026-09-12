@@ -17,6 +17,9 @@ export default defineConfig({
     environment: "node",
     include: [
       "artifacts/dls-cms/src/**/__tests__/**/*.test.ts",
+      "lib/credentialing/__tests__/**/*.test.ts",
+      "lib/db/__tests__/credentialing.test.ts",
+      "artifacts/api-server/__tests__/**/*.test.ts",
       "lib/time/__tests__/**/*.test.ts"
     ],
     // Demo mode is how this build runs (see artifacts/dls-cms/vite.config.ts),

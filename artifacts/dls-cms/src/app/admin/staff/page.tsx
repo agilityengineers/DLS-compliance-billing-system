@@ -11,7 +11,7 @@ import { requireRole } from "@/lib/auth/session";
 import { listUsers } from "@/lib/data/repo-core";
 import { listRequirements, listStaffCredentials } from "@/lib/data/repo-credentialing";
 import { listReliasCompletions, listReliasCourses } from "@/lib/data/repo-business";
-import { evaluateAndSummarize } from "@/lib/credentialing/registry";
+import { evaluateAndSummarize } from "@workspace/credentialing";
 import { Badge } from "@/components/ui/badge";
 import { Table, THead, TBody } from "@/components/ui/table";
 import { StaffRowActions } from "@/components/admin/staff-row-actions";
@@ -50,7 +50,7 @@ export default async function StaffPage() {
           {staff.map((s) => {
             const { states, summary } = evaluateAndSummarize({
               requirements, staff: s, credentials,
-              reliasCourses: courses, reliasCompletions: completions, today
+              courses, completions, today
             });
             // Keep the row actions' contract: which licence/courses need a
             // renewal recorded — now answered by the registry, not by reading

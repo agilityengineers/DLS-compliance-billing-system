@@ -251,15 +251,16 @@ Recommendation #1 is implemented; the rest are recommendations only.
 
 | Area | Files |
 |---|---|
-| Migration-target schema | `lib/db/src/schema/requirements.ts`, `lib/db/src/schema/staff-credentials.ts` |
-| Evaluation engine (pure) | `artifacts/dls-cms/src/lib/credentialing/registry.ts` |
-| Default registry seed | `artifacts/dls-cms/src/lib/credentialing/defaults.ts` |
+| Shared engine package | `lib/credentialing/` — types, the pure engine, and the seed registry. Zero dependencies, so the client, the API server and the tests share one definition |
+| Database schema | `lib/db/src/schema/requirements.ts`, `lib/db/src/schema/staff-credentials.ts`, `lib/db/migrations/0001_credentialing.sql` |
+| Seeding | `lib/db/src/seed/requirements.ts` |
+| API | `lib/api-spec/openapi.yaml` (contract) → `artifacts/api-server/src/routes/credentialing.ts` |
 | Repository layer | `artifacts/dls-cms/src/lib/data/repo-credentialing.ts` |
 | Claim readiness | `artifacts/dls-cms/src/lib/billing/readiness.ts` — three hardcoded checks became one registry pass, evaluated once per staff member |
 | Staff screen | `artifacts/dls-cms/src/app/admin/staff/page.tsx` — no longer re-derives credential logic; renders the same engine |
-| Admin screen | `artifacts/dls-cms/src/app/admin/requirements/` + `components/admin/requirement-toggles.tsx` |
+| Admin screen | `artifacts/dls-cms/src/app/admin/requirements/` + `components/admin/requirement-toggles.tsx`, `requirement-verification.tsx` |
 | Demo data | `artifacts/dls-cms/src/lib/data/demo/dataset.ts` — registry plus credential evidence for both resolution paths |
-| Tests | `artifacts/dls-cms/src/lib/credentialing/__tests__/registry.test.ts` (engine), `artifacts/dls-cms/src/lib/billing/__tests__/readiness-credentials.test.ts` (billing regression guard), `vitest.config.ts` + `pnpm test` |
+| Tests | `lib/credentialing/__tests__/engine.test.ts` (engine), `artifacts/dls-cms/src/lib/billing/__tests__/readiness-credentials.test.ts` (billing regression guard), `lib/db/__tests__/credentialing.test.ts` (migration, constraints and seed against in-process PostgreSQL), `artifacts/api-server/__tests__/credentialing.test.ts` (the registry over HTTP, end to end). `vitest.config.ts` + `pnpm test` — 69 tests |
 
 The engine reads legacy `training_completed[]`, Relias completions and
 `license_expiration_date` through each requirement's `source` descriptor, so
@@ -275,7 +276,47 @@ Ray Romero, newly hired with six gating items never started, is outstanding for
 activation and blocks no claim. `pnpm test` runs 45 tests across the engine,
 that guard, and the existing agency-time suite.
 
-Registry persistence is still ahead of us: the tables are defined for the
-Drizzle target, so in real mode `listRequirements()` falls back to the shipped
-defaults (the same fallback `getMenuConfig()` uses) and toggles persist only in
-demo mode until that migration runs.
+### Persistence
+
+Resolved. The registry persists for real: `0001_credentialing.sql` creates both
+tables with the constraints that matter (a gating item must be required; a
+`confirmed` row must name a signer and a date; a waiver must carry a person and
+a reason), the API server serves and updates them over the generated contract,
+and the client's real-mode path calls that API. There is **no silent fallback
+to the shipped defaults** any more — quietly serving default policy to an
+agency that had edited theirs would mean billing decisions taken against rules
+they never set, so a failure surfaces instead.
+
+Re-seeding is safe on a live database: it refreshes what we own (labels,
+notes, citations) and never touches what the agency decided (`required`,
+`gating`, and any recorded sign-off). That split is pinned by tests.
+
+### Provenance — and what still needs a human
+
+The registry now records **which rule each requirement rests on and how far
+that rule has been checked**. A compliance table that cannot cite its own
+authority cannot be audited: a developer's guess and counsel's sign-off look
+identical once they are rows. `verification_status` keeps them apart —
+`confirmed` (a named person read the primary source), `reported` (citation from
+secondary sources), `agency_policy` (DLS's own rule, no mandate behind it).
+
+**Nothing ships as `confirmed`.** The citations were gathered from secondary
+sources; primary Colorado regulatory sites were unreachable from the build
+environment, so no rule text was read directly. The admin screen counts what is
+outstanding and carries a sign-off control, so this is a worklist rather than a
+comment nobody reads.
+
+Two substantive corrections came out of that research:
+
+- **QMAP does not renew.** CDPHE registration has not required renewal since
+  1 July 2017. The first cut of this registry carried a 12-month interval,
+  which would have raised a false expiry warning on every QMAP in the agency.
+  (A 2025 change re-qualifies QMAPs in assisted-living residences — confirm
+  whether it reaches DLS's HCBS settings.)
+- **Colorado does not license direct support professionals.** The
+  `professional_license` row is kept Required because the agency records a
+  licence number per field staff member and has always treated a lapse as a
+  claim blocker — it is preserved deliberately, and labelled `agency_policy`
+  rather than dressed up as a mandate. Turning it off is DLS's call.
+
+TB screening was added; it was missing entirely.

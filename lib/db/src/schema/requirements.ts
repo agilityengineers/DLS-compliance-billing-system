@@ -7,34 +7,17 @@
 //   required — the item appears on every matching staff member's checklist
 //   gating   — it must be verified (or waived) before the account goes Active
 //
-// Claim readiness, the activation gate, and the staff checklists all read from
-// here. Enforcement lives in the app's credentialing engine
-// (artifacts/dls-cms/src/lib/credentialing/registry.ts), which is a pure
-// function over these rows.
-import { pgTable, text, boolean, integer, jsonb, timestamp } from "drizzle-orm/pg-core";
+// The provenance columns matter as much as the policy ones. A compliance table
+// that cannot cite its own authority cannot be audited: a developer's guess and
+// counsel's sign-off look identical once they are rows. `verification_status`
+// keeps them apart and the admin screen reports what is still outstanding.
+//
+// Shapes live in @workspace/credentialing so the engine, the API and the client
+// agree on one definition.
+import { pgTable, text, boolean, integer, jsonb, date, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
-
-/**
- * Where the engine looks to decide whether a staff member holds this
- * credential. Requirements are configurable, but the PLACES credential
- * evidence can live are not — each is backed by a real column or table.
- *
- *   license  — users.license_number / users.license_expiration_date
- *   training — users.training_completed[] and Relias completions, by course name
- *   manual   — staff_credentials rows only (uploads, background checks)
- */
-export type CredentialSourceKind = "license" | "training" | "manual";
-
-export interface CredentialSource {
-  kind: CredentialSourceKind;
-  /** For `training`: course names that satisfy this requirement (case-insensitive). */
-  courseNames?: string[];
-}
-
-/** Roles a requirement can apply to. Mirrors the app's Role union. */
-export const REQUIREMENT_ROLES = ["Admin", "Scheduler", "Field_Staff"] as const;
-export type RequirementRole = (typeof REQUIREMENT_ROLES)[number];
+import type { CredentialSource, Role, VerificationStatus } from "@workspace/credentialing";
 
 export const requirementsTable = pgTable("requirements", {
   /** Stable slug (e.g. "cpr_first_aid") — referenced by staff_credentials. */
@@ -43,17 +26,26 @@ export const requirementsTable = pgTable("requirements", {
   category: text("category").notNull(),
   /** Admin toggle: on every matching checklist. */
   required: boolean("required").notNull().default(true),
-  /** Admin toggle: blocks activation and blocks claims when expired. */
+  /** Admin toggle: blocks activation, and blocks claims when lapsed. */
   gating: boolean("gating").notNull().default(true),
-  /** The system can order or verify this without a human (Checkr, E-Verify, LMS). */
+  /** The system can order or verify this without a human (E-Verify, LMS). */
   automated: boolean("automated").notNull().default(false),
   vendor: text("vendor"),
-  appliesTo: jsonb("applies_to").$type<RequirementRole[]>().notNull(),
+  appliesTo: jsonb("applies_to").$type<Role[]>().notNull(),
   /** Renewal interval in months; null = does not expire. */
   renewsMonths: integer("renews_months"),
   source: jsonb("source").$type<CredentialSource>().notNull(),
   note: text("note").notNull().default(""),
   sortOrder: integer("sort_order").notNull().default(0),
+
+  // ── Provenance ──────────────────────────────────────────────────────────
+  authorityCitation: text("authority_citation"),
+  authorityUrl: text("authority_url"),
+  verificationStatus: text("verification_status").$type<VerificationStatus>().notNull().default("unverified"),
+  verifiedOn: date("verified_on"),
+  verifiedBy: text("verified_by"),
+  verificationNote: text("verification_note"),
+
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
 });
@@ -64,4 +56,4 @@ export const insertRequirementSchema = createInsertSchema(requirementsTable).omi
 });
 
 export type InsertRequirement = z.infer<typeof insertRequirementSchema>;
-export type Requirement = typeof requirementsTable.$inferSelect;
+export type RequirementRow = typeof requirementsTable.$inferSelect;

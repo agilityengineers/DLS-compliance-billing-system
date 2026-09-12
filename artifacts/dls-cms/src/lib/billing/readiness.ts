@@ -10,15 +10,15 @@
 // Credentialing is NOT hardcoded here any more. Three hand-written checks
 // (licence expiry, training_completed[], overdue required Relias courses) are
 // now one pass over the configurable requirements registry —
-// lib/credentialing/registry.ts. Which items exist, which are required, and
-// which block a claim are admin toggles at /admin/requirements.
+// the @workspace/credentialing package. Which items exist, which are required,
+// and which block a claim are admin toggles at /admin/requirements.
 import "server-only";
 
 import { listNotes, type NoteWithContext, listEvvLogs } from "@/lib/data/repo-field";
 import { listClients, listPhysicianOrders, listUsers, listVisits } from "@/lib/data/repo-core";
 import { getFeeSchedule, listReliasCompletions, listReliasCourses } from "@/lib/data/repo-business";
 import { listRequirements, listStaffCredentials } from "@/lib/data/repo-credentialing";
-import { evaluateAndSummarize } from "@/lib/credentialing/registry";
+import { evaluateAndSummarize } from "@workspace/credentialing";
 import type { Client, FeeScheduleRow, StaffUser, VisitType, VisitWithNames } from "@/lib/supabase/types";
 import { agencyAddDays, agencySundayOf, agencyTodayIso } from "@/lib/time/agency";
 
@@ -81,7 +81,7 @@ export async function evaluateUnbilledNotes(opts: { from?: string; to?: string }
       u.id,
       evaluateAndSummarize({
         requirements, staff: u, credentials,
-        reliasCourses: courses, reliasCompletions: completions, today
+        courses, completions, today
       }).summary.claimBlockers.map((reason) => `${u.full_name} — ${reason}`)
     ])
   );

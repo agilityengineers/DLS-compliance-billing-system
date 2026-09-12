@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: credentialing
+    description: The credentialing requirements registry and staff credential evidence
 paths:
   /healthz:
     get:
@@ -24,6 +26,92 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /requirements:
+    get:
+      operationId: listRequirements
+      tags: [credentialing]
+      summary: List credentialing requirements
+      description: >
+        The registry that decides what credentials exist, which are required,
+        and which block a staff account from delivering billable services.
+        Returned in display order.
+      responses:
+        "200":
+          description: The registry
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Requirement"
+
+  /requirements/{requirementId}:
+    patch:
+      operationId: updateRequirement
+      tags: [credentialing]
+      summary: Update a requirement's policy toggles or verification record
+      description: >
+        `required` and `gating` are the agency's policy switches. The
+        verification fields record who checked the requirement's legal basis
+        and when. Turning `required` off also clears `gating`, because an item
+        nobody must hold cannot gate anything.
+      parameters:
+        - name: requirementId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequirementUpdate"
+      responses:
+        "200":
+          description: The updated requirement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Requirement"
+        "400":
+          description: Invalid update
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: No such requirement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /staff-credentials:
+    get:
+      operationId: listStaffCredentials
+      tags: [credentialing]
+      summary: List recorded staff credentials
+      description: >
+        Evidence rows. Absence of a row means the requirement has not been
+        started — it never means the credential is held.
+      parameters:
+        - name: staffId
+          in: query
+          required: false
+          description: Narrow to one staff member
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Credential evidence
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StaffCredential"
 components:
   schemas:
     HealthStatus:
@@ -34,3 +122,143 @@ components:
       required:
         - status
 
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    CredentialSource:
+      type: object
+      description: Where the engine looks for evidence that a requirement is met.
+      properties:
+        kind:
+          type: string
+          enum: [license, training, manual]
+        courseNames:
+          type: array
+          items:
+            type: string
+      required:
+        - kind
+
+    VerificationStatus:
+      type: string
+      description: >
+        How far the requirement's legal basis has been checked. `confirmed`
+        means a named person read the primary source and signed off;
+        `reported` means the citation came from secondary sources;
+        `agency_policy` means it is the agency's own rule, not a mandate.
+      enum: [confirmed, reported, agency_policy, unverified]
+
+    Requirement:
+      type: object
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+        category:
+          type: string
+        required:
+          type: boolean
+        gating:
+          type: boolean
+        automated:
+          type: boolean
+        vendor:
+          type: [string, "null"]
+        appliesTo:
+          type: array
+          items:
+            type: string
+        renewsMonths:
+          type: [integer, "null"]
+        source:
+          $ref: "#/components/schemas/CredentialSource"
+        note:
+          type: string
+        sortOrder:
+          type: integer
+        authorityCitation:
+          type: [string, "null"]
+        authorityUrl:
+          type: [string, "null"]
+        verificationStatus:
+          $ref: "#/components/schemas/VerificationStatus"
+        verifiedOn:
+          type: [string, "null"]
+        verifiedBy:
+          type: [string, "null"]
+        verificationNote:
+          type: [string, "null"]
+      required:
+        - id
+        - label
+        - category
+        - required
+        - gating
+        - automated
+        - vendor
+        - appliesTo
+        - renewsMonths
+        - source
+        - note
+        - sortOrder
+        - authorityCitation
+        - authorityUrl
+        - verificationStatus
+        - verifiedOn
+        - verifiedBy
+        - verificationNote
+
+    RequirementUpdate:
+      type: object
+      description: >
+        Every field is optional; only what is sent is changed. A verification
+        sign-off must carry both who signed it and when.
+      properties:
+        required:
+          type: boolean
+        gating:
+          type: boolean
+        verificationStatus:
+          $ref: "#/components/schemas/VerificationStatus"
+        verifiedOn:
+          type: [string, "null"]
+        verifiedBy:
+          type: [string, "null"]
+        verificationNote:
+          type: [string, "null"]
+
+    StaffCredential:
+      type: object
+      properties:
+        staff_id:
+          type: string
+        requirement_id:
+          type: string
+        status:
+          type: string
+          enum: [verified, in_progress, not_started, failed, waived]
+        completed_on:
+          type: [string, "null"]
+        expires_on:
+          type: [string, "null"]
+        note:
+          type: [string, "null"]
+        waived_by:
+          type: [string, "null"]
+        waive_reason:
+          type: [string, "null"]
+      required:
+        - staff_id
+        - requirement_id
+        - status
+        - completed_on
+        - expires_on
+        - note
+        - waived_by
+        - waive_reason

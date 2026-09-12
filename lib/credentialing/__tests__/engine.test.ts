@@ -1,14 +1,14 @@
-// lib/credentialing/__tests__/registry.test.ts — the credentialing engine.
+// lib/credentialing/__tests__/engine.test.ts — the credentialing engine.
 //
 // These assertions are the contract claim readiness depends on. The most
 // important one is negative: turning a requirement on must not start blocking
 // claims for staff who simply have no record yet (see "never-started").
 import { describe, expect, it } from "vitest";
-import type { ReliasCompletion, ReliasCourse, Role, StaffUser } from "@/lib/supabase/types";
 import {
   evaluateCredentials, gatingRequirementsForRole, requirementsForRole, summarize,
-  type Requirement, type StaffCredentialRecord
-} from "../registry";
+  type CredentialSubject, type Requirement, type Role, type StaffCredentialRecord,
+  type TrainingCompletion, type TrainingCourse
+} from "../src";
 
 const TODAY = "2026-06-15";
 
@@ -27,10 +27,10 @@ function req(over: Partial<Requirement> & Pick<Requirement, "id">): Requirement 
   };
 }
 
-function staff(over: Partial<StaffUser> = {}): StaffUser {
+function staff(over: Partial<CredentialSubject> = {}): CredentialSubject {
   return {
-    id: "s1", email: "a@b.c", full_name: "Ana Field", role: "Field_Staff" as Role,
-    status: "Active", license_number: null, license_expiration_date: null,
+    id: "s1", full_name: "Ana Field", role: "Field_Staff" as Role,
+    license_number: null, license_expiration_date: null,
     training_completed: [], ...over
   };
 }
@@ -106,12 +106,11 @@ describe("training evidence", () => {
   const registry = [
     req({ id: "cpr", label: "CPR / First Aid", source: { kind: "training", courseNames: ["CPR / First Aid"] } })
   ];
-  const courses: ReliasCourse[] = [
-    { id: "c1", code: "CPR", name: "CPR / First Aid", required: true, renewal_months: 24 }
+  const courses: TrainingCourse[] = [
+    { id: "c1", name: "CPR / First Aid" }
   ];
-  const completion = (over: Partial<ReliasCompletion>): ReliasCompletion => ({
-    id: "rc1", user_id: "s1", course_id: "c1", completed_on: day(-10),
-    expires_on: day(300), source: "api", synced_at: `${TODAY}T02:00:00.000Z`, ...over
+  const completion = (over: Partial<TrainingCompletion>): TrainingCompletion => ({
+    user_id: "s1", course_id: "c1", completed_on: day(-10), expires_on: day(300), ...over
   });
 
   it("accepts a training record on the staff row", () => {
@@ -141,18 +140,18 @@ describe("training evidence", () => {
     // Stale record on the staff row, fresh Relias completion → current.
     const [state] = evaluate(registry, {
       staff: staff({ training_completed: [{ course: "CPR / First Aid", completed_on: day(-400), expires_on: day(-35) }] }),
-      reliasCourses: courses,
-      reliasCompletions: [completion({ completed_on: day(-5), expires_on: day(700) })]
+      courses,
+      completions: [completion({ completed_on: day(-5), expires_on: day(700) })]
     });
     expect(state.status).toBe("verified");
-    expect(state.evidence).toBe("relias");
+    expect(state.evidence).toBe("lms");
     expect(state.blocksClaims).toBe(false);
   });
 
   it("ignores another user's Relias completion", () => {
     const [state] = evaluate(registry, {
-      reliasCourses: courses,
-      reliasCompletions: [completion({ user_id: "someone-else" })]
+      courses,
+      completions: [completion({ user_id: "someone-else" })]
     });
     expect(state.status).toBe("not_started");
   });

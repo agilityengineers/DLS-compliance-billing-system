@@ -21,6 +21,9 @@ import { requirementsTable } from "./requirements";
 export const CREDENTIAL_STATUSES = ["verified", "in_progress", "not_started", "failed", "waived"] as const;
 export type StoredCredentialStatus = (typeof CREDENTIAL_STATUSES)[number];
 
+// The engine's StaffCredentialRecord (in @workspace/credentialing) is the read
+// shape of this table; keep the two in step.
+
 export const staffCredentialsTable = pgTable(
   "staff_credentials",
   {
@@ -51,4 +54,4 @@ export const insertStaffCredentialSchema = createInsertSchema(staffCredentialsTa
 });
 
 export type InsertStaffCredential = z.infer<typeof insertStaffCredentialSchema>;
-export type StaffCredential = typeof staffCredentialsTable.$inferSelect;
+export type StaffCredentialRow = typeof staffCredentialsTable.$inferSelect;

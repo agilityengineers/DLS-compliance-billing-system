@@ -10,12 +10,12 @@ import { requireRole } from "@/lib/auth/session";
 import { listRequirements, listStaffCredentials } from "@/lib/data/repo-credentialing";
 import { listUsers } from "@/lib/data/repo-core";
 import { listReliasCompletions, listReliasCourses } from "@/lib/data/repo-business";
-import { byCategory } from "@/lib/credentialing/defaults";
-import { evaluateAndSummarize } from "@/lib/credentialing/registry";
+import { byCategory, evaluateAndSummarize, NEEDS_REVIEW } from "@workspace/credentialing";
 import { agencyTodayIso } from "@/lib/time/agency";
 import { ROLE_LABELS } from "@/lib/rbac/roles";
 import { Badge } from "@/components/ui/badge";
 import { RequirementToggles } from "@/components/admin/requirement-toggles";
+import { RequirementVerification } from "@/components/admin/requirement-verification";
 
 export default async function RequirementsPage() {
   try {
@@ -39,12 +39,13 @@ export default async function RequirementsPage() {
     .map((staff) => ({
       staff,
       ...evaluateAndSummarize({
-        requirements, staff, credentials, reliasCourses: courses, reliasCompletions: completions, today
+        requirements, staff, credentials, courses, completions, today
       })
     }));
 
   const requiredCount = requirements.filter((r) => r.required).length;
   const gatingCount = requirements.filter((r) => r.required && r.gating).length;
+  const needsReview = requirements.filter((r) => NEEDS_REVIEW.includes(r.verificationStatus));
   const notReady = roster.filter((r) => !r.summary.ready);
   const blocked = roster.filter((r) => r.summary.claimBlockers.length > 0);
 
@@ -60,10 +61,25 @@ export default async function RequirementsPage() {
         </p>
       </div>
 
+      {needsReview.length > 0 && (
+        <div className="rounded-card border border-pill-warning-fg/30 bg-pill-warning p-4 text-sm text-pill-warning-fg">
+          <strong>{needsReview.length} of {requirements.length} requirements rest on a citation nobody has checked.</strong>{" "}
+          They were seeded from secondary sources as a starting point, not read out of the rule text.
+          Confirm each against the primary source and record the sign-off below — until then, treat
+          them as prompts rather than as settled law.
+        </div>
+      )}
+
       <div className="grid gap-3 sm:grid-cols-4">
         <Stat label="Requirements defined" value={requirements.length} sub={`${byCategory(requirements).length} categories`} />
         <Stat label="Currently required" value={requiredCount} sub={`${requirements.length - requiredCount} optional`} />
         <Stat label="Gating activation" value={gatingCount} sub="Must clear before Active" />
+        <Stat
+          label="Citations to check"
+          value={needsReview.length}
+          sub={needsReview.length > 0 ? "Not yet verified against the rule" : "All checked or agency policy"}
+          tone={needsReview.length > 0 ? "warning" : "ok"}
+        />
         <Stat
           label="Staff not yet clear"
           value={notReady.length}
@@ -89,12 +105,23 @@ export default async function RequirementsPage() {
                     {r.renewsMonths && <Badge variant="warning">renews {r.renewsMonths} mo</Badge>}
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {r.note} · applies to {r.appliesTo.map((role) => ROLE_LABELS[role]).join(", ")}
+                    {r.note} · applies to {r.appliesTo.map(roleLabel).join(", ")}
                     {r.source.kind === "training" && " · evidence from training records and Relias"}
                     {r.source.kind === "license" && " · evidence from the staff licence record"}
                   </p>
                 </div>
                 <RequirementToggles requirementId={r.id} required={r.required} gating={r.gating} />
+                <div className="w-full">
+                  <RequirementVerification
+                    requirementId={r.id}
+                    status={r.verificationStatus}
+                    citation={r.authorityCitation}
+                    citationUrl={r.authorityUrl}
+                    note={r.verificationNote}
+                    verifiedOn={r.verifiedOn}
+                    verifiedBy={r.verifiedBy}
+                  />
+                </div>
               </div>
             ))}
           </div>
@@ -149,6 +176,14 @@ export default async function RequirementsPage() {
       </section>
     </div>
   );
+}
+
+/**
+ * The registry stores roles as plain strings so the engine stays free of app
+ * types; anything the app does not know about renders as written.
+ */
+function roleLabel(role: string): string {
+  return (ROLE_LABELS as Record<string, string>)[role] ?? role.replace(/_/g, " ");
 }
 
 function Stat({
