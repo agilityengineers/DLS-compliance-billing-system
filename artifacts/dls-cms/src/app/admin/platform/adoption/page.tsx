@@ -5,7 +5,7 @@ import { PlatformPageHeader } from "@/components/admin/platform/page-header";
 import { FeatureAdoptionMatrix } from "@/components/admin/platform/adoption-matrix";
 
 export default async function PlatformAdoptionPage() {
-  const { denied } = await checkAccess({ roles: ["Super_Admin"] });
+  const { denied } = await checkAccess({ capability: "platform.view" });
   if (denied) return denied;
 
   return (

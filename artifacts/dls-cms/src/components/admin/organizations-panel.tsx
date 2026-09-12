@@ -7,9 +7,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Check, Minus } from "lucide-react";
+import { Check, Download, Minus } from "lucide-react";
 import { ROLE_LABELS } from "@workspace/features";
-import { platformApi, type OrganizationRow, type OrgRole } from "@/lib/api/admin";
+import { platformApi, type OrganizationPatch, type OrganizationRow, type OrgRole } from "@/lib/api/admin";
 import { errorMessage } from "@/lib/api/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -156,15 +156,28 @@ function OrganizationCard({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={org.status === "active" ? "success" : "destructive"}>{org.status}</Badge>
-          {!renaming && (
+          <Badge variant={org.status === "active" ? "success" : org.status === "suspended" ? "warning" : "destructive"}>
+            {org.status}
+          </Badge>
+          {!renaming && org.status !== "decommissioned" && (
             <Button size="sm" variant="ghost" onClick={() => setRenaming(true)}>Rename</Button>
           )}
+          <a
+            href={platformApi.organizationExportUrl(org.id)}
+            className="inline-flex items-center gap-1 rounded-btn border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted"
+            title="Download this organization's configuration, accounts and audit history as JSON."
+          >
+            <Download className="h-3.5 w-3.5" /> Export
+          </a>
           <Button
             size="sm"
             variant="outline"
             disabled={busy === `org:${org.id}`}
-            title={org.status === "active" ? "Signs everyone in the organization out and blocks sign-in until reactivated." : "Lets the organization sign in again."}
+            title={
+              org.status === "active"
+                ? "Signs everyone in the organization out and blocks sign-in until reactivated."
+                : "Lets the organization sign in again."
+            }
             onClick={() =>
               void onRun(`org:${org.id}`, async () => {
                 await platformApi.updateOrganization(org.id, { status: org.status === "active" ? "suspended" : "active" });
@@ -175,6 +188,14 @@ function OrganizationCard({
           </Button>
         </div>
       </div>
+
+      {org.status === "decommissioned" && (
+        <div className="border-b border-border bg-pill-danger px-4 py-3 text-sm text-pill-danger-fg">
+          <span className="font-medium">Decommissioned {org.decommissionedAt ? fmtDate(org.decommissionedAt) : ""}.</span>{" "}
+          {org.decommissionReason} Every account in it is suspended. Reactivating restores sign-in but not the
+          accounts, which are turned back on one at a time.
+        </div>
+      )}
 
       {/* hand-over checklist */}
       <div className="border-b border-border bg-muted/30 px-4 py-3">
@@ -239,14 +260,20 @@ function OrganizationCard({
         </span>
       </div>
 
-      <AddAccountForm
-        orgId={org.id}
-        orgName={org.name}
-        onCreated={(email, temp) => {
-          if (temp) onIssued(email, temp);
-          void onReload();
-        }}
-      />
+      <ContractDetails org={org} busy={busy} onRun={onRun} />
+
+      {org.status !== "decommissioned" && (
+        <AddAccountForm
+          orgId={org.id}
+          orgName={org.name}
+          onCreated={(email, temp) => {
+            if (temp) onIssued(email, temp);
+            void onReload();
+          }}
+        />
+      )}
+
+      {org.status !== "decommissioned" && <DecommissionForm org={org} busy={busy} onRun={onRun} />}
     </section>
   );
 }
@@ -371,3 +398,206 @@ function NewOrganizationForm({ onCreated }: { onCreated: () => void }) {
   );
 }
 
+
+/**
+ * The commercial side of a tenant: who answers the phone, which time zone
+ * their day is measured in, and when the Business Associate Agreement was
+ * signed and lapses. Without these the provider keeps the contract in their
+ * head, and a lapsed BAA is invisible until it matters.
+ */
+function ContractDetails({
+  org,
+  busy,
+  onRun,
+}: {
+  org: OrganizationRow;
+  busy: string | null;
+  onRun: (key: string, fn: () => Promise<void>) => Promise<void>;
+}) {
+  const [form, setForm] = useState<OrganizationPatch>({
+    primaryContactName: org.primaryContactName ?? "",
+    primaryContactEmail: org.primaryContactEmail ?? "",
+    primaryContactPhone: org.primaryContactPhone ?? "",
+    timeZone: org.timeZone ?? "America/Denver",
+    baaSignedOn: org.baaSignedOn ?? "",
+    baaExpiresOn: org.baaExpiresOn ?? "",
+    contractNotes: org.contractNotes ?? "",
+  });
+  const [saved, setSaved] = useState(false);
+  const baaDays = org.baaExpiresOn ? Math.ceil((Date.parse(`${org.baaExpiresOn}T00:00:00Z`) - Date.now()) / 86_400_000) : null;
+
+  return (
+    <details className="border-t border-border">
+      <summary className="cursor-pointer px-4 py-3 text-sm font-medium">
+        Contract &amp; contact
+        {org.baaExpiresOn ? (
+          <span className={`ml-2 text-xs font-normal ${baaDays !== null && baaDays <= 60 ? "text-destructive" : "text-muted-foreground"}`}>
+            BAA {baaDays !== null && baaDays < 0 ? `lapsed ${fmtDate(org.baaExpiresOn)}` : `expires ${fmtDate(org.baaExpiresOn)}`}
+          </span>
+        ) : (
+          <span className="ml-2 text-xs font-normal text-muted-foreground">no BAA recorded</span>
+        )}
+      </summary>
+      <form
+        className="space-y-3 px-4 pb-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          setSaved(false);
+          void onRun(`contract:${org.id}`, async () => {
+            await platformApi.updateOrganization(org.id, {
+              ...form,
+              primaryContactName: form.primaryContactName || null,
+              primaryContactEmail: form.primaryContactEmail || null,
+              primaryContactPhone: form.primaryContactPhone || null,
+              baaSignedOn: form.baaSignedOn || null,
+              baaExpiresOn: form.baaExpiresOn || null,
+              contractNotes: form.contractNotes || null,
+            });
+            setSaved(true);
+          });
+        }}
+      >
+        <div className="grid gap-3 md:grid-cols-3">
+          <div className="space-y-1.5">
+            <Label htmlFor={`contact-name-${org.id}`}>Primary contact</Label>
+            <Input
+              id={`contact-name-${org.id}`}
+              value={form.primaryContactName ?? ""}
+              onChange={(e) => setForm((f) => ({ ...f, primaryContactName: e.target.value }))}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor={`contact-email-${org.id}`}>Email</Label>
+            <Input
+              id={`contact-email-${org.id}`}
+              type="email"
+              value={form.primaryContactEmail ?? ""}
+              onChange={(e) => setForm((f) => ({ ...f, primaryContactEmail: e.target.value }))}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor={`contact-phone-${org.id}`}>Phone</Label>
+            <Input
+              id={`contact-phone-${org.id}`}
+              value={form.primaryContactPhone ?? ""}
+              onChange={(e) => setForm((f) => ({ ...f, primaryContactPhone: e.target.value }))}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor={`baa-signed-${org.id}`}>BAA signed</Label>
+            <Input
+              id={`baa-signed-${org.id}`}
+              type="date"
+              value={form.baaSignedOn ?? ""}
+              onChange={(e) => setForm((f) => ({ ...f, baaSignedOn: e.target.value }))}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor={`baa-expires-${org.id}`}>BAA expires</Label>
+            <Input
+              id={`baa-expires-${org.id}`}
+              type="date"
+              value={form.baaExpiresOn ?? ""}
+              onChange={(e) => setForm((f) => ({ ...f, baaExpiresOn: e.target.value }))}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor={`tz-${org.id}`}>Time zone</Label>
+            <Input
+              id={`tz-${org.id}`}
+              value={form.timeZone ?? ""}
+              onChange={(e) => setForm((f) => ({ ...f, timeZone: e.target.value }))}
+              placeholder="America/Denver"
+            />
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor={`notes-${org.id}`}>Contract notes</Label>
+          <textarea
+            id={`notes-${org.id}`}
+            className="min-h-16 w-full rounded-btn border border-border bg-card px-3 py-2 text-sm"
+            value={form.contractNotes ?? ""}
+            onChange={(e) => setForm((f) => ({ ...f, contractNotes: e.target.value }))}
+          />
+        </div>
+        <div className="flex items-center gap-3">
+          <Button type="submit" size="sm" disabled={busy === `contract:${org.id}`}>
+            {busy === `contract:${org.id}` ? "Saving…" : "Save"}
+          </Button>
+          {saved && <span className="text-sm text-pill-success-fg" role="status">Saved.</span>}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          The portal warns the organization&rsquo;s administrators 60, 30 and 7 days before the agreement lapses, and once
+          on the day.
+        </p>
+      </form>
+    </details>
+  );
+}
+
+/**
+ * The end of the relationship. Suspending is a pause; this is a close-down, so
+ * it also suspends every account and ends every session. Typing the slug is
+ * the "are you sure": it cannot be clicked through by accident.
+ */
+function DecommissionForm({
+  org,
+  busy,
+  onRun,
+}: {
+  org: OrganizationRow;
+  busy: string | null;
+  onRun: (key: string, fn: () => Promise<void>) => Promise<void>;
+}) {
+  const [confirmSlug, setConfirmSlug] = useState("");
+  const [reason, setReason] = useState("");
+
+  return (
+    <details className="border-t border-border">
+      <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-destructive">Decommission</summary>
+      <form
+        className="space-y-3 px-4 pb-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void onRun(`decommission:${org.id}`, async () => {
+            await platformApi.decommissionOrganization(org.id, { confirmSlug, reason });
+            setConfirmSlug("");
+            setReason("");
+          });
+        }}
+      >
+        <p className="text-sm text-muted-foreground">
+          Closing {org.name} down suspends all {org.users.length} of its accounts and ends every session. Export the
+          organization first — this is the end of the relationship, not a pause.
+        </p>
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor={`decomm-reason-${org.id}`}>Reason</Label>
+            <Input
+              id={`decomm-reason-${org.id}`}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Contract ended; data exported"
+              required
+              minLength={4}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor={`decomm-slug-${org.id}`}>
+              Type <code className="rounded bg-muted px-1">{org.slug}</code> to confirm
+            </Label>
+            <Input id={`decomm-slug-${org.id}`} value={confirmSlug} onChange={(e) => setConfirmSlug(e.target.value)} required />
+          </div>
+        </div>
+        <Button
+          type="submit"
+          size="sm"
+          variant="destructive"
+          disabled={busy === `decommission:${org.id}` || confirmSlug !== org.slug || reason.trim().length < 4}
+        >
+          {busy === `decommission:${org.id}` ? "Closing…" : "Decommission this organization"}
+        </Button>
+      </form>
+    </details>
+  );
+}

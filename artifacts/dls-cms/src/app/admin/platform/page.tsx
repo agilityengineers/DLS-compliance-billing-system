@@ -7,7 +7,7 @@ import { PlatformPageHeader } from "@/components/admin/platform/page-header";
 import { PlatformOverviewPanel } from "@/components/admin/platform/overview";
 
 export default async function PlatformConsolePage() {
-  const { denied } = await checkAccess({ roles: ["Super_Admin"] });
+  const { denied } = await checkAccess({ capability: "platform.view" });
   if (denied) return denied;
 
   return (

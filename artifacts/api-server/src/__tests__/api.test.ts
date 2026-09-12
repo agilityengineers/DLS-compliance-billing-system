@@ -7,6 +7,8 @@ import { createDb, runMigrations, type DbHandle } from "@workspace/db";
 import { createApp } from "../app";
 import { bootstrapPlatform } from "../lib/bootstrap";
 import { loadConfig } from "../lib/config";
+import { Mailer, MemoryTransport } from "../lib/mail";
+import { totpCodeNow } from "../lib/totp";
 
 const TEST_URL = process.env.TEST_DATABASE_URL;
 
@@ -20,7 +22,19 @@ describe.skipIf(!TEST_URL)("api server", () => {
   let handle: DbHandle;
   let base = "";
   let server: ReturnType<ReturnType<typeof createApp>["listen"]>;
-  const config = loadConfig({ NODE_ENV: "test", LOGIN_MAX_FAILURES: "3", LOGIN_WINDOW_MINUTES: "15" });
+  const config = loadConfig({
+    NODE_ENV: "test",
+    LOGIN_MAX_FAILURES: "3",
+    LOGIN_WINDOW_MINUTES: "15",
+    APP_BASE_URL: "https://portal.example.test",
+    CRON_SECRET: "cron-secret-for-tests",
+  });
+  // Capture mail instead of sending or logging it, so the tests can read what
+  // the system would have put in someone's inbox.
+  const mailTransport = new MemoryTransport();
+  const mailOf = (kind: string) => mailTransport.sent.filter((m) => m.message.kind === kind);
+  const linkIn = (body: string) => /https:\/\/portal\.example\.test\S+/.exec(body)?.[0] ?? "";
+  const tokenIn = (body: string) => new URL(linkIn(body)).searchParams.get("token") ?? "";
 
   async function api<T = any>(method: string, path: string, body?: unknown, cookie?: string | null): Promise<ApiResponse<T>> {
     const res = await fetch(base + path, {
@@ -48,7 +62,7 @@ describe.skipIf(!TEST_URL)("api server", () => {
     await handle.db.execute(sql`drop schema public cascade; drop schema if exists drizzle cascade; create schema public;`);
     await runMigrations(handle.db);
     await bootstrapPlatform(handle.db, config);
-    const app = createApp({ db: handle.db, config, quiet: true });
+    const app = createApp({ db: handle.db, config, quiet: true, mailer: new Mailer(handle.db, config, mailTransport) });
     server = app.listen(0);
     await new Promise<void>((resolve) => server.once("listening", resolve));
     const address = server.address();
@@ -67,6 +81,7 @@ describe.skipIf(!TEST_URL)("api server", () => {
   let lisaTempPassword: string;
   let schedulerCookie: string;
   let schedulerId: string;
+  let supportWindowId: string;
 
   it("bootstraps the super admin and rejects a wrong password", async () => {
     const bad = await login("emailme@clarencewilliams.com", "not-the-password");
@@ -237,9 +252,45 @@ describe.skipIf(!TEST_URL)("api server", () => {
     expect(self.status).toBe(400);
   });
 
+  it("refuses a provider support session until the organization opens a window", async () => {
+    // Lisa has signed in, so this organization has taken delivery of itself:
+    // the hand-over exception is closed and a window is now required.
+    const denied = await api("POST", "/api/auth/impersonate", { userId: lisaId }, superCookie);
+    expect(denied.status).toBe(403);
+    expect(denied.body.error.code).toBe("NO_SUPPORT_WINDOW");
+    expect(denied.body.error.message).toContain("Settings");
+    expect((await api("GET", "/api/auth/me", undefined, superCookie)).body.impersonating).toBe(false);
+
+    // Asking is all the provider can do on its own.
+    const request = await api(
+      "POST",
+      "/api/platform/support-windows/request",
+      { orgId, reason: "Investigating the billing export" },
+      superCookie
+    );
+    expect(request.status).toBe(200);
+    expect(request.body.adminsNotified).toBe(1);
+
+    // An employee cannot open the door for the provider.
+    expect(
+      (await api("POST", "/api/org/support-windows", { reason: "Let them in", hours: 2 }, schedulerCookie)).status
+    ).toBe(403);
+  });
+
   it("supports view-as for the super admin and the admin, with audit attribution", async () => {
+    const granted = await api(
+      "POST",
+      "/api/org/support-windows",
+      { reason: "Help with the billing export", hours: 2 },
+      lisaCookie
+    );
+    expect(granted.status).toBe(201);
+    supportWindowId = granted.body.window.id;
+    expect(granted.body.window.hours).toBe(2);
+
     const start = await api("POST", "/api/auth/impersonate", { userId: lisaId }, superCookie);
     expect(start.status).toBe(200);
+    expect(start.body.supportWindowExpiresAt).toEqual(expect.any(String));
     let me = await api("GET", "/api/auth/me", undefined, superCookie);
     expect(me.body.impersonating).toBe(true);
     expect(me.body.realUser.role).toBe("Super_Admin");
@@ -258,8 +309,12 @@ describe.skipIf(!TEST_URL)("api server", () => {
     const row = audit.body.entries.find((e: any) => e.action === "org.feature_updated" && e.targetId === "reports.utilization");
     expect(row.actorName).toBe("Clarence Williams");
     expect(row.impersonatingName).toBe("Lisa Torres");
+    const startRow = audit.body.entries.find((e: any) => e.action === "auth.impersonation_started");
+    expect(startRow.details.supportWindowId).toBe(supportWindowId);
+    expect(startRow.details.viaHandoverException).toBe(false);
 
-    // Admin may view as her own employee, never upward or across orgs.
+    // Admin may view as her own employee, never upward or across orgs. An
+    // Admin needs no window: it is her own organization.
     expect((await api("POST", "/api/auth/impersonate", { userId: schedulerId }, lisaCookie)).status).toBe(200);
     me = await api("GET", "/api/auth/me", undefined, lisaCookie);
     expect(me.body.effectiveUser.role).toBe("Scheduler");
@@ -267,6 +322,46 @@ describe.skipIf(!TEST_URL)("api server", () => {
     expect((await api("DELETE", "/api/auth/impersonate", undefined, lisaCookie)).status).toBe(200);
     expect((await api("POST", "/api/auth/impersonate", { userId: me.body.realUser.id }, schedulerCookie)).status).toBe(403);
     expect((await api("POST", "/api/auth/impersonate", { userId: schedulerId }, schedulerCookie)).status).toBe(403);
+  });
+
+  it("closes the window on request, and the provider is locked out again", async () => {
+    const windows = await api("GET", "/api/org/support-windows", undefined, lisaCookie);
+    expect(windows.status).toBe(200);
+    expect(windows.body.maxHours).toBe(8);
+    const open = windows.body.windows.find((w: any) => w.id === supportWindowId);
+    expect(open.active).toBe(true);
+    expect(open.grantedByName).toBe("Lisa Torres");
+    expect(open.reason).toBe("Help with the billing export");
+
+    const revoked = await api("DELETE", `/api/org/support-windows/${supportWindowId}`, undefined, lisaCookie);
+    expect(revoked.status).toBe(200);
+    expect((await api("DELETE", `/api/org/support-windows/${supportWindowId}`, undefined, lisaCookie)).status).toBe(409);
+
+    const denied = await api("POST", "/api/auth/impersonate", { userId: lisaId }, superCookie);
+    expect(denied.status).toBe(403);
+    expect(denied.body.error.code).toBe("NO_SUPPORT_WINDOW");
+
+    const audit = await api("GET", "/api/platform/audit?category=support", undefined, superCookie);
+    expect(audit.body.entries.map((e: any) => e.action)).toEqual(
+      expect.arrayContaining(["support.window_granted", "support.window_revoked", "support.window_requested"])
+    );
+  });
+
+  it("lets the provider in without a window only before the hand-over is complete", async () => {
+    // "Other Agency" has an Admin who has never signed in, so there is nobody
+    // who could grant a window — and no client records to protect yet.
+    const orgs = await api("GET", "/api/platform/organizations", undefined, superCookie);
+    const other = orgs.body.organizations.find((o: any) => o.name === "Other Agency");
+    const otherAdmin = other.users.find((u: any) => u.role === "Admin");
+    expect(otherAdmin.lastLoginAt).toBeNull();
+
+    const start = await api("POST", "/api/auth/impersonate", { userId: otherAdmin.id }, superCookie);
+    expect(start.status).toBe(200);
+    expect(start.body.supportWindowExpiresAt).toBeNull();
+    await api("DELETE", "/api/auth/impersonate", undefined, superCookie);
+
+    const audit = await api("GET", "/api/platform/audit?action=auth.impersonation_started", undefined, superCookie);
+    expect(audit.body.entries[0].details.viaHandoverException).toBe(true);
   });
 
   it("suspending an account ends its sessions and blocks sign-in", async () => {
@@ -304,7 +399,7 @@ describe.skipIf(!TEST_URL)("api server", () => {
     expect(empty.status).toBe(201);
     const res = await api("GET", "/api/platform/overview", undefined, superCookie);
     expect(res.status).toBe(200);
-    expect(res.body.organizations).toEqual({ total: 3, active: 3, suspended: 0 });
+    expect(res.body.organizations).toEqual({ total: 3, active: 3, suspended: 0, decommissioned: 0 });
     expect(res.body.accounts.platform).toBe(1);
     expect(res.body.accounts.byRole.Admin).toBe(2); // Lisa and Other Owner
     expect(res.body.accounts.byRole.Scheduler).toBe(1); // Sam
@@ -431,6 +526,301 @@ describe.skipIf(!TEST_URL)("api server", () => {
     expect(JSON.stringify(res.body)).not.toContain("Success2026");
     expect(res.body.provider).not.toHaveProperty("superAdminPassword");
     expect(res.body.warnings.some((w: any) => w.message.includes("Only one provider account"))).toBe(true);
+  });
+
+  // ── hardening: sign-in records, second factor, invitations ────────────
+  it("records a failed sign-in against the account, but never names an unknown address", async () => {
+    const before = await api("GET", "/api/platform/audit?action=auth.login_failed&limit=50", undefined, superCookie);
+    expect((await login("lisa.torres@durablelifeskills.com", "definitely-wrong-1")).status).toBe(401);
+    expect((await login("ghost@nowhere.example", "definitely-wrong-1")).status).toBe(401);
+
+    const after = await api("GET", "/api/platform/audit?action=auth.login_failed&limit=50", undefined, superCookie);
+    expect(after.body.entries.length).toBe(before.body.entries.length + 1);
+    const entry = after.body.entries[0];
+    expect(entry.targetId).toBe(lisaId);
+    expect(entry.details.reason).toBe("invalid_password");
+    // The miss is counted for the limiter but never written to the audit log.
+    expect(JSON.stringify(after.body.entries)).not.toContain("ghost@nowhere.example");
+  });
+
+  it("enrols a second factor and then requires it at sign-in", async () => {
+    const created = await api(
+      "POST",
+      "/api/org/users",
+      { email: "mia.mfa@durablelifeskills.com", fullName: "Mia Mfa", role: "Scheduler", password: "Mia-2026-ok" },
+      lisaCookie
+    );
+    expect(created.status).toBe(201);
+    const first = await login("mia.mfa@durablelifeskills.com", "Mia-2026-ok");
+    expect(first.status).toBe(200);
+    let miaCookie = first.cookie!;
+
+    const setup = await api("POST", "/api/auth/totp/setup", {}, miaCookie);
+    expect(setup.status).toBe(200);
+    expect(setup.body.secret).toMatch(/^[A-Z2-7]{32}$/);
+    expect(setup.body.uri).toContain("otpauth://totp/");
+    const secret: string = setup.body.secret;
+
+    // A wrong code does not finish enrolment.
+    expect((await api("POST", "/api/auth/totp/enable", { code: "000000" }, miaCookie)).status).toBe(400);
+    const enabled = await api("POST", "/api/auth/totp/enable", { code: totpCodeNow(secret) }, miaCookie);
+    expect(enabled.status).toBe(200);
+    expect(enabled.body.recoveryCodes).toHaveLength(10);
+    const recoveryCodes: string[] = enabled.body.recoveryCodes;
+    expect((await api("GET", "/api/auth/me", undefined, miaCookie)).body.mfa.enabled).toBe(true);
+
+    // From now on the password alone only gets a half-finished sign-in.
+    const step1 = await login("mia.mfa@durablelifeskills.com", "Mia-2026-ok");
+    expect(step1.status).toBe(200);
+    expect(step1.cookie).toBeNull();
+    expect(step1.body.mfaRequired).toBe(true);
+    expect(step1.body.mfaToken).toEqual(expect.any(String));
+
+    expect((await api("POST", "/api/auth/login/mfa", { mfaToken: step1.body.mfaToken, code: "000000" })).status).toBe(401);
+    const code = totpCodeNow(secret);
+    const step2 = await api("POST", "/api/auth/login/mfa", { mfaToken: step1.body.mfaToken, code });
+    expect(step2.status).toBe(200);
+    expect(step2.cookie).toMatch(/^dls_session=/);
+    miaCookie = step2.cookie!;
+    // The handle is single-use.
+    expect((await api("POST", "/api/auth/login/mfa", { mfaToken: step1.body.mfaToken, code: totpCodeNow(secret) })).status).toBe(401);
+
+    // The same code cannot be used for a second sign-in, even though it is
+    // still inside its 30-second window.
+    const replay = await login("mia.mfa@durablelifeskills.com", "Mia-2026-ok");
+    expect((await api("POST", "/api/auth/login/mfa", { mfaToken: replay.body.mfaToken, code })).status).toBe(401);
+
+    // A recovery code works once, and only once.
+    const viaRecovery = await login("mia.mfa@durablelifeskills.com", "Mia-2026-ok");
+    const recovered = await api("POST", "/api/auth/login/mfa", {
+      mfaToken: viaRecovery.body.mfaToken,
+      recoveryCode: recoveryCodes[0],
+    });
+    expect(recovered.status).toBe(200);
+    expect(recovered.body.usedRecoveryCode).toBe(true);
+    expect(recovered.body.remainingRecoveryCodes).toBe(9);
+    const again = await login("mia.mfa@durablelifeskills.com", "Mia-2026-ok");
+    expect((await api("POST", "/api/auth/login/mfa", { mfaToken: again.body.mfaToken, recoveryCode: recoveryCodes[0] })).status).toBe(401);
+
+    // Turning it off needs the password, not just the session.
+    expect((await api("DELETE", "/api/auth/totp", { currentPassword: "wrong-password-1" }, miaCookie)).status).toBe(400);
+    expect((await api("DELETE", "/api/auth/totp", { currentPassword: "Mia-2026-ok" }, miaCookie)).status).toBe(200);
+    expect((await login("mia.mfa@durablelifeskills.com", "Mia-2026-ok")).cookie).toMatch(/^dls_session=/);
+  });
+
+  it("invites a new account by email and lets them set their own password", async () => {
+    const created = await api(
+      "POST",
+      "/api/org/users",
+      { email: "ivy.invite@durablelifeskills.com", fullName: "Ivy Invite", role: "Field_Staff" },
+      lisaCookie
+    );
+    expect(created.status).toBe(201);
+    expect(created.body.invite.sentTo).toBe("ivy.invite@durablelifeskills.com");
+    // The one-time password is still issued as the fallback for a deployment
+    // with no mail provider.
+    expect(created.body.temporaryPassword).toEqual(expect.any(String));
+
+    const invite = mailOf("account.invite").at(-1)!;
+    expect(invite.to).toBe("ivy.invite@durablelifeskills.com");
+    expect(invite.from).toBe("noreply@durablelifeskills.com");
+    expect(invite.message.subject).toContain("Durable Life Skills");
+    const token = tokenIn(invite.message.text);
+    expect(token).toEqual(expect.any(String));
+
+    const peek = await api("GET", `/api/auth/token/invite/${token}`);
+    expect(peek.status).toBe(200);
+    expect(peek.body.fullName).toBe("Ivy Invite");
+
+    expect((await api("POST", "/api/auth/accept-invite", { token, password: "short1" })).status).toBe(400);
+    const accepted = await api("POST", "/api/auth/accept-invite", { token, password: "Ivy-Invite-2026" });
+    expect(accepted.status).toBe(200);
+    expect(accepted.cookie).toMatch(/^dls_session=/);
+    expect(accepted.body.mustChangePassword).toBe(false);
+    // The link cannot be used twice, and the one-time password is now dead.
+    expect((await api("POST", "/api/auth/accept-invite", { token, password: "Ivy-Invite-2026" })).status).toBe(400);
+    expect((await api("GET", `/api/auth/token/invite/${token}`)).status).toBe(400);
+    expect((await login("ivy.invite@durablelifeskills.com", created.body.temporaryPassword)).status).toBe(401);
+    expect((await login("ivy.invite@durablelifeskills.com", "Ivy-Invite-2026")).status).toBe(200);
+  });
+
+  it("answers a forgotten password the same way whether or not the address exists", async () => {
+    const known = await api("POST", "/api/auth/forgot-password", { email: "ivy.invite@durablelifeskills.com" });
+    const unknown = await api("POST", "/api/auth/forgot-password", { email: "nobody-at-all@example.test" });
+    expect(known.status).toBe(200);
+    expect(unknown.status).toBe(200);
+    expect(known.body).toEqual(unknown.body);
+
+    const reset = mailOf("account.password_reset").at(-1)!;
+    expect(reset.to).toBe("ivy.invite@durablelifeskills.com");
+    const token = tokenIn(reset.message.text);
+    const done = await api("POST", "/api/auth/reset-password", { token, password: "Ivy-Reset-2026" });
+    expect(done.status).toBe(200);
+    expect((await login("ivy.invite@durablelifeskills.com", "Ivy-Invite-2026")).status).toBe(401);
+    expect((await login("ivy.invite@durablelifeskills.com", "Ivy-Reset-2026")).status).toBe(200);
+  });
+
+  // ── hardening: the support role ───────────────────────────────────────
+  it("cuts a support account that can read the console but change nothing", async () => {
+    const created = await api(
+      "POST",
+      "/api/platform/provider-users",
+      { email: "sasha.support@agilityengineers.com", fullName: "Sasha Support", password: "Sasha-2026-ok" },
+      superCookie
+    );
+    expect(created.status).toBe(201);
+    expect(created.body.user.role).toBe("Platform_Support");
+    expect(created.body.user.orgId).toBeNull();
+
+    const signIn = await login("sasha.support@agilityengineers.com", "Sasha-2026-ok");
+    expect(signIn.status).toBe(200);
+    const supportCookie = signIn.cookie!;
+
+    // Reads the console.
+    for (const path of ["/api/platform/overview", "/api/platform/organizations", "/api/platform/sessions", "/api/platform/audit", "/api/platform/system"]) {
+      expect((await api("GET", path, undefined, supportCookie)).status).toBe(200);
+    }
+    // Changes nothing.
+    expect((await api("PUT", "/api/platform/features/qa.flags", { enabled: false }, supportCookie)).status).toBe(403);
+    expect((await api("POST", "/api/platform/organizations", { name: "Sneaky Agency" }, supportCookie)).status).toBe(403);
+    expect(
+      (await api("POST", "/api/platform/users", { orgId, email: "x@y.example", fullName: "X", role: "Admin" }, supportCookie)).status
+    ).toBe(403);
+    expect((await api("POST", `/api/platform/users/${schedulerId}/reset-password`, {}, supportCookie)).status).toBe(403);
+    expect(
+      (await api("POST", "/api/platform/provider-users", { email: "more@support.example", fullName: "More" }, supportCookie)).status
+    ).toBe(403);
+    // Support cannot view as anyone without a window either, and never upward.
+    expect((await api("POST", "/api/auth/impersonate", { userId: lisaId }, supportCookie)).body.error.code).toBe("NO_SUPPORT_WINDOW");
+
+    // The Super Admin can suspend the support account it cut.
+    expect((await api("PATCH", `/api/platform/users/${created.body.user.id}`, { status: "Suspended" }, superCookie)).status).toBe(200);
+    expect((await api("GET", "/api/auth/me", undefined, supportCookie)).status).toBe(401);
+  });
+
+  // ── hardening: an organization's middle and end ───────────────────────
+  it("records the contract, then decommissions an organization for good reason", async () => {
+    const orgs = await api("GET", "/api/platform/organizations", undefined, superCookie);
+    const target = orgs.body.organizations.find((o: any) => o.name === "Empty Agency");
+
+    const patched = await api(
+      "PATCH",
+      `/api/platform/organizations/${target.id}`,
+      {
+        primaryContactName: "Dana Owner",
+        primaryContactEmail: "dana@empty.example",
+        baaSignedOn: "2026-01-15",
+        baaExpiresOn: "2027-01-15",
+        timeZone: "America/Denver",
+        contractNotes: "Pilot agreement, renews yearly.",
+      },
+      superCookie
+    );
+    expect(patched.status).toBe(200);
+    expect(
+      (await api("PATCH", `/api/platform/organizations/${target.id}`, { baaSignedOn: "2026-06-01", baaExpiresOn: "2026-01-01" }, superCookie))
+        .status
+    ).toBe(400);
+
+    const exported = await api("GET", `/api/platform/organizations/${target.id}/export`, undefined, superCookie);
+    expect(exported.status).toBe(200);
+    expect(exported.body.organization.slug).toBe(target.slug);
+    expect(exported.body.organization.primaryContactEmail).toBe("dana@empty.example");
+    expect(Array.isArray(exported.body.features)).toBe(true);
+    expect(Array.isArray(exported.body.auditLog)).toBe(true);
+    // Nothing that could be replayed as a credential leaves the building.
+    expect(JSON.stringify(exported.body)).not.toContain("passwordHash");
+    expect(JSON.stringify(exported.body)).not.toContain("scrypt$");
+
+    // Closing down needs the slug typed and a reason given.
+    expect((await api("POST", `/api/platform/organizations/${target.id}/decommission`, { confirmSlug: "wrong", reason: "Contract ended" }, superCookie)).status).toBe(400);
+    const done = await api(
+      "POST",
+      `/api/platform/organizations/${target.id}/decommission`,
+      { confirmSlug: target.slug, reason: "Pilot finished; data exported 2026-09-12" },
+      superCookie
+    );
+    expect(done.status).toBe(200);
+    const after = await api("GET", "/api/platform/organizations", undefined, superCookie);
+    const closed = after.body.organizations.find((o: any) => o.id === target.id);
+    expect(closed.status).toBe("decommissioned");
+    expect(closed.decommissionReason).toContain("Pilot finished");
+    expect((await api("POST", `/api/platform/organizations/${target.id}/decommission`, { confirmSlug: target.slug, reason: "again" }, superCookie)).status).toBe(409);
+  });
+
+  // ── hardening: audit chain, jobs and mail ─────────────────────────────
+  it("verifies the audit chain and exports it", async () => {
+    const verify = await api("GET", "/api/platform/audit/verify", undefined, superCookie);
+    expect(verify.status).toBe(200);
+    expect(verify.body.ok).toBe(true);
+    expect(verify.body.checked).toBeGreaterThan(10);
+    expect(verify.body.firstBadSeq).toBeNull();
+    expect(verify.body.lastHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(verify.body.retentionYears).toBe(6);
+
+    const csv = await fetch(`${base}/api/platform/audit/export?category=support`, { headers: { cookie: superCookie } });
+    expect(csv.status).toBe(200);
+    expect(csv.headers.get("content-type")).toContain("text/csv");
+    const text = await csv.text();
+    expect(text.split("\n")[0]).toBe("seq,when,actor,acting_as,action,organization,target_type,target_id,details,ip,hash");
+    expect(text).toContain("support.window_granted");
+    // The export is itself an event worth recording.
+    const audit = await api("GET", "/api/platform/audit?action=platform.audit_exported", undefined, superCookie);
+    expect(audit.body.entries[0].details.rows).toBeGreaterThan(0);
+  });
+
+  it("runs a maintenance job on demand and remembers that it ran", async () => {
+    const before = await api("GET", "/api/platform/jobs", undefined, superCookie);
+    expect(before.status).toBe(200);
+    expect(before.body.jobs.length).toBeGreaterThan(4);
+    expect(before.body.externalCronConfigured).toBe(true);
+    expect(before.body.jobs.every((j: any) => j.lastRun === null)).toBe(true);
+
+    const run = await api("POST", "/api/platform/jobs/audit.verify_chain/run", {}, superCookie);
+    expect(run.status).toBe(200);
+    expect(run.body.ok).toBe(true);
+    expect(run.body.items).toBeGreaterThan(0);
+
+    const after = await api("GET", "/api/platform/jobs", undefined, superCookie);
+    const verified = after.body.jobs.find((j: any) => j.name === "audit.verify_chain");
+    expect(verified.lastRun.ok).toBe(true);
+    expect(verified.lastRun.trigger).toBe("manual");
+    expect((await api("POST", "/api/platform/jobs/nope.not.a.job/run", {}, superCookie)).status).toBe(404);
+
+    // An external cron drives the same jobs with the shared secret.
+    const denied = await fetch(`${base}/api/jobs/sessions.prune/run`, { method: "POST", headers: { "x-cron-secret": "wrong" } });
+    expect(denied.status).toBe(403);
+    const allowed = await fetch(`${base}/api/jobs/sessions.prune/run`, {
+      method: "POST",
+      headers: { "x-cron-secret": "cron-secret-for-tests" },
+    });
+    expect(allowed.status).toBe(200);
+    expect(((await allowed.json()) as { ok: boolean }).ok).toBe(true);
+  });
+
+  it("shows what the system tried to send, subjects only", async () => {
+    const res = await api("GET", "/api/platform/mail?limit=100", undefined, superCookie);
+    expect(res.status).toBe(200);
+    const kinds = res.body.messages.map((m: any) => m.kind);
+    expect(kinds).toEqual(expect.arrayContaining(["account.invite", "account.password_reset", "support.window_requested"]));
+    const invite = res.body.messages.find((m: any) => m.kind === "account.invite");
+    expect(invite.sender).toBe("noreply");
+    expect(invite.status).toBe("sent");
+    // A body would eventually carry a name; only the subject is kept.
+    expect(Object.keys(invite)).not.toContain("body");
+    expect(JSON.stringify(res.body)).not.toContain("set-password?token=");
+  });
+
+  it("reports readiness for an uptime check", async () => {
+    const ready = await fetch(`${base}/api/readyz`);
+    expect(ready.status).toBe(200);
+    const body = (await ready.json()) as { status: string; database: { ok: boolean }; migrations: { pending: string[] } };
+    expect(body.status).toBe("ready");
+    expect(body.database.ok).toBe(true);
+    expect(body.migrations.pending).toEqual([]);
+    // The shallow check stays cheap and needs no session.
+    const shallow = (await (await fetch(`${base}/api/healthz`)).json()) as { status: string };
+    expect(shallow.status).toBe("ok");
   });
 
   it("rate-limits repeated failures per email and address", async () => {

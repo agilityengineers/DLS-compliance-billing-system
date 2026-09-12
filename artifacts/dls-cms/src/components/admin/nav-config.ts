@@ -10,7 +10,7 @@
 // console, grouped by the job at hand — overview, organizations and people,
 // capabilities, security and compliance, system. None of it opens client
 // records.
-import type { FeatureKey, Role } from "@workspace/features";
+import { hasPlatformCapability, isPlatformRole, type FeatureKey, type PlatformCapability, type Role } from "@workspace/features";
 
 export type SectionKey =
   | "CORE"
@@ -35,6 +35,8 @@ export interface NavItem {
   lockedForNonAdmin?: boolean;
   /** One line for the overview's quick-links; also the collapsed-rail tooltip. */
   description?: string;
+  /** Provider screens only: what the role must be able to do to see it. */
+  capability?: PlatformCapability;
 }
 
 export interface NavSection {
@@ -107,6 +109,7 @@ export const PLATFORM_NAV: NavSection[] = [
         href: "/admin/platform",
         label: "Platform overview",
         icon: "LayoutDashboard",
+        capability: "platform.view",
         description: "What needs attention, activity this week and the numbers at a glance."
       }
     ]
@@ -120,13 +123,15 @@ export const PLATFORM_NAV: NavSection[] = [
         href: "/admin/platform/organizations",
         label: "Organizations",
         icon: "Building2",
-        description: "Create an organization, hand it to its administrator, suspend or rename it."
+        capability: "platform.view",
+        description: "Create an organization, record its contract, hand it over, suspend or close it down."
       },
       {
         href: "/admin/platform/accounts",
         label: "Accounts",
         icon: "Users",
-        description: "Every sign-in on the platform: search, reset a password, suspend, sign out everywhere."
+        capability: "platform.view",
+        description: "Every sign-in on the platform: search, invite, reset a password, suspend, sign out everywhere."
       }
     ]
   },
@@ -139,12 +144,14 @@ export const PLATFORM_NAV: NavSection[] = [
         href: "/admin/platform/features",
         label: "Feature switchboard",
         icon: "SlidersHorizontal",
+        capability: "platform.features",
         description: "Tier 1: which capabilities organizations may use at all."
       },
       {
         href: "/admin/platform/adoption",
         label: "Feature adoption",
         icon: "Grid3x3",
+        capability: "platform.view",
         description: "Which organization has switched on what, and for which roles."
       }
     ]
@@ -158,19 +165,29 @@ export const PLATFORM_NAV: NavSection[] = [
         href: "/admin/platform/support",
         label: "Support access",
         icon: "LifeBuoy",
-        description: "Start an audited view-as session and review every past one."
+        capability: "platform.support",
+        description: "Ask for a window, open an audited view-as session, review every past one."
+      },
+      {
+        href: "/admin/platform/security",
+        label: "Security",
+        icon: "ShieldCheck",
+        capability: "platform.view",
+        description: "Two-factor sign-in, provider accounts, support windows and failed sign-ins."
       },
       {
         href: "/admin/platform/sessions",
         label: "Active sessions",
         icon: "MonitorSmartphone",
+        capability: "platform.view",
         description: "Who is signed in right now, from where; end a session."
       },
       {
         href: "/admin/platform/audit",
         label: "Audit log",
         icon: "ScrollText",
-        description: "Every sign-in, switch flip and account change, filterable and exportable."
+        capability: "platform.audit",
+        description: "Every sign-in, switch flip and account change, with tamper checking and export."
       }
     ]
   },
@@ -183,7 +200,8 @@ export const PLATFORM_NAV: NavSection[] = [
         href: "/admin/platform/system",
         label: "System status",
         icon: "Activity",
-        description: "Service, database and migrations, sign-in policy, configuration warnings."
+        capability: "platform.system",
+        description: "Service, database, migrations, mail, scheduled jobs and configuration warnings."
       }
     ]
   }
@@ -203,7 +221,14 @@ export function navForRole(
   features: ReadonlySet<FeatureKey>,
   orgFeatures: ReadonlySet<FeatureKey> = features
 ): NavSection[] {
-  if (role === "Super_Admin") return PLATFORM_NAV;
+  // A provider role sees the console, trimmed to what it may actually do: a
+  // support account is never offered the switchboard it would be refused.
+  if (isPlatformRole(role)) {
+    return PLATFORM_NAV.map((s) => ({
+      ...s,
+      items: s.items.filter((i) => !i.capability || hasPlatformCapability(role, i.capability)),
+    })).filter((s) => s.items.length > 0);
+  }
   const isAdmin = role === "Admin";
   return ADMIN_NAV
     .map((s) => ({

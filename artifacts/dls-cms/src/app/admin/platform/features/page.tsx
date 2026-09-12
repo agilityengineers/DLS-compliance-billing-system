@@ -5,7 +5,7 @@ import { PlatformPageHeader } from "@/components/admin/platform/page-header";
 import { FeatureSwitchboard } from "@/components/admin/feature-switchboard";
 
 export default async function PlatformFeaturesPage() {
-  const { denied } = await checkAccess({ roles: ["Super_Admin"] });
+  const { denied } = await checkAccess({ capability: "platform.features" });
   if (denied) return denied;
 
   return (

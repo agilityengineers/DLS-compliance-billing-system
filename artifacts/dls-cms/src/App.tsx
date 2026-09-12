@@ -16,6 +16,7 @@ import LoginPage from "@/app/(auth)/login/page";
 import LogoutPage from "@/app/auth/logout/page";
 import ResetPasswordPage from "@/app/auth/reset/page";
 import AuthCallbackPage from "@/app/auth/callback/page";
+import SetPasswordPage from "@/app/auth/set-password/page";
 
 // ── Admin pages ───────────────────────────────────────────────────────────
 import AdminDashboard from "@/app/admin/page";
@@ -41,6 +42,7 @@ import AdminPlatformAccounts from "@/app/admin/platform/accounts/page";
 import AdminPlatformFeatures from "@/app/admin/platform/features/page";
 import AdminPlatformAdoption from "@/app/admin/platform/adoption/page";
 import AdminPlatformSupport from "@/app/admin/platform/support/page";
+import AdminPlatformSecurity from "@/app/admin/platform/security/page";
 import AdminPlatformSessions from "@/app/admin/platform/sessions/page";
 import AdminPlatformAudit from "@/app/admin/platform/audit/page";
 import AdminPlatformSystem from "@/app/admin/platform/system/page";
@@ -102,6 +104,7 @@ function Router() {
       <Route path="/logout">{() => <LogoutPage />}</Route>
       <Route path="/auth/logout">{() => <LogoutPage />}</Route>
       <Route path="/auth/reset">{() => <ResetPasswordPage />}</Route>
+      <Route path="/auth/set-password">{() => <SetPasswordPage />}</Route>
       <Route path="/auth/callback">{() => <AuthCallbackPage />}</Route>
 
       {/* Admin console */}
@@ -128,6 +131,7 @@ function Router() {
       <Route path="/admin/platform/features">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminPlatformFeatures as AsyncComponent)} />}</Route>
       <Route path="/admin/platform/adoption">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminPlatformAdoption as AsyncComponent)} />}</Route>
       <Route path="/admin/platform/support">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminPlatformSupport as AsyncComponent)} />}</Route>
+      <Route path="/admin/platform/security">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminPlatformSecurity as AsyncComponent)} />}</Route>
       <Route path="/admin/platform/sessions">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminPlatformSessions as AsyncComponent)} />}</Route>
       <Route path="/admin/platform/audit">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminPlatformAudit as AsyncComponent)} />}</Route>
       <Route path="/admin/platform/system">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminPlatformSystem as AsyncComponent)} />}</Route>

@@ -2,6 +2,8 @@
 
 **Audience:** the platform owner (Super Admin) and the developers who maintain the console. **Date:** 2026-09-12. Code references are for the developers; skip them if you are reading as the owner.
 
+> **Update, 2026-09-12.** Items 1 to 8 of "what you are not yet thinking about" have since been built, along with item 10. Each is marked below, and [the platform hardening note](./2026-09-platform-hardening.md) describes what shipped and what an operator still has to configure. The analysis itself is left as written.
+
 ## The short version
 
 Until now the Super Admin had one menu entry, "Platform console", with three things stacked on one page: the feature switchboard, the organizations with their accounts, and the audit table. That is fine for a first week and useless by the third month, for the same reason a hotel would not run its front desk, housekeeping and security from a single clipboard.
@@ -36,6 +38,8 @@ These are ranked by how much they would hurt on a bad day. Each says what exists
 
 ### 1. You are one lost password away from a locked building
 
+**Status: closed.** A break-glass provider account (`SUPER_ADMIN_BREAKGLASS_*`) and TOTP two-factor sign-in, which the deployment can require of provider accounts. See the [hardening note](./2026-09-platform-hardening.md).
+
 There is exactly one provider account, protected by one password, with no second factor. If that password is lost or leaked, recovery means a deployment operator setting `SUPER_ADMIN_PASSWORD` and `SUPER_ADMIN_FORCE_RESET=true` and restarting the API. That works, but it is a scramble, and it means whoever holds the deployment secrets effectively holds the master key too.
 
 * Now: the overview and System status both flag "only one provider account". System status shows whether the force-reset flag is still on so you do not leave it that way.
@@ -43,6 +47,8 @@ There is exactly one provider account, protected by one password, with no second
 * Track as: new work-plan rows under section 5 (security). Effort: break-glass account is configuration only; TOTP is about 3 days.
 
 ### 2. The support window is a promise, not yet a rule
+
+**Status: closed.** An Admin grants a time-boxed window from Settings, and outside one the API refuses the session. Decision D-02 is now implemented rather than described.
 
 Decision D-02 in the work plan says the provider gets into an organization's data only inside a support window the organization's Admin grants, for a limited time. Today you can start a "view as" session whenever you like. It is audited and now visible while it runs, but nobody on the organization's side has to say yes first.
 
@@ -52,6 +58,8 @@ Decision D-02 in the work plan says the provider gets into an organization's dat
 
 ### 3. You can see successful sign-ins but not the failed ones
 
+**Status: closed.** Every attempt is recorded, failures against a real account are audited, and the limiter reads the database so it survives restarts and spans instances.
+
 Failed sign-ins are counted in memory for the lock-out rule and then forgotten. A password-guessing attempt against Lisa's account leaves no trace unless it succeeds. The lock-out counter also lives inside one API process, so it stops working the moment the API runs on two instances.
 
 * Now: the audit log shows every successful sign-in and the sign-in policy is visible on System status.
@@ -59,6 +67,8 @@ Failed sign-ins are counted in memory for the lock-out rule and then forgotten. 
 * Effort: about 1 day.
 
 ### 4. The audit log has no retention rule and no tamper evidence
+
+**Status: closed.** A hash chain with a verify button and a nightly job, triggers that refuse updates and deletes outright, and a stated retention period shown on System status.
 
 The log is append-only from the app's point of view, and you can now filter and export it. But nothing states how long it is kept, nothing archives it, and a database administrator could edit a row without leaving a mark.
 
@@ -68,6 +78,8 @@ The log is append-only from the app's point of view, and you can now filter and 
 
 ### 5. Organizations have a start but no middle or end
 
+**Status: closed.** Contract and contact fields, a recorded Business Associate Agreement with expiry warnings, a full export, and a decommission flow.
+
 You can create, rename and suspend an organization. You cannot record when its Business Associate Agreement was signed, export its data, or retire it. There is also no per-organization configuration beyond the switchboard: time zone, billing identifiers (NPI, tax ID) and the like are still server-wide environment settings.
 
 * Now: the Organizations screen shows the hand-over checklist so a half-onboarded tenant is obvious.
@@ -75,6 +87,8 @@ You can create, rename and suspend an organization. You cannot record when its B
 * Track as: new roadmap items; BAA tracking ties to R1.x. Effort: fields and dates 1 day; export and decommission 3 to 4 days once domain data is in the database.
 
 ### 6. Handing over a password by hand does not scale
+
+**Status: closed.** Single-use invitation and reset links with a self-service recovery flow, and a mailer that records and logs everything until a provider is configured. The SendGrid key remains the operator's step.
 
 New accounts get a one-time password that you read out or paste into a message. That is acceptable for one organization with a dozen people. It is not acceptable for the second organization, and it means there is no self-service "forgot my password".
 
@@ -84,6 +98,8 @@ New accounts get a one-time password that you read out or paste into a message. 
 
 ### 7. Nothing wakes anyone up
 
+**Status: mostly closed.** A scheduler with seven jobs and a visible history, a cron endpoint for hosts that sleep idle instances, and a readiness endpoint. An uptime monitor and an error tracker are configuration, not code.
+
 System status tells you whether the database answered and whether migrations are pending, but only when you look. There is no uptime check, no alert when the API stops answering, and no scheduled job runner at all, so the nightly credential-expiry sweep and the Relias sync that the roadmap describes simply never run.
 
 * Missing: an external uptime monitor pointed at `/api/healthz`, error monitoring with PHI scrubbing, and a scheduler (a cron in the deployment or a small in-process scheduler) with a "last ran" line on System status.
@@ -91,11 +107,15 @@ System status tells you whether the database answered and whether migrations are
 
 ### 8. Backups exist only if the host says so
 
+**Status: still open.** This lives in the database host rather than in the application.
+
 The console cannot show you whether point-in-time recovery is on or when a restore was last rehearsed, because that lives in the database host, not the app. It still belongs on your checklist.
 
 * Track as: work-plan row R6.3. Effort: a restore drill is an afternoon.
 
 ### 9. You have no way to talk to everyone
+
+**Status: still open.**
 
 There is no platform-wide notice ("maintenance Sunday 6 to 7 am") and no maintenance mode. When you need to take the service down, the first anyone hears of it is an error page.
 
@@ -104,6 +124,8 @@ There is no platform-wide notice ("maintenance Sunday 6 to 7 am") and no mainten
 
 ### 10. Every provider operator is a Super Admin
 
+**Status: closed.** A Support role reads the console and works an incident but changes no configuration, creates no accounts and cuts no keys.
+
 If a second person ever helps with support, they get the whole master key ring: switchboard, organizations, accounts, and view-as. A support engineer should be able to open a view-as session and read the audit log without being able to switch off billing for everyone.
 
 * Missing: a second provider role ("Support") with a narrower grant, expressed in the same role hierarchy the API already enforces.
@@ -111,15 +133,21 @@ If a second person ever helps with support, they get the whole master key ring: 
 
 ### 11. Small things worth an hour each
 
+**Status: partly closed.** System status now reads and displays `GIT_SHA`, so stamping it at deploy time is a one-line change. The dormant-account policy is still undecided.
+
 * Stamp the build. System status shows the Git commit if `GIT_SHA` is set at deploy time; set it, so "which version is running" is never a guess.
 * Show the web app's data mode on the overview. The demo-data banner already exists; the provider should also see "this deployment serves synthetic client data" in one place.
 * Decide what "dormant" means for you. The overview notes accounts with no sign-in for 90 days; if your policy is to suspend them, say so and the note becomes an action.
 
 ## A sensible order
 
-1. **This month:** break-glass provider account; failed-sign-in audit; uptime monitor on `/api/healthz`; write down the audit retention period. All small, all reduce your worst day.
-2. **Before the second organization:** the support window (D-02); invitation emails and self-service reset; BAA and contract dates on the organization.
-3. **Before real PHI:** TOTP second factor; scheduled audit export with tamper evidence; the Support provider role; backups verified by a restore drill.
+The engineering half of this list is done; what remains is configuration and two decisions.
+
+1. **This week, in the deployment:** set the break-glass account; enrol both provider accounts in two-factor and then require it; set a cron secret and point a schedule at the jobs endpoint; point an uptime monitor at the health endpoint; stamp the build.
+2. **Before the second organization:** the mail key and base URL, so invitations and resets are sent rather than logged; record each organization's agreement dates.
+3. **Before real PHI:** a rehearsed database restore; an error tracker with PHI scrubbing; decide the dormant-account policy; decide whether a maintenance-notice banner is worth building.
+
+The exact settings are listed in the [platform hardening note](./2026-09-platform-hardening.md).
 
 ## For the developers: what shipped
 

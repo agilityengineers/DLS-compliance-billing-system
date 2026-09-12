@@ -5,7 +5,7 @@ import { PlatformPageHeader } from "@/components/admin/platform/page-header";
 import { SystemStatusPanel } from "@/components/admin/platform/system-status";
 
 export default async function PlatformSystemPage() {
-  const { denied } = await checkAccess({ roles: ["Super_Admin"] });
+  const { denied } = await checkAccess({ capability: "platform.system" });
   if (denied) return denied;
 
   return (

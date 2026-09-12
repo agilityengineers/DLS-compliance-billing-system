@@ -5,7 +5,7 @@ import { PlatformPageHeader } from "@/components/admin/platform/page-header";
 import { AuditExplorer } from "@/components/admin/platform/audit-explorer";
 
 export default async function PlatformAuditPage() {
-  const { denied } = await checkAccess({ roles: ["Super_Admin"] });
+  const { denied } = await checkAccess({ capability: "platform.audit" });
   if (denied) return denied;
 
   return (

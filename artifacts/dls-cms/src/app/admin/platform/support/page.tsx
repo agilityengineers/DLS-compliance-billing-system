@@ -5,7 +5,7 @@ import { PlatformPageHeader } from "@/components/admin/platform/page-header";
 import { SupportAccessPanel } from "@/components/admin/platform/support-access";
 
 export default async function PlatformSupportPage() {
-  const { ctx, denied } = await checkAccess({ roles: ["Super_Admin"] });
+  const { ctx, denied } = await checkAccess({ capability: "platform.support" });
   if (denied) return denied;
 
   return (

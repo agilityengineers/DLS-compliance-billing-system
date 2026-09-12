@@ -8,7 +8,7 @@
 // redirect loop or a 500.
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
-import { getFeature, type FeatureKey, type Role } from "@workspace/features";
+import { getFeature, hasPlatformCapability, type FeatureKey, type PlatformCapability, type Role } from "@workspace/features";
 import { getSessionContext, type SessionContext } from "@/lib/auth/session";
 import { AccessDenied } from "@/components/access-denied";
 
@@ -16,12 +16,24 @@ export interface AccessCheck {
   feature?: FeatureKey;
   /** Effective roles allowed. Defaults to Admin + Scheduler (the desktop console). */
   roles?: Role[];
+  /**
+   * A provider-console screen. Gating on the capability rather than the role
+   * is what lets a support account read the console without also holding the
+   * switchboard; it implies the provider roles, so `roles` can be left out.
+   */
+  capability?: PlatformCapability;
 }
 
 export async function checkAccess(check: AccessCheck = {}): Promise<{ ctx: SessionContext; denied: ReactNode | null }> {
   const ctx = await getSessionContext();
   if (!ctx.effectiveUser) redirect("/login");
   const role = ctx.effectiveUser.role;
+  if (check.capability) {
+    if (!hasPlatformCapability(role, check.capability)) {
+      return { ctx, denied: <AccessDenied reason={{ kind: "capability", capability: check.capability, viewerRole: role }} /> };
+    }
+    return { ctx, denied: null };
+  }
   const allowed = check.roles ?? ["Admin", "Scheduler"];
   if (!allowed.includes(role)) {
     return { ctx, denied: <AccessDenied reason={{ kind: "role", allowed, viewerRole: role }} /> };

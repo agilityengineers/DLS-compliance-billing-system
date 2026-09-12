@@ -14,8 +14,8 @@ Sources: [launch-readiness review](./2026-09-launch-readiness-review.md) (defect
 
 | ID | Decision | Detail | Approver | Status | Notes |
 |---|---|---|---|---|---|
-| D-01 | Role mapping: add `Super_Admin` above `Admin`; keep `Scheduler` and `Field_Staff` as the two employee roles | Roadmap q.1 | DLS owner | In progress | Decided by the architect 2026-09-05; implemented 2026-09-08 (`lib/features`); owner confirmation pending |
-| D-02 | Vendor access: Super Admin has no standing PHI access; PHI only inside an Admin-granted, time-boxed, audited support window | Roadmap q.2 | DLS owner | In progress | Decided by the architect 2026-09-05; implemented 2026-09-08 as audited "view as" from the platform console (the Admin-granted, time-boxed window is not yet enforced); owner confirmation pending |
+| D-01 | Role mapping: add `Super_Admin` above `Admin`; keep `Scheduler` and `Field_Staff` as the two employee roles | Roadmap q.1 | DLS owner | In progress | Decided by the architect 2026-09-05; implemented 2026-09-08 (`lib/features`); a provider-side `Platform_Support` role added 2026-09-12 so support work needs no master key; owner confirmation pending |
+| D-02 | Vendor access: Super Admin has no standing PHI access; PHI only inside an Admin-granted, time-boxed, audited support window | Roadmap q.2 | DLS owner | In progress | Decided by the architect 2026-09-05; fully implemented 2026-09-12 — the Admin grants a window (Settings → Support access) and the API refuses a support session without one (`artifacts/api-server/src/lib/support-access.ts`); owner confirmation pending |
 | D-03 | Intake paperwork in launch scope; contents of the intake packet and the yearly renewal packet | Roadmap q.3 | DLS owner | Open | Drives roadmap 2.2 |
 | D-04 | Authorizations in hours or units; rounding rule under HCPF; authorization week Sun–Sat | Roadmap q.4 | DLS owner | Open | Drives roadmap 3.6 |
 | D-05 | Attendance and person-centered-profile samples: build generic v1 now or wait | Roadmap q.5 | DLS owner | Open | Linked to BL-002 |
@@ -43,10 +43,10 @@ Sources: [launch-readiness review](./2026-09-launch-readiness-review.md) (defect
 | 0.2 | `Super_Admin` role at every enum site | — | D-01 | 2 d | Dev | Architect | Done (2026-09-08, `@workspace/features` roles shared by API + web) |
 | 0.3 | Feature flags: table, guard trigger, `fn_feature_enabled`, RLS, migration 0006, demo parity | — | 0.2, A-01 | 5 d | Dev | Architect | Done (2026-09-08 — implemented in the API server + PostgreSQL (`platform_features`, `org_features`, tier rules in `validateOrgChange`) instead of Supabase RLS; see `docs/access-model.md`) |
 | 0.4 | `requireFeature` at every gate, nav rewrite, two-tier Settings editor, Super Admin console; `Completed` on note submit when EVV is off | — | 0.3, A-03 | 5 d | Dev | Architect | Done (2026-09-08) |
-| 0.5 | Employee onboarding: invite-based Add User, invite-only Google sign-in, password reset | #1, #22 | — | 2 d | Dev | Architect | In progress (2026-09-08: password accounts with admin-issued one-time passwords and forced first-sign-in change; email invites and Google sign-in not wired — no mail/OAuth provider yet) |
+| 0.5 | Employee onboarding: invite-based Add User, invite-only Google sign-in, password reset | #1, #22 | — | 2 d | Dev | Architect | In progress (2026-09-12: single-use invitation links, self-service "forgot password" and a mailer that logs when unconfigured; the on-screen one-time password remains the fallback. Needs the SendGrid key + BAA to actually send. Google sign-in not wired) |
 | 0.6 | Real-database breakers: timesheet index and result checks; notes query limit; eMAR "Missed" policy; geofence trigger repair; seed runs | #2, #9, #6, #38, #39 | — | 3 d | Dev | Architect | In progress (PR-A) |
 | 0.7 | Demo-mode guard at startup; deployment notes | #7 | — | 0.5 d | Dev | Architect | In progress (PR-A) |
-| 0.8 | HIPAA blockers: service-worker cache, idle-timeout wipe, impersonation audit, roster search off the URL, Scheduler column guard, error-string mapping, security headers | #20, #21, #23, #24, #25, #27 (headers), #28 (idle) | — | 3 d | Dev | Architect | Open |
+| 0.8 | HIPAA blockers: service-worker cache, idle-timeout wipe, impersonation audit, roster search off the URL, Scheduler column guard, error-string mapping, security headers | #20, #21, #23, #24, #25, #27 (headers), #28 (idle) | — | 3 d | Dev | Architect | In progress (2026-09-12: impersonation is audited and now gated on an Admin-granted support window; failed sign-ins recorded; the rest open) |
 | 0.10 | In-process Postgres (pglite) harness: migrations, policies, seed, RLS and rule triggers verified under `npm test` | — | — | 1 d | Dev | Architect | In progress (PR-A) |
 | 0.9 | Field data safety: backoff without deletion, durable failure list, keep draft until ack, no wipe on 401, per-table sync validation, notes RLS re-asserts `client_id` | #15, #16, #19 | 0.1 | 3 d | Dev | Architect | Open |
 | 1.1 | Launch data model migration 0007 + policies + types + demo/seed parity | #5 (schema part) | 0.1–0.3 | 3 d | Dev | Architect | Open |
@@ -56,7 +56,7 @@ Sources: [launch-readiness review](./2026-09-launch-readiness-review.md) (defect
 | 2.4 | Notes oversight: admin viewer, billed lock, addenda, goals from `client_goals` | — | 1.1, 2.6 | 3 d | Dev | DLS owner | Open |
 | 2.5 | Attendance records v1 | — | 1.1, D-05 | 3 d | Dev | DLS owner | Open |
 | 2.6 | Person-centered profile v1 + goals | — | 1.1, D-05 | 3 d | Dev | DLS owner | Open |
-| 2.7 | Staff credential documents; nightly scheduler for expiry jobs; `CRON_SECRET` documented | #29 | 0.5, D-07 | 2 d | Dev | Architect | Open |
+| 2.7 | Staff credential documents; nightly scheduler for expiry jobs; `CRON_SECRET` documented | #29 | 0.5, D-07 | 2 d | Dev | Architect | In progress (2026-09-12: the scheduler, the credential-expiry job and `CRON_SECRET` exist and are documented; credential documents still to build) |
 | 2.8 | Relias: nightly sync route, sync-run log, readiness guard fix, SSO off until real SP settings | #29 (Relias job) | 0.4, D-08 | 3 d + vendor | Dev | Architect | Open |
 | 3.1 | Valid 837P file and a test that proves it; agency-time ISA/GS dates | #8, #12 (dates) | — | 1 d | Dev | Architect | In progress (PR-A wire format; PR-B agency dates) |
 | 3.2 | Safe export order; checked file attach; export runs as the Admin so audit attribution holds | #10, #26 | — | 2 d | Dev | Architect | In progress (PR-A) |
@@ -122,13 +122,13 @@ Sources: [launch-readiness review](./2026-09-launch-readiness-review.md) (defect
 | R5.4 | Visit without active physician order rejected | §5 | Dev | Architect | Open |
 | R5.5 | NMT trip beyond the weekly authorization rejected | §5 | Dev | Architect | Open |
 | R5.6 | eMAR `Administered` without a time rejected | §5 | Dev | Architect | Open |
-| R5.7 | Audit rows for every PHI mutation, signatures redacted | §5 | Dev | Architect | Open |
+| R5.7 | Audit rows for every PHI mutation, signatures redacted | §5 | Dev | Architect | Open (configuration audit is hash-chained and append-only as of 2026-09-12; PHI mutations follow when that data moves to the database) |
 | R5.8 | Unit math: DB generated column and `lib/billing/units.ts` agree | §5 | Dev | Architect | Open |
 | R6.1 | dev / staging / prod environments; PHI only in prod | §6 | Dev | Architect | Open |
 | R6.2 | Secrets in the host's secret store; service-role key rotation plan | §6 | Dev | Architect | Open |
 | R6.3 | Backups: point-in-time recovery enabled; restore drill performed | §6 | Dev | Architect | Open |
 | R6.4 | TLS-only access; network restrictions where available | §6 | Dev | Architect | Open |
-| R6.5 | Error monitoring with PHI scrubbing; uptime alerting | §6 | Dev | Architect | Open |
+| R6.5 | Error monitoring with PHI scrubbing; uptime alerting | §6 | Dev | Architect | In progress (2026-09-12: `/api/healthz` and `/api/readyz` exist for a monitor, and the scheduler records every job run; an error tracker is still to be chosen) |
 | R6.6 | Log hygiene: no PHI in server logs | §6 | Dev | Architect | Open |
 | R6.7 | Dependency audit in CI; Dependabot enabled | §6 | Dev | Architect | Open |
 | R7.1 | Client and staff data import plan with field-level mapping sign-off | §7 | PM + DLS owner | DLS owner | Open |

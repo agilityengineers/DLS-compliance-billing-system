@@ -12,7 +12,8 @@ Care management, compliance and billing portal for Durable Life Skills, Inc.: a 
 - `pnpm --filter @workspace/db run generate` — write a new SQL migration after changing `lib/db/src/schema`
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string. Optional: `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_PASSWORD`, `SESSION_IDLE_MINUTES`, `SESSION_MAX_DAYS`, `CORS_ORIGINS` (see `docs/access-model.md`)
+- Required env: `DATABASE_URL` — Postgres connection string. Optional: `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_PASSWORD`, `SUPER_ADMIN_BREAKGLASS_EMAIL`/`_PASSWORD` (the second provider account), `REQUIRE_MFA_FOR_PLATFORM`, `SUPPORT_WINDOW_MAX_HOURS`, `AUDIT_RETENTION_YEARS`, `SENDGRID_API_KEY` + `APP_BASE_URL` (mail; without them invitations are logged, not sent), `SCHEDULER_ENABLED`, `CRON_SECRET`, `SESSION_IDLE_MINUTES`, `SESSION_MAX_DAYS`, `CORS_ORIGINS`, `GIT_SHA` (see `docs/access-model.md` and `docs/review/2026-09-platform-hardening.md`)
+- `GET /api/healthz` for an uptime monitor (cheap, no database); `GET /api/readyz` for a readiness probe (database + migrations); `POST /api/jobs/:name/run` with `x-cron-secret` for an external scheduler
 
 ## Stack
 
@@ -25,27 +26,27 @@ Care management, compliance and billing portal for Durable Life Skills, Inc.: a 
 
 ## Where things live
 
-- `lib/features` — roles, the feature catalog and the two-tier permission maths (shared by API + web)
+- `lib/features` — roles, the provider capability model (`platform.ts`), the feature catalog and the two-tier permission maths (shared by API + web)
 - `lib/credentialing` — the requirements registry types, the pure evaluation engine and the shipped default registry. No dependencies, so the client, the API server and the tests share one definition. Claim readiness and the staff screen both read it — do not re-derive credential logic anywhere else
-- `lib/db/src/schema/access.ts` — organizations, users, sessions, platform/org feature switches, audit log; `schema/requirements.ts` + `schema/staff-credentials.ts` — the credentialing registry; migrations in `lib/db/migrations` (drizzle-kit managed, journal included — never hand-write one)
+- `lib/db/src/schema/access.ts` — organizations (with contract/BAA/lifecycle), users (with TOTP), sessions, platform/org feature switches, audit log (hash-chained); `schema/security.ts` — sign-in attempts, single-use links, support windows, job runs, mail outbox; `schema/requirements.ts` + `schema/staff-credentials.ts` — the credentialing registry; migrations in `lib/db/migrations` (drizzle-kit managed, journal included — never hand-write one)
 - `lib/api-spec/openapi.yaml` — the API contract and the source of truth. Edit it, then run the codegen above; never hand-edit anything under a `generated/` folder
-- `artifacts/api-server/src` — auth (`routes/auth.ts`), provider console (`routes/platform.ts`), organization admin (`routes/org.ts`), credentialing registry (`routes/credentialing.ts`), bootstrap seed (`lib/bootstrap.ts`)
+- `artifacts/api-server/src` — auth incl. two-factor, invitations and resets (`routes/auth.ts`), provider console (`routes/platform.ts`), organization admin incl. support windows (`routes/org.ts`), credentialing registry (`routes/credentialing.ts`), bootstrap seed (`lib/bootstrap.ts`), maintenance jobs (`lib/jobs.ts`), mail (`lib/mail/`), TOTP (`lib/totp.ts`)
 - `artifacts/dls-cms/src/app/(auth)/login` — the front door; `app/admin/platform/*` — the Super Admin console (overview, organizations, accounts, switchboard, adoption, support access, sessions, audit log, system status; panels in `components/admin/platform`, menu in `components/admin/nav-config.ts`); `app/admin/settings` — Admin accounts + feature access; `app/admin/requirements` — the credentialing registry
 - `artifacts/dls-cms/src/lib/auth/session.ts` — the one way to resolve who is acting (reads `/api/auth/me`); `lib/rbac/access.tsx` — page gate
-- `docs/access-model.md` — the access model reference; `docs/review/` — launch-readiness review, roadmap, work plan, and the Super Admin console review (`2026-09-super-admin-console.md`: what the console covers and what a provider still needs)
+- `docs/access-model.md` — the access model reference; `docs/review/2026-09-platform-hardening.md` — the security work and what an operator must configure; `docs/review/` — launch-readiness review, roadmap, work plan, and the Super Admin console review (`2026-09-super-admin-console.md`: what the console covers and what a provider still needs)
 
 ## Architecture decisions
 
 - Identity and configuration are real (PostgreSQL via the API server); client/visit/billing records are still the synthetic demo dataset in the browser. Real accounts are merged into staff lists so screens keep working.
 - One catalog (`FEATURE_CATALOG`) drives the switchboard, the Settings screen, navigation and every gate; adding a feature is one catalog entry plus a `checkAccess`/`requireFeature` call.
 - Effective access = provider switch ∧ organization switch ∧ role grant; Admins always get what is on, employees only what is granted. Spine features cannot be switched off by the organization.
-- The Super Admin has no standing PHI access (review decision D-02); support happens through audited "view as".
+- The Super Admin has no standing PHI access (review decision D-02); support happens through an audited "view as" that the organization's Admin must first allow by opening a time-boxed support window.
 - Web app and API share one host (`/` and `/api`), so the session is a first-party httpOnly cookie and no CORS is configured.
 
 ## Product
 
 - Login page (email + password) with the DLS logo; role-based landing: provider → platform console, Admin/Scheduler → desktop console, Field Staff → field app
-- Platform console (Super Admin): overview with an attention list, organizations with a hand-over checklist, cross-organization accounts, feature switchboard (tier 1), feature adoption matrix, support access (audited view-as), active sessions (end one / sign out everywhere), filterable audit log with CSV export, system status (migrations, sign-in policy, configuration warnings)
+- Platform console (Super Admin and Support): overview with an attention list, organizations with a hand-over checklist, cross-organization accounts, feature switchboard (tier 1), feature adoption matrix, support access (audited view-as), active sessions (end one / sign out everywhere), filterable audit log with CSV export, security (two-factor, provider accounts, support windows, failed sign-ins), system status (migrations, sign-in policy, mail, scheduled jobs, configuration warnings)
 - Settings: accounts (create/role/suspend/one-time password), feature access per role (tier 2), permission matrix, audit
 - Every module (QA, EVV, eMAR, payroll, reports, documents, Relias, incidents, billing …) is gated by its switch
 

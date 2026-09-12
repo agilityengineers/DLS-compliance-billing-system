@@ -5,7 +5,7 @@ import { PlatformPageHeader } from "@/components/admin/platform/page-header";
 import { PlatformAccountsPanel } from "@/components/admin/platform/accounts-panel";
 
 export default async function PlatformAccountsPage({ searchParams }: { searchParams: { org?: string } }) {
-  const { ctx, denied } = await checkAccess({ roles: ["Super_Admin"] });
+  const { ctx, denied } = await checkAccess({ capability: "platform.view" });
   if (denied) return denied;
 
   return (

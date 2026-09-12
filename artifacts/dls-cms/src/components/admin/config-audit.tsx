@@ -13,17 +13,35 @@ export const AUDIT_LABELS: Record<string, string> = {
   "auth.password_changed": "Changed own password",
   "auth.impersonation_started": "Started viewing as",
   "auth.impersonation_stopped": "Stopped viewing as",
+  "auth.login_failed": "Failed sign-in",
+  "auth.mfa_enabled": "Turned on two-factor sign-in",
+  "auth.mfa_disabled": "Turned off two-factor sign-in",
+  "auth.mfa_recovery_codes_regenerated": "New recovery codes issued",
+  "auth.recovery_code_used": "Signed in with a recovery code",
+  "auth.invite_accepted": "Accepted an invitation",
+  "auth.password_reset_requested": "Asked for a reset link",
+  "auth.password_reset_completed": "Reset own password",
   "platform.bootstrap": "Platform bootstrapped",
   "platform.feature_toggled": "Provider switch",
   "platform.super_admin_password_reset": "Provider password reset",
+  "platform.breakglass_created": "Break-glass account created",
+  "platform.job_run": "Maintenance job run",
+  "platform.audit_exported": "Audit log exported",
   "org.created": "Organization created",
   "org.updated": "Organization updated",
   "org.feature_updated": "Feature access changed",
+  "org.decommissioned": "Organization decommissioned",
+  "org.exported": "Organization exported",
   "user.created": "Account created",
   "user.updated": "Account updated",
   "user.password_reset": "Password reset issued",
   "user.sessions_revoked": "Signed out everywhere",
+  "user.invite_sent": "Invitation sent",
   "session.revoked": "Session ended",
+  "support.window_granted": "Support window opened",
+  "support.window_revoked": "Support window closed early",
+  "support.window_expired": "Support window expired",
+  "support.window_requested": "Support access requested",
 };
 
 export function auditLabel(action: string): string {
@@ -43,6 +61,24 @@ export function summarizeAudit(e: AuditEntry): string {
       return `${d.fullName ?? ""} (${d.email ?? ""}) as ${String(d.role ?? "").replace("_", " ")}`;
     case "user.updated":
       return Object.entries(d).map(([k, v]) => `${k}: ${String(v)}`).join(", ");
+    case "support.window_granted":
+      return `${d.reason ?? ""}${d.hours ? ` · ${d.hours} hour${d.hours === 1 ? "" : "s"}` : ""}`;
+    case "support.window_revoked":
+    case "support.window_expired":
+    case "support.window_requested":
+      return String(d.reason ?? "");
+    case "auth.login_failed":
+      return String(d.reason ?? "").replace(/_/g, " ");
+    case "platform.job_run":
+      return `${e.targetId} → ${d.ok ? `ok, ${Number(d.items ?? 0)} item(s)` : "failed"}`;
+    case "platform.audit_exported":
+      return `${Number(d.rows ?? 0)} row(s)`;
+    case "org.decommissioned":
+      return `${d.reason ?? ""} · ${Number(d.accountsSuspended ?? 0)} account(s) suspended`;
+    case "org.exported":
+      return `${Number(d.users ?? 0)} account(s), ${Number(d.auditEntries ?? 0)} audit entries`;
+    case "user.invite_sent":
+      return `${d.email ?? ""}${d.status ? ` · ${d.status}` : ""}`;
     case "user.sessions_revoked":
       return `${d.fullName ?? ""} · ${Number(d.revoked ?? 0)} session${Number(d.revoked ?? 0) === 1 ? "" : "s"} ended`;
     case "session.revoked":

@@ -5,9 +5,14 @@ import { z } from "zod/v4";
 import { auditLogTable, type Db } from "@workspace/db";
 import { isFeatureKey, validateOrgChange, type FeatureKey } from "@workspace/features";
 import { recordAudit } from "../lib/audit";
+import type { AppConfig } from "../lib/config";
 import { HttpError, badRequest, notFound } from "../lib/errors";
 import { loadFeatureStates, setOrgFeature } from "../lib/features";
-import { createUserAccount, listOrgUsers, resetUserPassword, updateUserAccount } from "../lib/users";
+import { sendInvite } from "../lib/invites";
+import type { Mailer } from "../lib/mail";
+import { clampWindowHours } from "../lib/support-access";
+import { findWindow, grantWindow, listWindowsForOrg, revokeWindow } from "../lib/support-windows";
+import { createUserAccount, findUserById, listOrgUsers, resetUserPassword, updateUserAccount } from "../lib/users";
 import { actorOf, requireAuth, requireAuthContext, requireRole } from "../middlewares/auth";
 
 const FeaturePatch = z.object({
@@ -30,7 +35,13 @@ const UserPatch = z.object({
 
 const ResetBody = z.object({ password: z.string().min(1).max(200).optional() });
 
-export function orgRouter(db: Db): IRouter {
+const SupportWindowBody = z.object({
+  /** Why the door is being opened. Required: an unexplained grant is not an informed one. */
+  reason: z.string().trim().min(4).max(400),
+  hours: z.number().positive().max(72),
+});
+
+export function orgRouter(db: Db, config: AppConfig, deps: { mailer: Mailer }): IRouter {
   const router: IRouter = Router();
 
   // Names and roles of everyone in the caller's organization — readable by
@@ -104,7 +115,93 @@ export function orgRouter(db: Db): IRouter {
       role: body.role,
       password: body.password,
     });
-    res.status(201).json(result);
+    // The invitation is the normal path; the one-time password stays in the
+    // response as the fallback for a deployment with no mail provider.
+    const created = await findUserById(db, result.user.id);
+    const invite = created
+      ? await sendInvite(db, deps.mailer, config, {
+          user: created,
+          orgName: auth.org?.name ?? "your organization",
+          createdBy: auth.realUser.id,
+        })
+      : null;
+    res.status(201).json({ ...result, invite });
+  });
+
+  router.post("/org/users/:id/resend-invite", async (req, res) => {
+    const auth = requireAuthContext(res);
+    const orgId = orgIdOf(res);
+    const target = await findUserById(db, req.params.id);
+    if (!target || target.orgId !== orgId) throw notFound("User not found.");
+    const invite = await sendInvite(db, deps.mailer, config, {
+      user: target,
+      orgName: auth.org?.name ?? "your organization",
+      createdBy: auth.realUser.id,
+    });
+    await recordAudit(db, {
+      orgId,
+      actorUserId: auth.realUser.id,
+      impersonatingUserId: auth.impersonating ? auth.effectiveUser.id : null,
+      action: "user.invite_sent",
+      targetType: "user",
+      targetId: target.id,
+      details: { email: target.email, status: invite.status },
+      ip: req.ip ?? null,
+    });
+    res.json({ invite });
+  });
+
+  // ── Support access (review decision D-02) ───────────────────────────────
+  //
+  // The provider cannot open an organization's records at will. An Admin opens
+  // a window, for a reason, with an end time; outside one, a support session
+  // is refused by the API rather than merely discouraged by policy.
+  router.get("/org/support-windows", async (_req, res) => {
+    res.json({ windows: await listWindowsForOrg(db, orgIdOf(res)), maxHours: config.supportWindowMaxHours });
+  });
+
+  router.post("/org/support-windows", async (req, res) => {
+    const auth = requireAuthContext(res);
+    const orgId = orgIdOf(res);
+    const body = SupportWindowBody.parse(req.body);
+    const hours = clampWindowHours(body.hours, config.supportWindowMaxHours);
+    const expiresAt = new Date(Date.now() + hours * 3_600_000);
+    const window = await grantWindow(db, {
+      orgId,
+      grantedByUserId: auth.realUser.id,
+      reason: body.reason,
+      expiresAt,
+    });
+    await recordAudit(db, {
+      orgId,
+      actorUserId: auth.realUser.id,
+      impersonatingUserId: auth.impersonating ? auth.effectiveUser.id : null,
+      action: "support.window_granted",
+      targetType: "support_window",
+      targetId: window.id,
+      details: { reason: body.reason, hours, expiresAt: expiresAt.toISOString() },
+      ip: req.ip ?? null,
+    });
+    res.status(201).json({ window: { id: window.id, expiresAt: window.expiresAt.toISOString(), hours } });
+  });
+
+  router.delete("/org/support-windows/:id", async (req, res) => {
+    const auth = requireAuthContext(res);
+    const orgId = orgIdOf(res);
+    const existing = await findWindow(db, req.params.id);
+    if (!existing || existing.orgId !== orgId) throw notFound("Support window not found.");
+    const revoked = await revokeWindow(db, existing.id, auth.realUser.id);
+    if (!revoked) throw new HttpError(409, "ALREADY_CLOSED", "That window is already closed.");
+    await recordAudit(db, {
+      orgId,
+      actorUserId: auth.realUser.id,
+      action: "support.window_revoked",
+      targetType: "support_window",
+      targetId: existing.id,
+      details: { reason: existing.reason },
+      ip: req.ip ?? null,
+    });
+    res.json({ ok: true });
   });
 
   router.patch("/org/users/:id", async (req, res) => {

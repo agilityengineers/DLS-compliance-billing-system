@@ -5,7 +5,7 @@ import { PlatformPageHeader } from "@/components/admin/platform/page-header";
 import { OrganizationsPanel } from "@/components/admin/organizations-panel";
 
 export default async function PlatformOrganizationsPage() {
-  const { ctx, denied } = await checkAccess({ roles: ["Super_Admin"] });
+  const { ctx, denied } = await checkAccess({ capability: "platform.view" });
   if (denied) return denied;
 
   return (

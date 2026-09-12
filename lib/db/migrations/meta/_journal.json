@@ -15,6 +15,13 @@
       "when": 1789216509962,
       "tag": "0001_credentialing",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789236572689,
+      "tag": "0002_platform_hardening",
+      "breakpoints": true
     }
   ]
 }

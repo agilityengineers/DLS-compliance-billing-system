@@ -5,8 +5,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Download } from "lucide-react";
-import { platformApi, type AuditCategory, type AuditEntry, type OrganizationRow } from "@/lib/api/admin";
+import { Download, ShieldCheck } from "lucide-react";
+import { platformApi, type AuditCategory, type AuditEntry, type AuditVerification, type OrganizationRow } from "@/lib/api/admin";
 import { errorMessage } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { AuditTable, auditLabel, summarizeAudit } from "@/components/admin/config-audit";
@@ -18,6 +18,7 @@ const CATEGORIES: { value: "" | AuditCategory; label: string }[] = [
   { value: "org", label: "Organization & feature-access changes" },
   { value: "user", label: "Account changes & password resets" },
   { value: "session", label: "Sessions ended by the provider" },
+  { value: "support", label: "Support windows granted, revoked and requested" },
 ];
 
 const SELECT = "h-9 rounded-btn border border-border bg-card px-2 text-sm";
@@ -57,6 +58,9 @@ export function AuditExplorer() {
   const [entries, setEntries] = useState<AuditEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [retentionYears, setRetentionYears] = useState<number | null>(null);
+  const [verification, setVerification] = useState<AuditVerification | null>(null);
+  const [verifying, setVerifying] = useState(false);
 
   useEffect(() => {
     void platformApi.organizations().then((r) => setOrgs(r.organizations)).catch(() => {});
@@ -70,6 +74,7 @@ export function AuditExplorer() {
       .then((r) => {
         if (cancelled) return;
         setEntries(r.entries);
+        setRetentionYears(r.retentionYears ?? null);
         setError(null);
       })
       .catch((e) => {
@@ -93,6 +98,12 @@ export function AuditExplorer() {
     a.click();
     URL.revokeObjectURL(url);
   }
+
+  const serverExportUrl = platformApi.auditExportUrl({
+    category: category || undefined,
+    orgId: orgId || undefined,
+    since: since || undefined,
+  });
 
   return (
     <div className="space-y-4">
@@ -120,15 +131,62 @@ export function AuditExplorer() {
         <span className="ml-auto flex items-center gap-2">
           <span className="text-xs text-muted-foreground">{loading ? "Loading…" : entries ? `${entries.length} shown` : ""}</span>
           <Button size="sm" variant="outline" onClick={exportCsv} disabled={!entries || entries.length === 0}>
-            <Download className="h-3.5 w-3.5" /> Export CSV
+            <Download className="h-3.5 w-3.5" /> Export shown
           </Button>
+          <a
+            href={serverExportUrl}
+            className="inline-flex items-center gap-1 rounded-btn border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted"
+            title="Everything matching these filters, straight from the server, with each entry's hash."
+          >
+            <Download className="h-3.5 w-3.5" /> Export all matching
+          </a>
         </span>
       </div>
+
+      {/* ── tamper check ─────────────────────────────────────────────────── */}
+      <section className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-border bg-card p-4">
+        <div className="min-w-64 flex-1">
+          <h2 className="flex items-center gap-2 font-medium">
+            <ShieldCheck className="h-4 w-4 text-plum-accent" /> Tamper check
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Each entry carries the fingerprint of the one before it, so a changed, deleted or reordered row breaks the
+            chain from that point on. The database refuses edits outright; this proves nothing slipped past it.
+            {retentionYears !== null && ` Entries are kept for ${retentionYears} years.`}
+          </p>
+          {verification && (
+            <p className={`mt-2 text-sm ${verification.ok ? "text-pill-success-fg" : "text-destructive"}`} role="status">
+              {verification.ok
+                ? `Verified ${verification.checked} entries — the chain is intact.`
+                : `The chain breaks at entry ${verification.firstBadSeq}. That entry has been changed or removed since it was written.`}
+            </p>
+          )}
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={verifying}
+          onClick={async () => {
+            setVerifying(true);
+            setError(null);
+            try {
+              setVerification(await platformApi.verifyAudit());
+            } catch (e) {
+              setError(errorMessage(e));
+            } finally {
+              setVerifying(false);
+            }
+          }}
+        >
+          {verifying ? "Checking…" : "Verify the chain"}
+        </Button>
+      </section>
       {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
       {entries ? <AuditTable entries={entries} showOrg /> : !error && <p className="text-sm text-muted-foreground">Loading…</p>}
       <p className="text-xs text-muted-foreground">
-        The log records every sign-in, switch flip, account change, password reset and view-as session with the real
-        identity that acted. It is append-only; nothing here can be edited or deleted from the app.
+        The log records every sign-in, failed sign-in against a real account, switch flip, account change, password
+        reset, support window and view-as session, with the real identity that acted. It is append-only: the database
+        itself refuses an update or a delete, and the hash chain makes any edit that got past it visible.
       </p>
     </div>
   );

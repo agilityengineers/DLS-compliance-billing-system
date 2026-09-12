@@ -6,6 +6,7 @@ import type { Db } from "@workspace/db";
 import { loadConfig, type AppConfig } from "./lib/config";
 import { errorHandler, notFound } from "./lib/errors";
 import { logger } from "./lib/logger";
+import { createMailer, type Mailer } from "./lib/mail";
 import { attachSession } from "./middlewares/auth";
 import { apiRouter } from "./routes";
 
@@ -14,9 +15,11 @@ export interface CreateAppOptions {
   config?: AppConfig;
   /** Disable request logging (tests). */
   quiet?: boolean;
+  /** Injected so a test can capture mail instead of sending or logging it. */
+  mailer?: Mailer;
 }
 
-export function createApp({ db, config = loadConfig(), quiet = false }: CreateAppOptions): Express {
+export function createApp({ db, config = loadConfig(), quiet = false, mailer }: CreateAppOptions): Express {
   const app: Express = express();
   app.disable("x-powered-by");
   if (config.trustProxy) app.set("trust proxy", 1);
@@ -52,7 +55,7 @@ export function createApp({ db, config = loadConfig(), quiet = false }: CreateAp
   app.use(express.urlencoded({ extended: true, limit: "100kb" }));
   app.use(attachSession(db, config));
 
-  app.use("/api", apiRouter(db, config));
+  app.use("/api", apiRouter(db, config, { mailer: mailer ?? createMailer(db, config) }));
   app.use("/api", (_req, _res, next) => next(notFound("No such API route.")));
   app.use(errorHandler);
 

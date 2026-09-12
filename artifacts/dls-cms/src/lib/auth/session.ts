@@ -46,6 +46,8 @@ export interface SessionContext {
   /** Both-tier state for the effective user's organization (settings screens). */
   featureStates: FeatureState[];
   org: SessionOrg | null;
+  /** Second factor: whether this account has one, and whether it must. */
+  mfa: { enabled: boolean; required: boolean };
   /** Set when the API could not be reached; the login screen explains it. */
   apiError: string | null;
 }
@@ -70,6 +72,7 @@ interface MePayload {
   organization: SessionOrg | null;
   features: FeatureState[];
   effectiveFeatures: FeatureKey[];
+  mfa?: { enabled: boolean; required: boolean };
 }
 
 const ANON: SessionContext = {
@@ -81,6 +84,7 @@ const ANON: SessionContext = {
   features: new Set(),
   featureStates: [],
   org: null,
+  mfa: { enabled: false, required: false },
   apiError: null,
 };
 
@@ -148,6 +152,7 @@ function demoSession(): SessionContext {
     features: new Set(effectiveFeatureKeys(featureStates, effectiveUser.role)),
     featureStates,
     org: { id: "demo", name: "Durable Life Skills, Inc.", slug: "durable-life-skills", status: "active" },
+    mfa: { enabled: false, required: false },
     apiError: null,
   };
 }
@@ -190,6 +195,7 @@ async function apiSession(): Promise<SessionContext> {
     features,
     featureStates: me.features,
     org: me.organization,
+    mfa: me.mfa ?? { enabled: false, required: false },
     apiError: null,
   };
 }

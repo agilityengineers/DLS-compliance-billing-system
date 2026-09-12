@@ -7,6 +7,7 @@ import type { PublicUser } from "../lib/users";
 
 const NOW = new Date("2026-09-12T12:00:00Z");
 const daysAgo = (n: number) => new Date(NOW.getTime() - n * 86_400_000).toISOString();
+const inDays = (n: number) => new Date(NOW.getTime() + n * 86_400_000).toISOString().slice(0, 10);
 
 function user(over: Partial<PublicUser> & { id: string }): PublicUser {
   return {
@@ -18,6 +19,7 @@ function user(over: Partial<PublicUser> & { id: string }): PublicUser {
     mustChangePassword: false,
     lastLoginAt: daysAgo(1),
     createdAt: daysAgo(30),
+    mfaEnabled: false,
     ...over,
   };
 }
@@ -29,7 +31,7 @@ function org(id: string, over: Partial<OverviewOrganization> = {}): OverviewOrga
 const base = {
   platformEnabled: new Map<string, boolean>(),
   activeSessions: [],
-  activity: { signInsLast7Days: 0, configChangesLast7Days: 0, supportSessionsLast30Days: 0 },
+  activity: { signInsLast7Days: 0, failedSignInsLast7Days: 0, configChangesLast7Days: 0, supportSessionsLast30Days: 0 },
   now: NOW,
 };
 
@@ -47,7 +49,7 @@ describe("platform overview", () => {
         user({ id: "fay", role: "Field_Staff", status: "Suspended" }),
       ],
     });
-    expect(out.organizations).toEqual({ total: 2, active: 1, suspended: 1 });
+    expect(out.organizations).toEqual({ total: 2, active: 1, suspended: 1, decommissioned: 0 });
     expect(out.accounts.total).toBe(4);
     expect(out.accounts.active).toBe(3);
     expect(out.accounts.suspended).toBe(1);
@@ -141,14 +143,114 @@ describe("platform overview", () => {
         { id: "s2", userId: "lisa", impersonatingUserId: null },
       ],
     });
-    expect(out.sessions).toEqual({ active: 2, supportSessions: 1 });
+    expect(out.sessions).toEqual({ active: 2, supportSessions: 1, openSupportWindows: 0 });
     expect(out.attention[0]?.kind).toBe("support_session_active");
     expect(out.attention[0]?.message).toContain("Clarence Williams");
     expect(out.attention[0]?.message).toContain("Lisa Torres");
     expect(out.attention[0]?.href).toBe("/admin/platform/support");
-    // A single provider account is worth a note, never a warning.
+    // One provider account is now a warning: the remedy (a break-glass
+    // account in the deployment) exists, so leaving it is a choice.
     const single = out.attention.find((a) => a.kind === "single_platform_account");
-    expect(single?.severity).toBe("info");
+    expect(single?.severity).toBe("warning");
+    expect(single?.message).toContain("SUPER_ADMIN_BREAKGLASS");
+  });
+
+  it("counts a decommissioned organization apart from a suspended one", () => {
+    const out = buildOverview({
+      ...base,
+      organizations: [org("org-1"), org("org-2", { status: "suspended" }), org("org-3", { status: "decommissioned" })],
+      users: [user({ id: "lisa", role: "Admin" })],
+    });
+    expect(out.organizations).toEqual({ total: 3, active: 1, suspended: 1, decommissioned: 1 });
+    // A closed-down organization is finished business, not an open item.
+    const kinds = out.attention.map((a) => a.kind);
+    expect(kinds.filter((k) => k === "org_suspended")).toHaveLength(1);
+    expect(out.attention.some((a) => a.message.includes("org-3"))).toBe(false);
+  });
+
+  it("warns about provider accounts with no second factor", () => {
+    const withoutMfa = buildOverview({
+      ...base,
+      organizations: [],
+      users: [
+        user({ id: "root", orgId: null, role: "Super_Admin" }),
+        user({ id: "spare", orgId: null, role: "Super_Admin", mfaEnabled: true }),
+      ],
+    });
+    const note = withoutMfa.attention.find((a) => a.kind === "provider_without_mfa");
+    expect(note?.severity).toBe("warning");
+    expect(note?.message).toContain("1 provider account");
+    expect(withoutMfa.accounts.platform).toBe(2);
+    expect(withoutMfa.accounts.platformWithMfa).toBe(1);
+
+    // With MFA required, the message changes to say they cannot work at all.
+    const required = buildOverview({
+      ...base,
+      organizations: [],
+      users: [user({ id: "root", orgId: null, role: "Super_Admin" })],
+      requireMfaForPlatform: true,
+    });
+    expect(required.attention.find((a) => a.kind === "provider_without_mfa")?.message).toContain("cannot work");
+
+    // Everyone enrolled: no note at all.
+    const enrolled = buildOverview({
+      ...base,
+      organizations: [],
+      users: [
+        user({ id: "root", orgId: null, role: "Super_Admin", mfaEnabled: true }),
+        user({ id: "spare", orgId: null, role: "Super_Admin", mfaEnabled: true }),
+      ],
+    });
+    expect(enrolled.attention.map((a) => a.kind)).not.toContain("provider_without_mfa");
+  });
+
+  it("surfaces sign-in failures, open support windows and failing jobs", () => {
+    const out = buildOverview({
+      ...base,
+      organizations: [org("org-1")],
+      users: [user({ id: "lisa", role: "Admin", fullName: "Lisa Torres" })],
+      bruteForce: [{ userId: "lisa", fullName: "Lisa Torres", email: "lisa@example.com", failures: 12, addresses: 3 }],
+      openSupportWindows: [{ id: "w1", orgId: "org-1", expiresAt: new Date(NOW.getTime() + 45 * 60_000).toISOString() }],
+      jobs: [
+        { name: "audit.verify_chain", ok: false, lastRunAt: daysAgo(1) },
+        { name: "sessions.prune", ok: true, lastRunAt: daysAgo(1) },
+        { name: "login_attempts.prune", ok: null, lastRunAt: null },
+      ],
+      mailConfigured: false,
+    });
+    const byKind = new Map(out.attention.map((a) => [a.kind, a]));
+    expect(byKind.get("sign_in_failures")?.message).toContain("Lisa Torres has 12 failed sign-ins from 3 addresses");
+    expect(byKind.get("sign_in_failures")?.severity).toBe("warning");
+    expect(byKind.get("support_window_open")?.message).toContain("45 minutes");
+    expect(byKind.get("job_failing")?.message).toContain("audit.verify_chain");
+    expect(byKind.get("job_never_ran")?.message).toContain("login_attempts.prune");
+    expect(byKind.get("mail_not_configured")?.severity).toBe("info");
+    expect(out.sessions.openSupportWindows).toBe(1);
+  });
+
+  it("chases a Business Associate Agreement that is lapsing or missing", () => {
+    const out = buildOverview({
+      ...base,
+      organizations: [
+        org("lapsed", { baaSignedOn: daysAgo(400).slice(0, 10), baaExpiresOn: daysAgo(3).slice(0, 10) }),
+        org("soon", { baaSignedOn: daysAgo(300).slice(0, 10), baaExpiresOn: inDays(20) }),
+        org("fine", { baaSignedOn: daysAgo(10).slice(0, 10), baaExpiresOn: inDays(300) }),
+        org("missing"),
+      ],
+      users: [
+        user({ id: "a", orgId: "lapsed", role: "Admin" }),
+        user({ id: "b", orgId: "soon", role: "Admin" }),
+        user({ id: "c", orgId: "fine", role: "Admin" }),
+        user({ id: "d", orgId: "missing", role: "Admin" }),
+      ],
+    });
+    const baa = out.attention.filter((a) => a.kind === "baa_expiring");
+    expect(baa).toHaveLength(2);
+    expect(baa.find((a) => a.message.includes("lapsed"))?.severity).toBe("warning");
+    expect(baa.find((a) => a.message.includes("expires in 20 days"))?.severity).toBe("info");
+    expect(out.attention.filter((a) => a.kind === "baa_missing").map((a) => a.message)).toEqual([
+      expect.stringContaining("missing"),
+    ]);
   });
 
   it("sorts warnings before notes", () => {

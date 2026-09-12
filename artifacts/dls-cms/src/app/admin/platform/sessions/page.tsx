@@ -4,7 +4,7 @@ import { PlatformPageHeader } from "@/components/admin/platform/page-header";
 import { ActiveSessionsPanel } from "@/components/admin/platform/sessions-panel";
 
 export default async function PlatformSessionsPage() {
-  const { denied } = await checkAccess({ roles: ["Super_Admin"] });
+  const { denied } = await checkAccess({ capability: "platform.view" });
   if (denied) return denied;
 
   return (
