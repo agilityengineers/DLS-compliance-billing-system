@@ -4,7 +4,7 @@ import { checkAccess } from "@/lib/rbac/access";
 import { listReliasCourses, listReliasCompletions } from "@/lib/data/repo-business";
 import { getReliasSsoUrl } from "@/lib/integrations/relias";
 import { Badge } from "@/components/ui/badge";
-import { agencyTodayIso } from "@/lib/time/agency";
+import { agencyTodayIso } from "@workspace/time";
 
 export default async function TrainingPage() {
   const { ctx, denied } = await checkAccess({ feature: "relias.training", roles: ["Field_Staff"] });

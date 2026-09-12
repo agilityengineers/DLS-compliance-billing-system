@@ -17,6 +17,7 @@ export default defineConfig({
     include: [
       "lib/features/__tests__/**/*.test.ts",
       "lib/credentialing/__tests__/**/*.test.ts",
+      "lib/time/__tests__/**/*.test.ts",
       "lib/db/__tests__/**/*.test.ts",
       "artifacts/api-server/src/**/__tests__/**/*.test.ts",
       "artifacts/dls-cms/src/**/__tests__/**/*.test.ts",

@@ -6,7 +6,7 @@ import { listClients, listFieldStaff, listPhysicianOrders, listVisits } from "@/
 import { ScheduleBoard } from "@/components/admin/schedule-board";
 import { GenerateRecurringButton } from "@/components/admin/generate-recurring-button";
 import { DesktopWorkspace } from "@/components/admin/desktop-workspace";
-import { agencyAddDays, agencyMondayOf, agencyTodayIso, formatAgencyCalendarDate } from "@/lib/time/agency";
+import { agencyAddDays, agencyMondayOf, agencyTodayIso, formatAgencyCalendarDate } from "@workspace/time";
 
 export default async function SchedulePage({ searchParams }: { searchParams: { week?: string } }) {
   const { ctx, denied } = await checkAccess({ feature: "schedule.board" });

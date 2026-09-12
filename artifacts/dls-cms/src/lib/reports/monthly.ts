@@ -11,7 +11,7 @@ import { getClient } from "@/lib/data/repo-core";
 import { listVisits } from "@/lib/data/repo-core";
 import { getJobCoachingLog, listNmtTripsForClientWeek, listNotes } from "@/lib/data/repo-field";
 import type { NmtTrip } from "@/lib/supabase/types";
-import { agencyAddDays, utcIsoToAgencyDate } from "@/lib/time/agency";
+import { agencyAddDays, utcIsoToAgencyDate } from "@workspace/time";
 
 export type MonthlyReportKind = "sls" | "dvr";
 

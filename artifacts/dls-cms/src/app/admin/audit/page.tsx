@@ -5,7 +5,7 @@ import { checkAccess } from "@/lib/rbac/access";
 import { listAuditTrail } from "@/lib/data/repo-business";
 import { Badge } from "@/components/ui/badge";
 import { Table, THead, TBody } from "@/components/ui/table";
-import { formatAgencyDateTime } from "@/lib/time/agency";
+import { formatAgencyDateTime } from "@workspace/time";
 
 export default async function AuditTrailPage({ searchParams }: { searchParams: { table?: string } }) {
   const { denied } = await checkAccess({ feature: "audit.trail", roles: ["Admin"] });

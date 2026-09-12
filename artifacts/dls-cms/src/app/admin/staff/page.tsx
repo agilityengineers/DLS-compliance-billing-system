@@ -14,7 +14,7 @@ import { evaluateAndSummarize } from "@workspace/credentialing";
 import { Badge } from "@/components/ui/badge";
 import { Table, THead, TBody } from "@/components/ui/table";
 import { StaffRowActions } from "@/components/admin/staff-row-actions";
-import { agencyTodayIso } from "@/lib/time/agency";
+import { agencyTodayIso } from "@workspace/time";
 
 export default async function StaffPage() {
   const { denied } = await checkAccess({ feature: "staff.credentials", roles: ["Admin"] });

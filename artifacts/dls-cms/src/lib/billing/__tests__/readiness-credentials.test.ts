@@ -14,7 +14,7 @@ import { listRequirements, listStaffCredentials } from "@/lib/data/repo-credenti
 import { listUsers } from "@/lib/data/repo-core";
 import { listReliasCompletions, listReliasCourses } from "@/lib/data/repo-business";
 import { evaluateAndSummarize } from "@workspace/credentialing";
-import { agencyTodayIso } from "@/lib/time/agency";
+import { agencyTodayIso } from "@workspace/time";
 
 /** Credential blockers per staff member, straight from the demo dataset. */
 async function blockersByStaff(): Promise<Map<string, string[]>> {

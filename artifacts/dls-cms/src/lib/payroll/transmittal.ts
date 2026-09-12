@@ -8,7 +8,7 @@ import "server-only";
 import { listFieldStaff } from "@/lib/data/repo-core";
 import { listTimesheetEntries, listTimesheets } from "@/lib/data/repo-field";
 import type { PayrollLine, PayrollPeriod } from "@/lib/supabase/types";
-import { agencyAddDays } from "@/lib/time/agency";
+import { agencyAddDays } from "@workspace/time";
 
 const addDays = agencyAddDays;
 

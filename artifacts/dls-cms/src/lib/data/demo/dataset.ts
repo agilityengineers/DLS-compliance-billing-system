@@ -11,7 +11,7 @@ import type {
   PhysicianOrder, ProgressNote, RecurringVisitTemplate, ReliasCompletion,
   ReliasCourse, StaffUser, Timesheet, TimesheetEntry, UserPrefs, Visit
 } from "@/lib/supabase/types";
-import { agencyAddDays, agencyMondayOf, agencyTodayIso, agencyToUtcIso } from "@/lib/time/agency";
+import { agencyAddDays, agencyMondayOf, agencyTodayIso, agencyToUtcIso } from "@workspace/time";
 import { DEFAULT_REQUIREMENTS, type Requirement, type StaffCredentialRecord } from "@workspace/credentialing";
 
 // ── ids (identical to supabase/seed.sql) ─────────────────────────────────

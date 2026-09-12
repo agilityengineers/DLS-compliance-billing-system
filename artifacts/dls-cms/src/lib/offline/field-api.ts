@@ -24,7 +24,7 @@ import {
   hoursBetweenUtc,
   utcIsoToAgencyDate,
   utcIsoToAgencyTime,
-} from "@/lib/time/agency";
+} from "@workspace/time";
 import { SyncBody, describeIssues } from "@/lib/api/sync-schemas";
 import { toPublicError } from "@/lib/api/errors";
 

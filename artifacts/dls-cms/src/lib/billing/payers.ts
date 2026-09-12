@@ -8,7 +8,7 @@ import "server-only";
 import { exportClaim837P, submitterFromEnv, type ClaimInput } from "./x12-837p";
 import type { NoteReadiness } from "./readiness";
 import type { Client } from "@/lib/supabase/types";
-import { agencyTodayIso } from "@/lib/time/agency";
+import { agencyTodayIso } from "@workspace/time";
 
 export interface ClaimBatchResult {
   ok: boolean;

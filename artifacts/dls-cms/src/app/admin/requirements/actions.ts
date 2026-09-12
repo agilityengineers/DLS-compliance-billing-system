@@ -16,7 +16,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireFeature } from "@/lib/auth/session";
 import { updateRequirement } from "@/lib/data/repo-credentialing";
-import { agencyTodayIso } from "@/lib/time/agency";
+import { agencyTodayIso } from "@workspace/time";
 
 const ToggleSchema = z.object({
   requirementId: z.string().min(1),

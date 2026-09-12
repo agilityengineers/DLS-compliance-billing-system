@@ -56,6 +56,7 @@
     "@workspace/api-client-react": "workspace:*",
     "@workspace/credentialing": "workspace:*",
     "@workspace/features": "workspace:*",
+    "@workspace/time": "workspace:*",
     "autoprefixer": "^10.4.20",
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",

@@ -4,7 +4,7 @@
 import { revalidatePath } from "next/cache";
 import { requireFeature } from "@/lib/auth/session";
 import { listVisits, recordCredentialRenewal, saveVisit, updateUser } from "@/lib/data/repo-core";
-import { agencyTodayIso } from "@/lib/time/agency";
+import { agencyTodayIso } from "@workspace/time";
 
 export async function renewLicense(userId: string, expirationDate: string) {
   const ctx = await requireFeature("staff.credentials", "Admin");

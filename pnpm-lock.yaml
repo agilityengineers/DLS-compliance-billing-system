@@ -188,6 +188,9 @@ importers:
       '@workspace/features':
         specifier: workspace:*
         version: link:../../lib/features
+      '@workspace/time':
+        specifier: workspace:*
+        version: link:../../lib/time
       cookie-parser:
         specifier: ^1.4.7
         version: 1.4.7
@@ -375,6 +378,9 @@ importers:
       '@workspace/features':
         specifier: workspace:*
         version: link:../../lib/features
+      '@workspace/time':
+        specifier: workspace:*
+        version: link:../../lib/time
       autoprefixer:
         specifier: ^10.4.20
         version: 10.5.2(postcss@8.5.15)
@@ -698,6 +704,8 @@ importers:
         version: 0.31.10
 
   lib/features: {}
+
+  lib/time: {}
 
   scripts:
     devDependencies:

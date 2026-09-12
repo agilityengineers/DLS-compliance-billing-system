@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, THead, TBody } from "@/components/ui/table";
 import { bulkExport837P } from "@/app/admin/billing/actions";
-import { agencyTodayIso } from "@/lib/time/agency";
+import { agencyTodayIso } from "@workspace/time";
 
 export interface BillingRow {
   id: string;

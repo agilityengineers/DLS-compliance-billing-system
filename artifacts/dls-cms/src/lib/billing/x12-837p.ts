@@ -13,7 +13,7 @@
 //  - CLIA / prior-auth REF segments where required
 //
 // Pure function; no I/O. Unit-tested in __tests__/x12-837p.test.ts.
-import { utcIsoToAgencyDate, utcIsoToAgencyTime } from "@/lib/time/agency";
+import { utcIsoToAgencyDate, utcIsoToAgencyTime } from "@workspace/time";
 
 export interface ClaimServiceLine {
   procedureCode: string;   // e.g. "T2021" — TODO confirm per payer contract

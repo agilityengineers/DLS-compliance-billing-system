@@ -15,6 +15,7 @@
     "@workspace/credentialing": "workspace:*",
     "@workspace/db": "workspace:*",
     "@workspace/features": "workspace:*",
+    "@workspace/time": "workspace:*",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "drizzle-orm": "catalog:",

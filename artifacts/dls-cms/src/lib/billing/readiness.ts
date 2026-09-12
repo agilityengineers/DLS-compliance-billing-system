@@ -20,7 +20,7 @@ import { getFeeSchedule, listReliasCompletions, listReliasCourses } from "@/lib/
 import { listRequirements, listStaffCredentials } from "@/lib/data/repo-credentialing";
 import { evaluateAndSummarize } from "@workspace/credentialing";
 import type { Client, FeeScheduleRow, StaffUser, VisitType, VisitWithNames } from "@/lib/supabase/types";
-import { agencyAddDays, agencySundayOf, agencyTodayIso } from "@/lib/time/agency";
+import { agencyAddDays, agencySundayOf, agencyTodayIso } from "@workspace/time";
 
 export interface NoteReadiness {
   note: NoteWithContext;

@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, THead, TBody } from "@/components/ui/table";
 import { MonthlyReportGenerator } from "@/components/admin/monthly-report-generator";
 import { DvrNoticeForm } from "@/components/admin/dvr-notice-form";
-import { formatAgencyDate } from "@/lib/time/agency";
+import { formatAgencyDate } from "@workspace/time";
 
 const KIND_LABEL: Record<string, string> = {
   field_upload: "Field upload",

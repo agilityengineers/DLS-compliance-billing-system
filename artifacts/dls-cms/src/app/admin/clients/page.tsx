@@ -3,7 +3,7 @@ import Link from "next/link";
 import { checkAccess } from "@/lib/rbac/access";
 import { listClients } from "@/lib/data/repo-core";
 import { ClientRoster } from "@/components/admin/client-roster";
-import { agencyTodayIso } from "@/lib/time/agency";
+import { agencyTodayIso } from "@workspace/time";
 
 export default async function ClientsPage() {
   const { denied } = await checkAccess({ feature: "clients.core" });

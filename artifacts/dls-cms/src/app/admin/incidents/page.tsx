@@ -5,7 +5,7 @@ import { listIncidents } from "@/lib/data/repo-business";
 import { getClient, getUser } from "@/lib/data/repo-core";
 import { Badge } from "@/components/ui/badge";
 import { Table, THead, TBody } from "@/components/ui/table";
-import { formatAgencyDateTime } from "@/lib/time/agency";
+import { formatAgencyDateTime } from "@workspace/time";
 
 const TYPE_LABEL: Record<string, string> = {
   abuse_neglect: "Abuse / neglect",

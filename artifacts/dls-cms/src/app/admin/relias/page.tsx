@@ -8,7 +8,7 @@ import { getReliasSsoUrl } from "@/lib/integrations/relias";
 import { Badge } from "@/components/ui/badge";
 import { Table, THead, TBody } from "@/components/ui/table";
 import { ReliasSyncButton } from "@/components/admin/relias-sync-button";
-import { agencyTodayIso } from "@/lib/time/agency";
+import { agencyTodayIso } from "@workspace/time";
 
 export default async function ReliasPage() {
   const { ctx, denied } = await checkAccess({ feature: "relias.training" });
