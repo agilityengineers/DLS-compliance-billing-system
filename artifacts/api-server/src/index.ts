@@ -6,6 +6,8 @@ import { loadConfig } from "./lib/config";
 import { Scheduler } from "./lib/jobs";
 import { logger } from "./lib/logger";
 import { createMailer } from "./lib/mail";
+import { createServer } from "node:http";
+import { createStartupGate } from "./lib/startup-gate";
 
 const rawPort = process.env["PORT"];
 
@@ -15,7 +17,7 @@ if (!rawPort) {
 
 const port = Number(rawPort);
 
-if (Number.isNaN(port) || port <= 0) {
+if (!Number.isInteger(port) || port <= 0 || port > 65535) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
@@ -25,14 +27,27 @@ async function main(): Promise<void> {
     logger.fatal({ phase }, "API startup exceeded 45 seconds; refusing to serve an uninitialized application");
     process.exit(1);
   }, 45_000);
-  startupDeadline.unref();
+  // Keep the deadline active even when a driver has no referenced handles.
+  const gate = createStartupGate();
+  const server = createServer(gate.listener);
+  server.on("error", (err) => {
+    logger.fatal({ err, phase }, "API HTTP server error");
+    process.exit(1);
+  });
+  phase = "listen";
+  await new Promise<void>((resolve) => {
+    server.listen(port, "0.0.0.0", resolve);
+  });
+  logger.info({ port }, "HTTP listener open; API requests return 503 until initialization completes");
 
+  phase = "configuration";
   const config = loadConfig();
   const db = getDb();
 
   phase = "database_connection";
   logger.info({ phase }, "Checking database connectivity");
   await db.execute(sql`SELECT 1`);
+  logger.info({ phase }, "Database connectivity confirmed");
 
   // Replit Publish applies the development schema to production. Replaying
   // local migrations at runtime can conflict with that managed schema.
@@ -69,15 +84,10 @@ async function main(): Promise<void> {
   }
 
   const app = createApp({ db, config, mailer });
-  phase = "listen";
-  app.listen(port, "0.0.0.0", (err) => {
-    if (err) {
-      logger.error({ err }, "Error listening on port");
-      process.exit(1);
-    }
-    clearTimeout(startupDeadline);
-    logger.info({ port }, "Server listening");
-  });
+  gate.ready(app);
+  phase = "ready";
+  clearTimeout(startupDeadline);
+  logger.info({ port }, "API initialization complete; server ready");
 }
 
 main().catch((err) => {
