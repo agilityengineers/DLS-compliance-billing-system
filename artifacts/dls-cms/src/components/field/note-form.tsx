@@ -17,7 +17,7 @@ import { useAutoSave, loadDraft } from "@/lib/offline/useAutoSave";
 import { writeLocal, newLocalId } from "@/lib/offline/db";
 import { SyncEngine } from "@/lib/offline/syncEngine";
 import { calculateBillingUnits } from "@/lib/billing/units";
-import { agencyTodayIso } from "@/lib/time/agency";
+import { agencyTodayIso } from "@workspace/time";
 
 interface NoteState {
   date: string;

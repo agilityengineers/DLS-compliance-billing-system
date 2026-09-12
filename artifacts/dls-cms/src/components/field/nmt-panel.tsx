@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { Client, Visit } from "@/lib/supabase/types";
-import { agencyAddDays, agencySundayOf, agencyTodayIso } from "@/lib/time/agency";
+import { agencyAddDays, agencySundayOf, agencyTodayIso } from "@workspace/time";
 
 export function NmtPanel({ visit, client }: { visit: Visit; client: Client }) {
   const [destination, setDestination] = useState("");

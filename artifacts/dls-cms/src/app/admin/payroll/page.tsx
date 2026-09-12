@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, THead, TBody } from "@/components/ui/table";
 import { DesktopWorkspace } from "@/components/admin/desktop-workspace";
 import { PayrollCertify } from "@/components/admin/payroll-certify";
-import { formatAgencyDateTime } from "@/lib/time/agency";
+import { formatAgencyDateTime } from "@workspace/time";
 
 function fmt(iso: string): string {
   return new Date(`${iso}T12:00:00`).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });

@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { setFieldHome } from "./actions";
 import { cn } from "@/lib/utils";
 import { useFeature } from "@/components/session-context";
-import { agencyTodayIso, formatAgencyCalendarDate, utcIsoToAgencyDate } from "@/lib/time/agency";
+import { agencyTodayIso, formatAgencyCalendarDate, utcIsoToAgencyDate } from "@workspace/time";
 
 const STATUS_VARIANT = {
   Scheduled: "muted", In_Progress: "warning", Completed: "success", Cancelled: "destructive", Billed: "default"

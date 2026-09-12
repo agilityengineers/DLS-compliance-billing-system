@@ -53,6 +53,15 @@
   "references": [
     {
       "path": "../../lib/api-client-react"
+    },
+    {
+      "path": "../../lib/credentialing"
+    },
+    {
+      "path": "../../lib/features"
+    },
+    {
+      "path": "../../lib/time"
     }
   ]
 }

@@ -7,7 +7,7 @@ import { evaluateUnbilledNotes } from "@/lib/billing/readiness";
 import { listClaimExports } from "@/lib/data/repo-business";
 import { BillingTable, type BillingRow } from "@/components/admin/billing-table";
 import { DesktopWorkspace } from "@/components/admin/desktop-workspace";
-import { formatAgencyDateTime } from "@/lib/time/agency";
+import { formatAgencyDateTime } from "@workspace/time";
 
 export default async function BillingPage() {
   const { ctx, denied } = await checkAccess({ roles: ["Admin", "Scheduler"] });

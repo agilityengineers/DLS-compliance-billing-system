@@ -11,7 +11,8 @@ import type {
   PhysicianOrder, ProgressNote, RecurringVisitTemplate, ReliasCompletion,
   ReliasCourse, StaffUser, Timesheet, TimesheetEntry, UserPrefs, Visit
 } from "@/lib/supabase/types";
-import { agencyAddDays, agencyMondayOf, agencyTodayIso, agencyToUtcIso } from "@/lib/time/agency";
+import { agencyAddDays, agencyMondayOf, agencyTodayIso, agencyToUtcIso } from "@workspace/time";
+import { DEFAULT_REQUIREMENTS, type Requirement, type StaffCredentialRecord } from "@workspace/credentialing";
 
 // ── ids (identical to supabase/seed.sql) ─────────────────────────────────
 export const UID = {
@@ -78,6 +79,8 @@ export interface DemoDataset {
   menuConfig: MenuConfigRow[];
   userPrefs: UserPrefs[];
   incidents: Incident[];
+  requirements: Requirement[];
+  staffCredentials: StaffCredentialRecord[];
   auditTrail: AuditRow[];
   appSettings: Record<string, unknown>;
 }
@@ -395,6 +398,74 @@ export function buildDemoDataset(): DemoDataset {
 
   const incidents: Incident[] = [];
 
+  // ── credentialing registry ──────────────────────────────────────────────
+  // The registry itself is the shipped default; an admin edits it at
+  // /admin/requirements and the edit lives here for the session.
+  const requirements: Requirement[] = DEFAULT_REQUIREMENTS.map((r) => ({ ...r }));
+
+  // Evidence for the requirements whose source is `manual` — the ones with no
+  // home in the legacy columns. License and training requirements deliberately
+  // have NO rows here: they resolve from users.license_expiration_date and
+  // users.training_completed[], which is exactly the backward-compatibility
+  // path production data will take.
+  const cred = (
+    staff: string,
+    requirement: string,
+    status: StaffCredentialRecord["status"],
+    completedOn: string | null = null,
+    extra: Partial<StaffCredentialRecord> = {}
+  ): StaffCredentialRecord => ({
+    staff_id: staff, requirement_id: requirement, status,
+    completed_on: completedOn, expires_on: null, note: null,
+    waived_by: null, waive_reason: null, ...extra
+  });
+
+  const staffCredentials: StaffCredentialRecord[] = [
+    // Office staff — cleared.
+    cred(UID.sandoval, "background_check", "verified", todayStr(-700)),
+    cred(UID.sandoval, "work_eligibility", "verified", todayStr(-700)),
+    cred(UID.alvarez, "background_check", "verified", todayStr(-500)),
+    cred(UID.alvarez, "work_eligibility", "verified", todayStr(-500)),
+
+    // Field staff — cleared.
+    cred(UID.vega, "background_check", "verified", todayStr(-400)),
+    cred(UID.vega, "caps_check", "verified", todayStr(-400)),
+    cred(UID.vega, "work_eligibility", "verified", todayStr(-400)),
+    cred(UID.price, "background_check", "verified", todayStr(-300)),
+    cred(UID.price, "caps_check", "verified", todayStr(-300)),
+    cred(UID.price, "work_eligibility", "verified", todayStr(-300)),
+    cred(UID.martinez, "background_check", "verified", todayStr(-600)),
+    cred(UID.martinez, "caps_check", "verified", todayStr(-600)),
+    cred(UID.martinez, "work_eligibility", "verified", todayStr(-600)),
+    cred(UID.torres, "background_check", "verified", todayStr(-250)),
+    cred(UID.torres, "work_eligibility", "verified", todayStr(-250)),
+
+    // DEMO: Torres's registry check is still running — an outstanding gating
+    // item that does NOT block a claim (only a lapse does).
+    cred(UID.torres, "caps_check", "in_progress", null, { note: "Submitted — result pending" }),
+
+    // HIPAA and abuse-and-neglect are recorded as credential rows rather than
+    // Relias completions, so the demo exercises BOTH evidence paths: the
+    // registry resolves these from staff_credentials and the QMAP/CPR rows
+    // from users.training_completed[] and Relias.
+    cred(UID.sandoval, "hipaa", "verified", todayStr(-120)),
+    cred(UID.sandoval, "abuse_neglect", "verified", todayStr(-120)),
+    cred(UID.alvarez, "hipaa", "verified", todayStr(-90)),
+    cred(UID.vega, "hipaa", "verified", todayStr(-150)),
+    cred(UID.price, "hipaa", "verified", todayStr(-80)),
+    cred(UID.price, "abuse_neglect", "verified", todayStr(-80)),
+    cred(UID.martinez, "hipaa", "verified", todayStr(-200)),
+    cred(UID.martinez, "abuse_neglect", "verified", todayStr(-200)),
+    cred(UID.torres, "hipaa", "verified", todayStr(-60)),
+    cred(UID.torres, "abuse_neglect", "verified", todayStr(-60)),
+
+    // DEMO: Ray Romero is newly hired — licence on file, nothing else started.
+    // He is the activation-gate case: several gating items outstanding, yet
+    // nothing LAPSED, so he blocks no claim. That is the distinction the
+    // registry draws and the old hardcoded checks could not.
+    cred(UID.romero, "work_eligibility", "verified", todayStr(-30))
+  ];
+
   // A few starter audit rows so the Audit Trail screen isn't empty pre-demo.
   const auditTrail: AuditRow[] = [
     {
@@ -415,7 +486,7 @@ export function buildDemoDataset(): DemoDataset {
     users, clients, physicianOrders, visits, evvLogs, progressNotes, jobCoachingLogs,
     medicationLogs, nmtTrips, documents, timesheets, timesheetEntries, payrollPeriods,
     feeSchedule, reliasCourses, reliasCompletions, recurringTemplates, menuConfig,
-    userPrefs, incidents, auditTrail,
+    userPrefs, incidents, requirements, staffCredentials, auditTrail,
     appSettings: { evv_geofence_radius_m: 150, agency_timezone: "America/Denver" }
   };
 }

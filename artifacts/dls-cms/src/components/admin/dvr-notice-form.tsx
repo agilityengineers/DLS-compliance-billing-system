@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { createDvrNotice } from "@/app/admin/documents/actions";
-import { agencyTodayIso } from "@/lib/time/agency";
+import { agencyTodayIso } from "@workspace/time";
 
 export function DvrNoticeForm({ clients }: { clients: { id: string; name: string }[] }) {
   const router = useRouter();

@@ -5,7 +5,7 @@
 // Flags are computed from data; resolutions live in qa_resolutions keyed by
 // a deterministic flag_key.
 import "server-only";
-import { agencyAddDays, agencyTodayIso, formatAgencyTime, utcIsoToAgencyDate } from "@/lib/time/agency";
+import { agencyAddDays, agencyTodayIso, formatAgencyTime, utcIsoToAgencyDate } from "@workspace/time";
 
 import { listVisits } from "@/lib/data/repo-core";
 import { listEvvLogs, listMedications, listNotes } from "@/lib/data/repo-field";

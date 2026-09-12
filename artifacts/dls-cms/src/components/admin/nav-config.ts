@@ -34,7 +34,10 @@ export const ADMIN_NAV: NavSection[] = [
       { href: "/admin", label: "Dashboard", icon: "LayoutDashboard" },
       { href: "/admin/clients", label: "Clients", icon: "Users", feature: "clients.core" },
       { href: "/admin/schedule", label: "Schedule", icon: "CalendarDays", feature: "schedule.board" },
-      { href: "/admin/staff", label: "Staff & credentials", icon: "UserCog", feature: "staff.credentials", adminOnly: true }
+      { href: "/admin/staff", label: "Staff & credentials", icon: "UserCog", feature: "staff.credentials", adminOnly: true },
+      // The registry configures staff.credentials rather than being a
+      // capability of its own, so it rides that feature's switch.
+      { href: "/admin/requirements", label: "Requirements", icon: "ListChecks", feature: "staff.credentials", adminOnly: true }
     ]
   },
   {

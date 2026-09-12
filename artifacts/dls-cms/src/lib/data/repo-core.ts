@@ -5,7 +5,7 @@ import "server-only";
 
 import { isDemoMode } from "@/lib/demo/mode";
 import { listAccountDirectory } from "@/lib/auth/directory";
-import { agencyAddDays, agencyDayRangeUtc, agencyToUtcIso, utcIsoToAgencyDate } from "@/lib/time/agency";
+import { agencyAddDays, agencyDayRangeUtc, agencyToUtcIso, utcIsoToAgencyDate } from "@workspace/time";
 import { getDemoStore, type AuditContext } from "@/lib/data/demo/store";
 import { createDataClient, createServiceClient } from "@/lib/supabase/server";
 import type {

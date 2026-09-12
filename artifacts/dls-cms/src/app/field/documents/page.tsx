@@ -2,7 +2,7 @@
 import { checkAccess } from "@/lib/rbac/access";
 import { listDocuments } from "@/lib/data/repo-field";
 import { Badge } from "@/components/ui/badge";
-import { formatAgencyDate } from "@/lib/time/agency";
+import { formatAgencyDate } from "@workspace/time";
 
 export default async function FieldDocumentsPage() {
   const { ctx, denied } = await checkAccess({ feature: "documents.files", roles: ["Field_Staff"] });

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/offline/db";
 import { Badge } from "@/components/ui/badge";
-import { agencyAddDays, agencyMondayOf, agencyTodayIso, formatAgencyCalendarDate, utcIsoToAgencyDate } from "@/lib/time/agency";
+import { agencyAddDays, agencyMondayOf, agencyTodayIso, formatAgencyCalendarDate, utcIsoToAgencyDate } from "@workspace/time";
 
 const STATUS_VARIANT = {
   Scheduled: "muted", In_Progress: "warning", Completed: "success", Cancelled: "destructive", Billed: "default"

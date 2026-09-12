@@ -4,7 +4,12 @@ import * as schema from "./schema";
 
 const { Pool } = pg;
 
-export type Db = NodePgDatabase<typeof schema>;
+/**
+ * A Drizzle handle over node-postgres. `drizzle()` attaches the underlying
+ * pool as `$client`; naming it here lets callers run a parameterised query
+ * without threading the pool separately or interpolating values into SQL.
+ */
+export type Db = NodePgDatabase<typeof schema> & { $client: pg.Pool };
 
 export interface DbHandle {
   db: Db;

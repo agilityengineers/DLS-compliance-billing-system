@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { manualEvvAdjustment } from "@/lib/evv/manualAdjustment";
-import { agencyToUtcIso, agencyTodayIso } from "@/lib/time/agency";
+import { agencyToUtcIso, agencyTodayIso } from "@workspace/time";
 
 export function ManualAdjustmentForm({ visits }: { visits: { id: string; label: string }[] }) {
   const router = useRouter();

@@ -7,7 +7,7 @@ import { getDemoStore, DemoRuleError, type AuditContext } from "@/lib/data/demo/
 import { createDataClient } from "@/lib/supabase/server";
 import { normalizeGps } from "./repo-core";
 import { calculateBillingUnits } from "@/lib/billing/units";
-import { agencyAddDays, agencyDayRangeUtc, agencySundayOf, utcIsoToAgencyDate } from "@/lib/time/agency";
+import { agencyAddDays, agencyDayRangeUtc, agencySundayOf, utcIsoToAgencyDate } from "@workspace/time";
 import type {
   DocumentRow, EvvLog, JobCoachingLog, MedicationLog, NmtTrip, ProgressNote,
   ServiceCode, Timesheet, TimesheetEntry, UserPrefs

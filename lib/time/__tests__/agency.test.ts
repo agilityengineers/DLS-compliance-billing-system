@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   agencyAddDays, agencyDayRangeUtc, agencyMondayOf, agencySundayOf, agencyToUtcIso, agencyTodayIso,
   agencyWeekday, hoursBetweenUtc, utcIsoToAgencyDate, utcIsoToAgencyParts, utcIsoToAgencyTime
-} from "../agency";
+} from "../src/agency";
 
 const TZ = "America/Denver";
 

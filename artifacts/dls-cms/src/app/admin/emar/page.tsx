@@ -5,7 +5,7 @@ import { listMedications } from "@/lib/data/repo-field";
 import { Badge } from "@/components/ui/badge";
 import { Table, THead, TBody } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { agencyAddDays, agencyTodayIso, formatAgencyDateTime, formatAgencyTime } from "@/lib/time/agency";
+import { agencyAddDays, agencyTodayIso, formatAgencyDateTime, formatAgencyTime } from "@workspace/time";
 
 const STATUSES = ["All", "Administered", "Refused", "Missed"] as const;
 

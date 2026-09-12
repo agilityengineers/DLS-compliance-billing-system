@@ -3,7 +3,7 @@
 // days" at 30/14/3-day marks, deduped via notification_log. Live sending is
 // gated on the BAA flag; demo mode logs instead of sending.
 import "server-only";
-import { agencyDaysBetween, agencyTodayIso } from "@/lib/time/agency";
+import { agencyDaysBetween, agencyTodayIso } from "@workspace/time";
 
 import { isDemoMode } from "@/lib/demo/mode";
 import { assertBaaGate } from "./hipaaGate";

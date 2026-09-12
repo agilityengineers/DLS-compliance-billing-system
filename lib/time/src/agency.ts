@@ -13,8 +13,15 @@
 
 export const DEFAULT_AGENCY_TZ = "America/Denver";
 
+// Declared rather than imported from @types/node: this package is imported by
+// browser code, where `process` simply does not exist. Reading it unguarded
+// throws a ReferenceError in any bundle that has not been told to shim it.
+declare const process: { env?: Record<string, string | undefined> } | undefined;
+
 /** Agency time zone. Overridable per deployment; the DB copy lives in app_settings.agency_timezone. */
-export const AGENCY_TZ: string = process.env.NEXT_PUBLIC_AGENCY_TIMEZONE || DEFAULT_AGENCY_TZ;
+export const AGENCY_TZ: string =
+  (typeof process !== "undefined" ? process?.env?.NEXT_PUBLIC_AGENCY_TIMEZONE : undefined) ||
+  DEFAULT_AGENCY_TZ;
 
 const fmtCache = new Map<string, Intl.DateTimeFormat>();
 function formatter(tz: string): Intl.DateTimeFormat {

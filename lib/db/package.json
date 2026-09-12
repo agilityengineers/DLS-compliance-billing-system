@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./schema": "./src/schema/index.ts"
+    "./schema": "./src/schema/index.ts",
+    "./seed": "./src/seed/index.ts"
   },
   "scripts": {
     "generate": "drizzle-kit generate --config ./drizzle.config.ts",
@@ -13,6 +14,7 @@
     "push-force": "drizzle-kit push --force --config ./drizzle.config.ts"
   },
   "dependencies": {
+    "@workspace/credentialing": "workspace:*",
     "drizzle-orm": "catalog:",
     "drizzle-zod": "^0.8.3",
     "pg": "^8.22.0",

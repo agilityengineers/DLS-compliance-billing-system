@@ -2,9 +2,12 @@
 //   1. one tier-1 row per catalog feature (new keys get their launch default)
 //   2. the first organization
 //   3. the platform owner (Super Admin) account
-// Nothing here ever overwrites an existing account unless SUPER_ADMIN_FORCE_RESET=true.
+//   4. the shipped credentialing requirements registry
+// Nothing here ever overwrites an existing account unless SUPER_ADMIN_FORCE_RESET=true,
+// and re-seeding the registry never overwrites an agency's own policy decisions.
 import { eq } from "drizzle-orm";
 import { organizationsTable, usersTable, type Db } from "@workspace/db";
+import { seedRequirements } from "@workspace/db/seed";
 import type { AppConfig } from "./config";
 import { ensurePlatformRows } from "./features";
 import { logger } from "./logger";
@@ -25,10 +28,23 @@ export interface BootstrapResult {
   orgCreated: boolean;
   superAdminId: string;
   superAdminCreated: boolean;
+  requirementsSeeded: number;
 }
 
 export async function bootstrapPlatform(db: Db, config: AppConfig): Promise<BootstrapResult> {
   const platformRowsAdded = await ensurePlatformRows(db);
+
+  // The credentialing registry decides what blocks a claim, so an empty one is
+  // not a neutral starting state — it would mean nothing is required of
+  // anybody. Install the shipped defaults. The seed refreshes the wording and
+  // citations we own and leaves the agency's own toggles and sign-offs alone,
+  // so this is safe on every restart, not just the first.
+  // `$client` is the node-postgres pool behind this Drizzle handle: the seed
+  // speaks numbered placeholders, and passing them through keeps every value
+  // parameterised rather than interpolated into SQL.
+  const { seeded: requirementsSeeded } = await seedRequirements((text, params) =>
+    db.$client.query(text, params as unknown[])
+  );
 
   let orgCreated = false;
   let [org] = await db.select().from(organizationsTable).where(eq(organizationsTable.slug, config.defaultOrgSlug)).limit(1);
@@ -85,5 +101,6 @@ export async function bootstrapPlatform(db: Db, config: AppConfig): Promise<Boot
     orgCreated,
     superAdminId: admin!.id,
     superAdminCreated,
+    requirementsSeeded,
   };
 }

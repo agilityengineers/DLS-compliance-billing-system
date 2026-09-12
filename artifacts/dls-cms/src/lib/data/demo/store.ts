@@ -10,7 +10,7 @@
 // Data resets on server restart (by design — synthetic only, no PHI).
 
 import { buildDemoDataset, type DemoDataset } from "./dataset";
-import { agencyAddDays, agencySundayOf, utcIsoToAgencyDate } from "@/lib/time/agency";
+import { agencyAddDays, agencySundayOf, utcIsoToAgencyDate } from "@workspace/time";
 import { haversineMeters } from "@/lib/evv/gps";
 import type {
   AuditRow, EvvLog, MedicationLog, NmtTrip, ProgressNote, Visit

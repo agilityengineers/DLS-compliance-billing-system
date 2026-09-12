@@ -8,8 +8,9 @@ Care management, compliance and billing portal for Durable Life Skills, Inc.: a 
 - `pnpm --filter @workspace/dls-cms run dev` — run the web app (needs `PORT`, `BASE_PATH`; forwards `/api` to `API_PROXY_TARGET`, default `http://localhost:8080`)
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
-- `pnpm test` — unit tests (feature rules) + API integration tests (set `TEST_DATABASE_URL` to a scratch Postgres; skipped otherwise)
+- `pnpm test` — unit tests (feature rules, credentialing engine) + API and DB integration tests (set `TEST_DATABASE_URL` to a scratch Postgres; skipped otherwise)
 - `pnpm --filter @workspace/db run generate` — write a new SQL migration after changing `lib/db/src/schema`
+- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - Required env: `DATABASE_URL` — Postgres connection string. Optional: `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_PASSWORD`, `SESSION_IDLE_MINUTES`, `SESSION_MAX_DAYS`, `CORS_ORIGINS` (see `docs/access-model.md`)
 
@@ -25,9 +26,11 @@ Care management, compliance and billing portal for Durable Life Skills, Inc.: a 
 ## Where things live
 
 - `lib/features` — roles, the feature catalog and the two-tier permission maths (shared by API + web)
-- `lib/db/src/schema/access.ts` — organizations, users, sessions, platform/org feature switches, audit log; migrations in `lib/db/migrations`
-- `artifacts/api-server/src` — auth (`routes/auth.ts`), provider console (`routes/platform.ts`), organization admin (`routes/org.ts`), bootstrap seed (`lib/bootstrap.ts`)
-- `artifacts/dls-cms/src/app/(auth)/login` — the front door; `app/admin/platform` — Super Admin console; `app/admin/settings` — Admin accounts + feature access
+- `lib/credentialing` — the requirements registry types, the pure evaluation engine and the shipped default registry. No dependencies, so the client, the API server and the tests share one definition. Claim readiness and the staff screen both read it — do not re-derive credential logic anywhere else
+- `lib/db/src/schema/access.ts` — organizations, users, sessions, platform/org feature switches, audit log; `schema/requirements.ts` + `schema/staff-credentials.ts` — the credentialing registry; migrations in `lib/db/migrations` (drizzle-kit managed, journal included — never hand-write one)
+- `lib/api-spec/openapi.yaml` — the API contract and the source of truth. Edit it, then run the codegen above; never hand-edit anything under a `generated/` folder
+- `artifacts/api-server/src` — auth (`routes/auth.ts`), provider console (`routes/platform.ts`), organization admin (`routes/org.ts`), credentialing registry (`routes/credentialing.ts`), bootstrap seed (`lib/bootstrap.ts`)
+- `artifacts/dls-cms/src/app/(auth)/login` — the front door; `app/admin/platform` — Super Admin console; `app/admin/settings` — Admin accounts + feature access; `app/admin/requirements` — the credentialing registry
 - `artifacts/dls-cms/src/lib/auth/session.ts` — the one way to resolve who is acting (reads `/api/auth/me`); `lib/rbac/access.tsx` — page gate
 - `docs/access-model.md` — the access model reference; `docs/review/` — launch-readiness review, roadmap, work plan
 

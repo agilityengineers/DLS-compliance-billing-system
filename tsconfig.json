@@ -4,7 +4,13 @@
   "files": [],
   "references": [
     {
+      "path": "./lib/credentialing"
+    },
+    {
       "path": "./lib/features"
+    },
+    {
+      "path": "./lib/time"
     },
     {
       "path": "./lib/db"

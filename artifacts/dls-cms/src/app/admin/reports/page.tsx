@@ -4,7 +4,7 @@ import { checkAccess } from "@/lib/rbac/access";
 import { listClients } from "@/lib/data/repo-core";
 import { listNotes } from "@/lib/data/repo-field";
 import type { Client, VisitType } from "@/lib/supabase/types";
-import { agencyAddDays, agencySundayOf, agencyTodayIso, formatAgencyCalendarDate } from "@/lib/time/agency";
+import { agencyAddDays, agencySundayOf, agencyTodayIso, formatAgencyCalendarDate } from "@workspace/time";
 
 const SERVICES: { type: VisitType; label: string; field: keyof Client }[] = [
   { type: "SCC", label: "SCC", field: "authorized_scc_hours_per_week" },

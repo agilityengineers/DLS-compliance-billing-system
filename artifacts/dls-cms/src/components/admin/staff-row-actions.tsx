@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { renewLicense, renewTraining, offboardStaff } from "@/app/admin/staff/actions";
-import { agencyTodayIso } from "@/lib/time/agency";
+import { agencyTodayIso } from "@workspace/time";
 
 export function StaffRowActions({
   user,

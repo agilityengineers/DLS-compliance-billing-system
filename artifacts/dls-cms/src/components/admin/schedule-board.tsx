@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { upsertVisit, findActiveOrder } from "@/app/admin/schedule/actions";
 import type { PhysicianOrder, VisitWithNames } from "@/lib/supabase/types";
 import { cn } from "@/lib/utils";
-import { agencyAddDays, agencyToUtcIso, formatAgencyTime, utcIsoToAgencyDate, utcIsoToAgencyParts } from "@/lib/time/agency";
+import { agencyAddDays, agencyToUtcIso, formatAgencyTime, utcIsoToAgencyDate, utcIsoToAgencyParts } from "@workspace/time";
 
 interface Props {
   visits: VisitWithNames[];

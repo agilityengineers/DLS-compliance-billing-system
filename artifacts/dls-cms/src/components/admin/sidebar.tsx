@@ -9,7 +9,7 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import {
   AlertTriangle, Banknote, BarChart3, Building2, CalendarDays, ChevronsLeft, ChevronsRight,
-  FolderOpen, GraduationCap, LayoutDashboard, Lock, MapPin, Pill, Receipt,
+  FolderOpen, GraduationCap, LayoutDashboard, ListChecks, Lock, MapPin, Pill, Receipt,
   ScrollText, Settings, ShieldCheck, SlidersHorizontal, UserCog, Users, type LucideIcon
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -18,7 +18,7 @@ import type { NavSection } from "./nav-config";
 const ICONS: Record<string, LucideIcon> = {
   AlertTriangle, LayoutDashboard, Users, CalendarDays, UserCog, ShieldCheck, MapPin, Pill,
   ScrollText, Receipt, Banknote, BarChart3, FolderOpen, GraduationCap, Settings,
-  SlidersHorizontal, Building2
+  SlidersHorizontal, Building2, ListChecks
 };
 
 export function AdminSidebar({

@@ -6,7 +6,7 @@ import { getOrCreateTimesheet, listTimesheetEntries } from "@/lib/data/repo-fiel
 import { getClient } from "@/lib/data/repo-core";
 import { SubmitTimesheetButton } from "@/components/field/submit-timesheet-button";
 import { Badge } from "@/components/ui/badge";
-import { agencyMondayOf, agencyTodayIso, formatAgencyCalendarDate, formatAgencyDateTime } from "@/lib/time/agency";
+import { agencyMondayOf, agencyTodayIso, formatAgencyCalendarDate, formatAgencyDateTime } from "@workspace/time";
 
 const mondayIso = () => agencyMondayOf(agencyTodayIso());
 

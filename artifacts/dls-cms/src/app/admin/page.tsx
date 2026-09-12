@@ -6,7 +6,7 @@ import { listClients, listVisits } from "@/lib/data/repo-core";
 import { computeQaFlags } from "@/lib/qa/flags";
 import { evaluateUnbilledNotes } from "@/lib/billing/readiness";
 import { Badge } from "@/components/ui/badge";
-import { agencyTodayIso, formatAgencyCalendarDate, formatAgencyTime } from "@/lib/time/agency";
+import { agencyTodayIso, formatAgencyCalendarDate, formatAgencyTime } from "@workspace/time";
 
 const STATUS_VARIANT = {
   Scheduled: "muted", In_Progress: "warning", Completed: "success", Cancelled: "destructive", Billed: "default"

@@ -6,7 +6,7 @@ import { listVisits } from "@/lib/data/repo-core";
 import { Badge } from "@/components/ui/badge";
 import { Table, THead, TBody } from "@/components/ui/table";
 import { ManualAdjustmentForm } from "@/components/admin/manual-adjustment-form";
-import { agencyAddDays, agencyTodayIso, formatAgencyDate, formatAgencyDateTime, formatAgencyTime } from "@/lib/time/agency";
+import { agencyAddDays, agencyTodayIso, formatAgencyDate, formatAgencyDateTime, formatAgencyTime } from "@workspace/time";
 
 export default async function EvvReviewPage() {
   const { ctx, denied } = await checkAccess({ feature: "evv.clock" });

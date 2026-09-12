@@ -7,7 +7,7 @@
     "dev": "vite --config vite.config.ts --host 0.0.0.0",
     "build": "vite build --config vite.config.ts",
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc --build ../../tsconfig.json && tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
     "@dnd-kit/core": "^6.1.0",
@@ -54,7 +54,9 @@
     "@types/react-signature-canvas": "^1.0.5",
     "@vitejs/plugin-react": "catalog:",
     "@workspace/api-client-react": "workspace:*",
+    "@workspace/credentialing": "workspace:*",
     "@workspace/features": "workspace:*",
+    "@workspace/time": "workspace:*",
     "autoprefixer": "^10.4.20",
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",
