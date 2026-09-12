@@ -36,6 +36,14 @@ import AdminSchedule from "@/app/admin/schedule/page";
 import AdminSettings from "@/app/admin/settings/page";
 import AdminStaff from "@/app/admin/staff/page";
 import AdminPlatform from "@/app/admin/platform/page";
+import AdminPlatformOrganizations from "@/app/admin/platform/organizations/page";
+import AdminPlatformAccounts from "@/app/admin/platform/accounts/page";
+import AdminPlatformFeatures from "@/app/admin/platform/features/page";
+import AdminPlatformAdoption from "@/app/admin/platform/adoption/page";
+import AdminPlatformSupport from "@/app/admin/platform/support/page";
+import AdminPlatformSessions from "@/app/admin/platform/sessions/page";
+import AdminPlatformAudit from "@/app/admin/platform/audit/page";
+import AdminPlatformSystem from "@/app/admin/platform/system/page";
 
 // ── Field pages ───────────────────────────────────────────────────────────
 import FieldToday from "@/app/field/page";
@@ -115,6 +123,14 @@ function Router() {
       <Route path="/admin/settings">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminSettings as AsyncComponent)} />}</Route>
       <Route path="/admin/staff">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminStaff as AsyncComponent)} />}</Route>
       <Route path="/admin/platform">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminPlatform as AsyncComponent)} />}</Route>
+      <Route path="/admin/platform/organizations">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminPlatformOrganizations as AsyncComponent)} />}</Route>
+      <Route path="/admin/platform/accounts">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminPlatformAccounts as AsyncComponent)} />}</Route>
+      <Route path="/admin/platform/features">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminPlatformFeatures as AsyncComponent)} />}</Route>
+      <Route path="/admin/platform/adoption">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminPlatformAdoption as AsyncComponent)} />}</Route>
+      <Route path="/admin/platform/support">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminPlatformSupport as AsyncComponent)} />}</Route>
+      <Route path="/admin/platform/sessions">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminPlatformSessions as AsyncComponent)} />}</Route>
+      <Route path="/admin/platform/audit">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminPlatformAudit as AsyncComponent)} />}</Route>
+      <Route path="/admin/platform/system">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminPlatformSystem as AsyncComponent)} />}</Route>
 
       {/* Field app */}
       <Route path="/field">{() => <AsyncRoute loader={withLayoutElement(FieldLayout, <FieldToday />)} />}</Route>

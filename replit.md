@@ -30,9 +30,9 @@ Care management, compliance and billing portal for Durable Life Skills, Inc.: a 
 - `lib/db/src/schema/access.ts` — organizations, users, sessions, platform/org feature switches, audit log; `schema/requirements.ts` + `schema/staff-credentials.ts` — the credentialing registry; migrations in `lib/db/migrations` (drizzle-kit managed, journal included — never hand-write one)
 - `lib/api-spec/openapi.yaml` — the API contract and the source of truth. Edit it, then run the codegen above; never hand-edit anything under a `generated/` folder
 - `artifacts/api-server/src` — auth (`routes/auth.ts`), provider console (`routes/platform.ts`), organization admin (`routes/org.ts`), credentialing registry (`routes/credentialing.ts`), bootstrap seed (`lib/bootstrap.ts`)
-- `artifacts/dls-cms/src/app/(auth)/login` — the front door; `app/admin/platform` — Super Admin console; `app/admin/settings` — Admin accounts + feature access; `app/admin/requirements` — the credentialing registry
+- `artifacts/dls-cms/src/app/(auth)/login` — the front door; `app/admin/platform/*` — the Super Admin console (overview, organizations, accounts, switchboard, adoption, support access, sessions, audit log, system status; panels in `components/admin/platform`, menu in `components/admin/nav-config.ts`); `app/admin/settings` — Admin accounts + feature access; `app/admin/requirements` — the credentialing registry
 - `artifacts/dls-cms/src/lib/auth/session.ts` — the one way to resolve who is acting (reads `/api/auth/me`); `lib/rbac/access.tsx` — page gate
-- `docs/access-model.md` — the access model reference; `docs/review/` — launch-readiness review, roadmap, work plan
+- `docs/access-model.md` — the access model reference; `docs/review/` — launch-readiness review, roadmap, work plan, and the Super Admin console review (`2026-09-super-admin-console.md`: what the console covers and what a provider still needs)
 
 ## Architecture decisions
 
@@ -45,7 +45,7 @@ Care management, compliance and billing portal for Durable Life Skills, Inc.: a 
 ## Product
 
 - Login page (email + password) with the DLS logo; role-based landing: provider → platform console, Admin/Scheduler → desktop console, Field Staff → field app
-- Platform console: feature switchboard (tier 1), organizations and their administrators, view-as, configuration audit
+- Platform console (Super Admin): overview with an attention list, organizations with a hand-over checklist, cross-organization accounts, feature switchboard (tier 1), feature adoption matrix, support access (audited view-as), active sessions (end one / sign out everywhere), filterable audit log with CSV export, system status (migrations, sign-in policy, configuration warnings)
 - Settings: accounts (create/role/suspend/one-time password), feature access per role (tier 2), permission matrix, audit
 - Every module (QA, EVV, eMAR, payroll, reports, documents, Relias, incidents, billing …) is gated by its switch
 

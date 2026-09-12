@@ -5,9 +5,24 @@
 // (provider switch ∧ organization switch ∧ role grant — see
 // @workspace/features). Billing is special: a Scheduler sees it locked (with
 // an explanation card) whenever the organization has billing switched on.
+//
+// The provider (Super Admin) gets a different menu altogether: the platform
+// console, grouped by the job at hand — overview, organizations and people,
+// capabilities, security and compliance, system. None of it opens client
+// records.
 import type { FeatureKey, Role } from "@workspace/features";
 
-export type SectionKey = "CORE" | "COMPLIANCE" | "BUSINESS" | "TRAINING" | "SYSTEM" | "PLATFORM";
+export type SectionKey =
+  | "CORE"
+  | "COMPLIANCE"
+  | "BUSINESS"
+  | "TRAINING"
+  | "SYSTEM"
+  | "PLATFORM_OVERVIEW"
+  | "PLATFORM_ORGS"
+  | "PLATFORM_CAPABILITIES"
+  | "PLATFORM_SECURITY"
+  | "PLATFORM_SYSTEM";
 
 export interface NavItem {
   href: string;
@@ -18,18 +33,23 @@ export interface NavItem {
   adminOnly?: boolean;
   /** Visible to non-admins but locked (Scheduler's Billing). */
   lockedForNonAdmin?: boolean;
+  /** One line for the overview's quick-links; also the collapsed-rail tooltip. */
+  description?: string;
 }
 
 export interface NavSection {
   key: SectionKey;
   label: string;
   items: NavItem[];
+  /** Expanded on first visit (the sidebar remembers the user's own choice afterwards). */
+  defaultOpen?: boolean;
 }
 
 export const ADMIN_NAV: NavSection[] = [
   {
     key: "CORE",
     label: "Core",
+    defaultOpen: true,
     items: [
       { href: "/admin", label: "Dashboard", icon: "LayoutDashboard" },
       { href: "/admin/clients", label: "Clients", icon: "Users", feature: "clients.core" },
@@ -73,16 +93,104 @@ export const ADMIN_NAV: NavSection[] = [
   }
 ];
 
-/** The provider's menu — platform configuration only, no client records. */
+/**
+ * The provider's menu — platform configuration only, no client records.
+ * Every section starts expanded: the console is small enough to see whole.
+ */
 export const PLATFORM_NAV: NavSection[] = [
   {
-    key: "PLATFORM",
-    label: "Platform",
+    key: "PLATFORM_OVERVIEW",
+    label: "Overview",
+    defaultOpen: true,
     items: [
-      { href: "/admin/platform", label: "Platform console", icon: "SlidersHorizontal" }
+      {
+        href: "/admin/platform",
+        label: "Platform overview",
+        icon: "LayoutDashboard",
+        description: "What needs attention, activity this week and the numbers at a glance."
+      }
+    ]
+  },
+  {
+    key: "PLATFORM_ORGS",
+    label: "Organizations & people",
+    defaultOpen: true,
+    items: [
+      {
+        href: "/admin/platform/organizations",
+        label: "Organizations",
+        icon: "Building2",
+        description: "Create an organization, hand it to its administrator, suspend or rename it."
+      },
+      {
+        href: "/admin/platform/accounts",
+        label: "Accounts",
+        icon: "Users",
+        description: "Every sign-in on the platform: search, reset a password, suspend, sign out everywhere."
+      }
+    ]
+  },
+  {
+    key: "PLATFORM_CAPABILITIES",
+    label: "Capabilities",
+    defaultOpen: true,
+    items: [
+      {
+        href: "/admin/platform/features",
+        label: "Feature switchboard",
+        icon: "SlidersHorizontal",
+        description: "Tier 1: which capabilities organizations may use at all."
+      },
+      {
+        href: "/admin/platform/adoption",
+        label: "Feature adoption",
+        icon: "Grid3x3",
+        description: "Which organization has switched on what, and for which roles."
+      }
+    ]
+  },
+  {
+    key: "PLATFORM_SECURITY",
+    label: "Security & compliance",
+    defaultOpen: true,
+    items: [
+      {
+        href: "/admin/platform/support",
+        label: "Support access",
+        icon: "LifeBuoy",
+        description: "Start an audited view-as session and review every past one."
+      },
+      {
+        href: "/admin/platform/sessions",
+        label: "Active sessions",
+        icon: "MonitorSmartphone",
+        description: "Who is signed in right now, from where; end a session."
+      },
+      {
+        href: "/admin/platform/audit",
+        label: "Audit log",
+        icon: "ScrollText",
+        description: "Every sign-in, switch flip and account change, filterable and exportable."
+      }
+    ]
+  },
+  {
+    key: "PLATFORM_SYSTEM",
+    label: "System",
+    defaultOpen: true,
+    items: [
+      {
+        href: "/admin/platform/system",
+        label: "System status",
+        icon: "Activity",
+        description: "Service, database and migrations, sign-in policy, configuration warnings."
+      }
     ]
   }
 ];
+
+/** Every provider screen, flattened — the overview's quick links. */
+export const PLATFORM_LINKS: NavItem[] = PLATFORM_NAV.flatMap((s) => s.items);
 
 /**
  * Sections/items the given role may see.
@@ -108,4 +216,21 @@ export function navForRole(
       })
     }))
     .filter((s) => s.items.length > 0);
+}
+
+/**
+ * The menu entry that owns `pathname`: the longest href that is the path
+ * itself or one of its parents. So /admin/clients/new highlights Clients,
+ * and /admin/platform/accounts highlights Accounts rather than the overview
+ * that shares its prefix. Returns null when nothing matches.
+ */
+export function activeHref(sections: readonly NavSection[], pathname: string): string | null {
+  let best: string | null = null;
+  for (const section of sections) {
+    for (const item of section.items) {
+      const matches = pathname === item.href || pathname.startsWith(`${item.href}/`);
+      if (matches && (best === null || item.href.length > best.length)) best = item.href;
+    }
+  }
+  return best;
 }

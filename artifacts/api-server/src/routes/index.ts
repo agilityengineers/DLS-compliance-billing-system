@@ -11,7 +11,7 @@ export function apiRouter(db: Db, config: AppConfig): IRouter {
   const router: IRouter = Router();
   router.use(healthRouter);
   router.use(authRouter(db, config));
-  router.use(platformRouter(db));
+  router.use(platformRouter(db, config));
   router.use(orgRouter(db));
   router.use(credentialingRouter(db));
   return router;

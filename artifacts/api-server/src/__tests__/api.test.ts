@@ -289,6 +289,150 @@ describe.skipIf(!TEST_URL)("api server", () => {
     expect(ok.body.mustChangePassword).toBe(true);
   });
 
+  // ── the provider console beyond the switchboard ───────────────────────
+  let opsId: string;
+
+  it("keeps the provider console closed to organization admins", async () => {
+    for (const path of ["/api/platform/overview", "/api/platform/adoption", "/api/platform/sessions", "/api/platform/system", "/api/platform/audit"]) {
+      expect((await api("GET", path, undefined, lisaCookie)).status).toBe(403);
+    }
+    expect((await api("DELETE", `/api/platform/users/${schedulerId}/sessions`, undefined, lisaCookie)).status).toBe(403);
+  });
+
+  it("summarizes the platform on the overview and flags what needs attention", async () => {
+    const empty = await api("POST", "/api/platform/organizations", { name: "Empty Agency" }, superCookie);
+    expect(empty.status).toBe(201);
+    const res = await api("GET", "/api/platform/overview", undefined, superCookie);
+    expect(res.status).toBe(200);
+    expect(res.body.organizations).toEqual({ total: 3, active: 3, suspended: 0 });
+    expect(res.body.accounts.platform).toBe(1);
+    expect(res.body.accounts.byRole.Admin).toBe(2); // Lisa and Other Owner
+    expect(res.body.accounts.byRole.Scheduler).toBe(1); // Sam
+    expect(res.body.features.total).toBeGreaterThan(0);
+    expect(res.body.features.available).toBeGreaterThan(0);
+    expect(res.body.activity.signInsLast7Days).toBeGreaterThan(0);
+    expect(res.body.activity.supportSessionsLast30Days).toBeGreaterThanOrEqual(2);
+    const kinds: string[] = res.body.attention.map((a: any) => a.kind);
+    expect(kinds).toContain("org_no_admin"); // Empty Agency
+    expect(kinds).toContain("org_admin_not_signed_in"); // Other Owner has never signed in
+    expect(kinds).toContain("single_platform_account");
+    expect(kinds).toContain("preview_features_available"); // qa.flags was made available above
+    const noAdmin = res.body.attention.find((a: any) => a.kind === "org_no_admin");
+    expect(noAdmin.severity).toBe("warning");
+    expect(noAdmin.message).toContain("Empty Agency");
+    expect(noAdmin.href).toBe("/admin/platform/organizations");
+  });
+
+  it("shows feature adoption for every organization", async () => {
+    const res = await api("GET", "/api/platform/adoption", undefined, superCookie);
+    expect(res.status).toBe(200);
+    expect(res.body.organizations).toHaveLength(3);
+    const dls = res.body.organizations.find((o: any) => o.id === orgId);
+    const qa = dls.features.find((f: any) => f.key === "qa.flags");
+    expect(qa).toEqual({ key: "qa.flags", platformEnabled: true, orgEnabled: true, roles: { Scheduler: false } });
+    const reports = dls.features.find((f: any) => f.key === "reports.utilization");
+    expect(reports.orgEnabled).toBe(false); // switched off while viewing as Lisa
+    const other = res.body.organizations.find((o: any) => o.name === "Other Agency");
+    expect(other.features.find((f: any) => f.key === "qa.flags").orgEnabled).toBe(false); // never turned on there
+  });
+
+  it("lists live sessions and lets the provider end one or sign a person out everywhere", async () => {
+    const created = await api(
+      "POST",
+      "/api/platform/users",
+      { orgId, email: "ops.olive@durablelifeskills.com", fullName: "Ops Olive", role: "Scheduler", password: "Olive-2026-ok" },
+      superCookie
+    );
+    expect(created.status).toBe(201);
+    opsId = created.body.user.id;
+    const first = await login("ops.olive@durablelifeskills.com", "Olive-2026-ok");
+    const second = await login("ops.olive@durablelifeskills.com", "Olive-2026-ok");
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+
+    const list = await api("GET", "/api/platform/sessions", undefined, superCookie);
+    expect(list.status).toBe(200);
+    const olive = list.body.sessions.filter((s: any) => s.userId === opsId);
+    expect(olive).toHaveLength(2);
+    expect(olive[0].userName).toBe("Ops Olive");
+    expect(olive[0].orgId).toBe(orgId);
+    expect(olive[0].orgName).toBe("Durable Life Skills, Inc.");
+    expect(olive[0].impersonatingUserId).toBeNull();
+    const own = list.body.sessions.find((s: any) => s.current);
+    expect(own.userEmail).toBe("emailme@clarencewilliams.com");
+    expect(own.orgName).toBeNull();
+
+    // Ending one session leaves the other device signed in.
+    expect((await api("DELETE", `/api/platform/sessions/${olive[0].id}`, undefined, superCookie)).status).toBe(200);
+    const after = await Promise.all([first.cookie!, second.cookie!].map((c) => api("GET", "/api/auth/me", undefined, c).then((r) => r.status)));
+    expect(after.sort()).toEqual([200, 401]);
+    expect((await api("DELETE", `/api/platform/sessions/${olive[0].id}`, undefined, superCookie)).status).toBe(404);
+
+    // The provider's own session is not ended from here.
+    expect((await api("DELETE", `/api/platform/sessions/${own.id}`, undefined, superCookie)).status).toBe(400);
+    expect((await api("DELETE", `/api/platform/users/${own.userId}/sessions`, undefined, superCookie)).status).toBe(400);
+
+    // "Sign out everywhere" ends what is left and is audited with the count.
+    const all = await api("DELETE", `/api/platform/users/${opsId}/sessions`, undefined, superCookie);
+    expect(all.status).toBe(200);
+    expect(all.body.revoked).toBe(1);
+    const gone = await Promise.all([first.cookie!, second.cookie!].map((c) => api("GET", "/api/auth/me", undefined, c).then((r) => r.status)));
+    expect(gone).toEqual([401, 401]);
+
+    const sessionAudit = await api("GET", "/api/platform/audit?category=session", undefined, superCookie);
+    expect(sessionAudit.body.entries.length).toBeGreaterThan(0);
+    expect(sessionAudit.body.entries.every((e: any) => e.action.startsWith("session."))).toBe(true);
+    expect(sessionAudit.body.entries.some((e: any) => e.action === "session.revoked" && e.details.userId === opsId)).toBe(true);
+    const userAudit = await api("GET", "/api/platform/audit?action=user.sessions_revoked", undefined, superCookie);
+    expect(userAudit.body.entries[0].targetId).toBe(opsId);
+    expect(userAudit.body.entries[0].details.revoked).toBe(1);
+    expect(userAudit.body.entries[0].actorName).toBe("Clarence Williams");
+  });
+
+  it("filters the platform audit log", async () => {
+    const platform = await api("GET", "/api/platform/audit?category=platform&limit=50", undefined, superCookie);
+    expect(platform.status).toBe(200);
+    expect(platform.body.entries.length).toBeGreaterThan(0);
+    expect(platform.body.entries.every((e: any) => e.action.startsWith("platform."))).toBe(true);
+
+    const scoped = await api("GET", `/api/platform/audit?orgId=${orgId}&category=user`, undefined, superCookie);
+    expect(scoped.body.entries.length).toBeGreaterThan(0);
+    expect(scoped.body.entries.every((e: any) => e.orgId === orgId && e.action.startsWith("user."))).toBe(true);
+    expect(scoped.body.entries[0].orgName).toBe("Durable Life Skills, Inc.");
+
+    const tomorrow = new Date(Date.now() + 86_400_000).toISOString();
+    const future = await api("GET", `/api/platform/audit?since=${encodeURIComponent(tomorrow)}`, undefined, superCookie);
+    expect(future.body.entries).toHaveLength(0);
+
+    const pair = await api("GET", "/api/platform/audit?action=auth.impersonation_started,auth.impersonation_stopped", undefined, superCookie);
+    expect(pair.body.entries.length).toBeGreaterThanOrEqual(2);
+    expect(new Set(pair.body.entries.map((e: any) => e.action))).toEqual(new Set(["auth.impersonation_started", "auth.impersonation_stopped"]));
+
+    expect((await api("GET", "/api/platform/audit?category=nope", undefined, superCookie)).status).toBe(400);
+    expect((await api("GET", "/api/platform/audit?limit=abc", undefined, superCookie)).status).toBe(200);
+  });
+
+  it("reports system status without leaking secrets", async () => {
+    const res = await api("GET", "/api/platform/system", undefined, superCookie);
+    expect(res.status).toBe(200);
+    expect(res.body.database.ok).toBe(true);
+    expect(res.body.database.latencyMs).toBeGreaterThanOrEqual(0);
+    expect(res.body.database.serverVersion).toMatch(/^\d+/);
+    expect(res.body.database.migrations.total).toBeGreaterThan(0);
+    expect(res.body.database.migrations.applied).toBe(res.body.database.migrations.total);
+    expect(res.body.database.migrations.pending).toEqual([]);
+    expect(res.body.database.migrations.latestApplied.tag).toMatch(/^\d{4}_/);
+    expect(res.body.signIn.loginMaxFailures).toBe(3);
+    expect(res.body.signIn.loginWindowMinutes).toBe(15);
+    expect(res.body.provider.superAdminEmail).toBe("emailme@clarencewilliams.com");
+    expect(res.body.provider.platformAccounts).toBe(1);
+    expect(res.body.catalog.requirements).toBeGreaterThan(0);
+    expect(res.body.catalog.features).toBeGreaterThan(res.body.catalog.featuresAvailable);
+    expect(JSON.stringify(res.body)).not.toContain("Success2026");
+    expect(res.body.provider).not.toHaveProperty("superAdminPassword");
+    expect(res.body.warnings.some((w: any) => w.message.includes("Only one provider account"))).toBe(true);
+  });
+
   it("rate-limits repeated failures per email and address", async () => {
     for (let i = 0; i < 3; i++) {
       expect((await login("nobody@example.com", "wrong-password-1")).status).toBe(401);

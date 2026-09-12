@@ -22,9 +22,9 @@ Super Admin (provider — Agility Engineers)
 
 * **Super Admin** owns the *platform*. It decides which capabilities are
   available to an organization, creates organizations and their Admins, can
-  reset any organization user's password, and can open an audited "view as"
-  support session. It has **no standing access to client records**: its only
-  screen is the platform console.
+  reset any organization user's password or end their sessions, and can open
+  an audited "view as" support session. It has **no standing access to client
+  records**: its only screens are the platform console (below).
 * **Admin** owns the *organization*. Creates Schedulers, Field Staff and other
   Admins, resets their passwords, suspends them, and decides which of the
   provider-enabled capabilities the organization uses and which employee roles
@@ -72,6 +72,29 @@ Every gated screen calls `checkAccess({ feature, roles })`
 Menus simply hide what a person may not use. A switched-off screen shows an
 explanation card that says who can turn it on.
 
+## The platform console
+
+The provider's screens, all under `/admin/platform` and all gated on the
+`Super_Admin` role (`artifacts/dls-cms/src/components/admin/nav-config.ts`,
+`artifacts/api-server/src/routes/platform.ts`):
+
+| Group | Screen | What it does |
+|---|---|---|
+| Overview | Platform overview | Attention list (organizations without an administrator, pending hand-overs, stale one-time passwords, running support sessions), 7-day activity, counts, console map |
+| Organizations & people | Organizations | Create, rename, suspend; the hand-over checklist; the organization's administrators |
+| Organizations & people | Accounts | Every account across organizations: role, one-time password reset, sign out everywhere, suspend, view as |
+| Capabilities | Feature switchboard | Tier 1 switches |
+| Capabilities | Feature adoption | Tier 1 ∧ tier 2 ∧ role grants for every organization, read-only |
+| Security & compliance | Support access | The support policy, start a view-as session, sessions in progress, full history |
+| Security & compliance | Active sessions | Live sessions with device and address; end one, or all of a person's |
+| Security & compliance | Audit log | Platform-wide log with filters (kind, organization, since) and CSV export |
+| System | System status | Process, database and migration status, sign-in policy in force, provider bootstrap, configuration warnings. Secrets are never shown |
+
+Provider accounts themselves are created only at deployment time
+(`SUPER_ADMIN_*`); no screen can create or manage one.
+`docs/review/2026-09-super-admin-console.md` records what the console
+covers and what it does not yet.
+
 ## Accounts and sign-in
 
 * Passwords are hashed with scrypt (Node built-in) and verified only by the API
@@ -84,6 +107,8 @@ explanation card that says who can turn it on.
   one-time password shown exactly once; the person must choose their own
   password on first sign-in (`/auth/reset`).
 * Suspending an account or resetting its password signs it out everywhere.
+  The provider can also end one session or all of a person's sessions from
+  the platform console (lost device, off-boarding); both are audited.
 * There is no email-based self-service reset yet (no mail provider is
   configured). Administrators issue resets.
 
@@ -99,9 +124,12 @@ the first sign-in.
 ## Audit
 
 Every configuration change — sign-ins, switch flips, account changes, password
-resets, view-as start/stop — is written to `audit_log` with the **real** actor
-and, when applicable, the impersonated user. The platform console shows the
-platform-wide log; Settings shows the organization's.
+resets, sessions ended by the provider, view-as start/stop — is written to
+`audit_log` with the **real** actor and, when applicable, the impersonated
+user. Actions are namespaced `<category>.<event>` (`auth`, `platform`, `org`,
+`user`, `session`). The platform console's Audit log screen shows the
+platform-wide log with filters and a CSV export; Settings shows the
+organization's.
 
 ## Demo data vs. real accounts
 
