@@ -30,7 +30,8 @@ export const ADMIN_NAV: NavSection[] = [
       { href: "/admin", label: "Dashboard", icon: "LayoutDashboard" },
       { href: "/admin/clients", label: "Clients", icon: "Users" },
       { href: "/admin/schedule", label: "Schedule", icon: "CalendarDays" },
-      { href: "/admin/staff", label: "Staff & credentials", icon: "UserCog", adminOnly: true }
+      { href: "/admin/staff", label: "Staff & credentials", icon: "UserCog", adminOnly: true },
+      { href: "/admin/requirements", label: "Requirements", icon: "ListChecks", adminOnly: true }
     ]
   },
   {

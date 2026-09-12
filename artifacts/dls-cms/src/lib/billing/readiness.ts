@@ -4,13 +4,21 @@
 //     summed every visit type against the SCC-only cap)
 //   · week windows use local dates end-to-end (no UTC/local mix)
 //   · adds blockers: cancelled/unclocked visit, inactive physician order,
-//     overdue REQUIRED Relias courses
+//     overdue REQUIRED credentials
 //   · runs on the repo (demo + Supabase) instead of raw service-role queries
+//
+// Credentialing is NOT hardcoded here any more. Three hand-written checks
+// (licence expiry, training_completed[], overdue required Relias courses) are
+// now one pass over the configurable requirements registry —
+// lib/credentialing/registry.ts. Which items exist, which are required, and
+// which block a claim are admin toggles at /admin/requirements.
 import "server-only";
 
 import { listNotes, type NoteWithContext, listEvvLogs } from "@/lib/data/repo-field";
 import { listClients, listPhysicianOrders, listUsers, listVisits } from "@/lib/data/repo-core";
 import { getFeeSchedule, listReliasCompletions, listReliasCourses } from "@/lib/data/repo-business";
+import { listRequirements, listStaffCredentials } from "@/lib/data/repo-credentialing";
+import { evaluateAndSummarize } from "@/lib/credentialing/registry";
 import type { Client, FeeScheduleRow, StaffUser, VisitType, VisitWithNames } from "@/lib/supabase/types";
 import { agencyAddDays, agencySundayOf, agencyTodayIso } from "@/lib/time/agency";
 
@@ -50,7 +58,7 @@ export async function evaluateUnbilledNotes(opts: { from?: string; to?: string }
   const windowFrom = sundayOf(dates[0]);
   const windowTo = addDaysIso(sundayOf(dates[dates.length - 1]), 6);
 
-  const [allNotes, users, clients, visits, orders, fees, courses, completions] = await Promise.all([
+  const [allNotes, users, clients, visits, orders, fees, courses, completions, requirements, credentials] = await Promise.all([
     listNotes({ from: windowFrom, to: windowTo, limit: null }),
     listUsers(),
     listClients(undefined, { limit: null }),
@@ -59,10 +67,24 @@ export async function evaluateUnbilledNotes(opts: { from?: string; to?: string }
     listPhysicianOrders(),
     getFeeSchedule(),
     listReliasCourses(),
-    listReliasCompletions()
+    listReliasCompletions(),
+    listRequirements(),
+    listStaffCredentials()
   ]);
 
   const userById = new Map(users.map((u) => [u.id, u]));
+  // Credentialing depends on the staff member, not the note, so evaluate each
+  // one once rather than per note — a busy week is thousands of notes over a
+  // handful of staff.
+  const credentialBlockersByStaff = new Map<string, string[]>(
+    users.map((u) => [
+      u.id,
+      evaluateAndSummarize({
+        requirements, staff: u, credentials,
+        reliasCourses: courses, reliasCompletions: completions, today
+      }).summary.claimBlockers.map((reason) => `${u.full_name} — ${reason}`)
+    ])
+  );
   const clientById = new Map(clients.map((c) => [c.id, c]));
   const visitById = new Map(visits.map((v) => [v.id, v]));
 
@@ -79,33 +101,15 @@ export async function evaluateUnbilledNotes(opts: { from?: string; to?: string }
       if (!client) blockers.push("Client record not found for this note.");
       if (!visit) blockers.push("Visit record not found for this note.");
 
-      // 1a. Staff license
-      if (staff?.license_expiration_date && staff.license_expiration_date < today) {
-        blockers.push(`Staff license expired ${fmt(staff.license_expiration_date)} (${staff.full_name}).`);
-      }
-      // 1b. Required trainings (credential records)
-      for (const t of staff?.training_completed ?? []) {
-        if (t.required !== false && t.expires_on && t.expires_on < today) {
-          blockers.push(`Required training "${t.course}" expired ${fmt(t.expires_on)}.`);
-        }
-      }
-      // 1c. Overdue REQUIRED Relias courses. A current same-named credential
-      // record (manually recorded renewal) also satisfies the requirement.
-      if (staff && staff.role === "Field_Staff") {
-        for (const course of courses.filter((c) => c.required)) {
-          const done = completions
-            .filter((x) => x.user_id === staff.id && x.course_id === course.id)
-            .sort((a, b) => b.completed_on.localeCompare(a.completed_on))[0];
-          const credential = (staff.training_completed ?? []).find(
-            (t) => t.course.trim().toLowerCase() === course.name.trim().toLowerCase()
-          );
-          const credentialCurrent = credential && (!credential.expires_on || credential.expires_on >= today);
-          const completionCurrent = done && (!done.expires_on || done.expires_on >= today);
-          if (!completionCurrent && !credentialCurrent && (done || credential)) {
-            blockers.push(`Required course "${course.name}" is expired (Relias/credentials).`);
-          }
-        }
-      }
+      // 1. Credentialing — one pass over the registry. It resolves each
+      //    requirement against its own evidence (licence column, training
+      //    records, Relias completions, explicit credential rows) and reports
+      //    only what must stop a claim: a REQUIRED + GATING item that has
+      //    lapsed or failed. A credential inside its renewal window is a
+      //    warning, and one never started does not block — matching the
+      //    behaviour this replaced. Blocking on never-started is roadmap 2.8
+      //    (`blockOnMissing`), a deliberate billing change, not a default.
+      if (staff) blockers.push(...(credentialBlockersByStaff.get(staff.id) ?? []));
 
       // 2. Signatures
       if (!note.caregiver_signature_data) blockers.push("Missing caregiver signature.");
@@ -162,11 +166,6 @@ export async function notesWithoutEvv(noteList: NoteWithContext[]): Promise<Set<
   const logs = await listEvvLogs({});
   const visitsWithEvv = new Set(logs.map((l) => l.visit_id));
   return new Set(noteList.filter((n) => !visitsWithEvv.has(n.visit_id)).map((n) => n.id));
-}
-
-function fmt(iso: string): string {
-  const [y, m, d] = iso.split("-");
-  return `${m}/${d}/${y.slice(2)}`;
 }
 
 export type { VisitWithNames };

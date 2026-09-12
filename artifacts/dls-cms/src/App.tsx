@@ -31,6 +31,7 @@ import AdminPayroll from "@/app/admin/payroll/page";
 import AdminQa from "@/app/admin/qa/page";
 import AdminRelias from "@/app/admin/relias/page";
 import AdminReports from "@/app/admin/reports/page";
+import AdminRequirements from "@/app/admin/requirements/page";
 import AdminSchedule from "@/app/admin/schedule/page";
 import AdminSettings from "@/app/admin/settings/page";
 import AdminStaff from "@/app/admin/staff/page";
@@ -108,6 +109,7 @@ function Router() {
       <Route path="/admin/qa">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminQa as AsyncComponent)} />}</Route>
       <Route path="/admin/relias">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminRelias as AsyncComponent)} />}</Route>
       <Route path="/admin/reports">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminReports as AsyncComponent)} />}</Route>
+      <Route path="/admin/requirements">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminRequirements as AsyncComponent)} />}</Route>
       <Route path="/admin/schedule">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminSchedule as AsyncComponent)} />}</Route>
       <Route path="/admin/settings">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminSettings as AsyncComponent)} />}</Route>
       <Route path="/admin/staff">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminStaff as AsyncComponent)} />}</Route>
