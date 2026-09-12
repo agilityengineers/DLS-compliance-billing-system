@@ -185,6 +185,9 @@ importers:
       '@workspace/db':
         specifier: workspace:*
         version: link:../../lib/db
+      '@workspace/features':
+        specifier: workspace:*
+        version: link:../../lib/features
       cookie-parser:
         specifier: ^1.4.7
         version: 1.4.7
@@ -203,6 +206,9 @@ importers:
       pino-http:
         specifier: ^10.5.0
         version: 10.5.0
+      zod:
+        specifier: 'catalog:'
+        version: 3.25.76
     devDependencies:
       '@types/cookie-parser':
         specifier: ^1.4.10
@@ -366,6 +372,9 @@ importers:
       '@workspace/credentialing':
         specifier: workspace:*
         version: link:../../lib/credentialing
+      '@workspace/features':
+        specifier: workspace:*
+        version: link:../../lib/features
       autoprefixer:
         specifier: ^10.4.20
         version: 10.5.2(postcss@8.5.15)
@@ -687,6 +696,8 @@ importers:
       drizzle-kit:
         specifier: ^0.31.10
         version: 0.31.10
+
+  lib/features: {}
 
   scripts:
     devDependencies:

@@ -11,34 +11,47 @@ import { TabBar } from "@/components/field/tab-bar";
 import { DemoBanner } from "@/components/demo-banner";
 import { ImpersonationBanner } from "@/components/impersonation-banner";
 import { IdleTimeout } from "@/components/idle-timeout";
+import { SessionProvider } from "@/components/session-context";
 
 export default async function FieldLayout({ children }: { children: React.ReactNode }) {
   const ctx = await getSessionContext();
   if (!ctx.effectiveUser) redirect("/login");
   if (ctx.effectiveUser.role !== "Field_Staff") redirect("/admin");
+  if (ctx.realUser!.must_change_password && !ctx.impersonating) redirect("/auth/reset?next=/field");
 
   return (
-    <div className="field-surface mx-auto flex min-h-screen max-w-md flex-col bg-background">
-      <DemoBanner />
-      {await ImpersonationBanner()}
-      <header className="sticky top-0 z-20 flex items-center justify-between border-b border-border bg-card/95 px-4 py-2.5 backdrop-blur">
-        <span className="flex items-center gap-2">
-          <Image
-            src="/brand/dls-mascot.png"
-            alt=""
-            width={28}
-            height={28}
-            className="h-7 w-7 rounded-full border border-border object-cover"
-          />
-          <span className="font-serif text-base font-semibold text-plum">DLS Field</span>
-        </span>
-        <SyncStatus />
-      </header>
-      <main className="flex-1 p-4 pb-24">{children}</main>
-      <TabBar />
-      <SwRegister />
-      <Hydrator />
-      <IdleTimeout wipe />
-    </div>
+    <SessionProvider
+      value={{
+        features: Array.from(ctx.features),
+        role: ctx.effectiveUser.role,
+        realRole: ctx.realUser!.role,
+        impersonating: ctx.impersonating,
+        userName: ctx.effectiveUser.full_name,
+        orgName: ctx.org?.name ?? null,
+      }}
+    >
+      <div className="field-surface mx-auto flex min-h-screen max-w-md flex-col bg-background">
+        <DemoBanner />
+        {await ImpersonationBanner()}
+        <header className="sticky top-0 z-20 flex items-center justify-between border-b border-border bg-card/95 px-4 py-2.5 backdrop-blur">
+          <span className="flex items-center gap-2">
+            <Image
+              src="/brand/dls-mascot.png"
+              alt=""
+              width={33}
+              height={33}
+              className="h-[33px] w-[33px] rounded-full border border-border object-contain"
+            />
+            <span className="font-serif text-base font-semibold text-plum">DLS Field</span>
+          </span>
+          <SyncStatus />
+        </header>
+        <main className="flex-1 p-4 pb-24">{children}</main>
+        <TabBar />
+        <SwRegister />
+        <Hydrator />
+        <IdleTimeout wipe />
+      </div>
+    </SessionProvider>
   );
 }

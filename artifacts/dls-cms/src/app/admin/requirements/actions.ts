@@ -14,7 +14,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireRole } from "@/lib/auth/session";
+import { requireFeature } from "@/lib/auth/session";
 import { updateRequirement } from "@/lib/data/repo-credentialing";
 import { agencyTodayIso } from "@/lib/time/agency";
 
@@ -32,7 +32,7 @@ function refresh() {
 }
 
 export async function saveRequirementToggles(input: unknown) {
-  const ctx = await requireRole("Admin");
+  const ctx = await requireFeature("staff.credentials", "Admin");
   const parsed = ToggleSchema.safeParse(input);
   if (!parsed.success) return { ok: false as const, error: "Invalid requirement toggle." };
   const { requirementId, ...patch } = parsed.data;
@@ -52,7 +52,7 @@ const VerifySchema = z.object({
  * claim about the world, so it carries who and when.
  */
 export async function confirmRequirement(input: unknown) {
-  const ctx = await requireRole("Admin");
+  const ctx = await requireFeature("staff.credentials", "Admin");
   const parsed = VerifySchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false as const, error: parsed.error.issues.map((i) => i.message).join("; ") };

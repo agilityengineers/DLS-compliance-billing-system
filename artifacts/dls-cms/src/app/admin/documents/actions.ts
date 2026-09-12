@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireRole } from "@/lib/auth/session";
+import { requireFeature } from "@/lib/auth/session";
 import { createDocument } from "@/lib/data/repo-field";
 
 const DvrNoticeSchema = z.object({
@@ -19,7 +19,7 @@ const DvrNoticeSchema = z.object({
 
 /** "New DVR employment notice" — records the state form's fields. */
 export async function createDvrNotice(input: unknown): Promise<{ ok: boolean; error?: string }> {
-  const ctx = await requireRole("Admin", "Scheduler");
+  const ctx = await requireFeature("documents.dvr_notices", "Admin", "Scheduler");
   const parsed = DvrNoticeSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues.map((i) => i.message).join("; ") };
   const d = parsed.data;

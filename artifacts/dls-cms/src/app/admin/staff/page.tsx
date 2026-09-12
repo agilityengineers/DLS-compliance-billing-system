@@ -6,8 +6,7 @@
 // credentialing registry (/admin/requirements) through the same engine claim
 // readiness uses, so the two can never drift: a requirement an admin turns off
 // stops appearing, and a lapse shown here is exactly what blocks the claim.
-import { redirect } from "next/navigation";
-import { requireRole } from "@/lib/auth/session";
+import { checkAccess } from "@/lib/rbac/access";
 import { listUsers } from "@/lib/data/repo-core";
 import { listRequirements, listStaffCredentials } from "@/lib/data/repo-credentialing";
 import { listReliasCompletions, listReliasCourses } from "@/lib/data/repo-business";
@@ -18,13 +17,8 @@ import { StaffRowActions } from "@/components/admin/staff-row-actions";
 import { agencyTodayIso } from "@/lib/time/agency";
 
 export default async function StaffPage() {
-  let ctx;
-  try {
-    ctx = await requireRole("Admin");
-  } catch {
-    redirect("/admin");
-  }
-  void ctx;
+  const { denied } = await checkAccess({ feature: "staff.credentials", roles: ["Admin"] });
+  if (denied) return denied;
 
   const [staff, requirements, credentials, courses, completions] = await Promise.all([
     listUsers(), listRequirements(), listStaffCredentials(), listReliasCourses(), listReliasCompletions()

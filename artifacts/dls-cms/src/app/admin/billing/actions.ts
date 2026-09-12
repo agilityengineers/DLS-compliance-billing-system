@@ -6,7 +6,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireRole } from "@/lib/auth/session";
+import { requireFeature } from "@/lib/auth/session";
 import { isDemoMode } from "@/lib/demo/mode";
 import { evaluateUnbilledNotes } from "@/lib/billing/readiness";
 import { getPayerAdapter } from "@/lib/billing/payers";
@@ -24,7 +24,7 @@ export async function bulkExport837P(noteIds: string[]): Promise<{
   error?: string;
   blocked?: Record<string, string[]>;
 }> {
-  const ctx = await requireRole("Admin");
+  const ctx = await requireFeature("billing.claims", "Admin");
 
   // Never put placeholder provider identity (all-zero NPI, TODO address) on
   // the wire. Demo mode is exempt: its file is synthetic by definition and

@@ -1,32 +1,23 @@
 // routes/credentialing.ts — the credentialing registry over HTTP.
 //
-// The registry decides what blocks a staff account from billing, so every
-// write is validated against the generated contract before it reaches the
-// database, and the two policy switches are kept coherent: an item nobody is
-// required to hold cannot gate anything. The same pairing is enforced by a
-// CHECK constraint in migrations/0001_credentialing.sql — this is the friendly
-// version of that rule, not a substitute for it.
+// The registry decides what blocks a staff account from billing, so:
+//   · reading it needs a signed-in member of the organization
+//   · changing it is Admin-only — these are the switches that stop claims
+//   · every write is validated against the generated contract first
+//   · the two policy switches are kept coherent (an item nobody is required
+//     to hold cannot gate anything)
+//
+// That last rule is also a CHECK constraint in the migration. This is the
+// friendly version of it, not a substitute.
 import { Router, type IRouter } from "express";
 import { eq, asc } from "drizzle-orm";
-import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
-import { requirementsTable, staffCredentialsTable, type RequirementRow } from "@workspace/db/schema";
+import type { Db } from "@workspace/db";
+import { requirementsTable, staffCredentialsTable, type RequirementRow } from "@workspace/db";
+import { requireAuth, requireRole } from "../middlewares/auth";
 import {
   ListRequirementsResponse, UpdateRequirementBody, UpdateRequirementParams,
   ListStaffCredentialsQueryParams, ListStaffCredentialsResponse
 } from "@workspace/api-zod";
-
-/**
- * Any Drizzle Postgres handle. The connection is injected rather than imported
- * so these routes can be exercised against an in-process PostgreSQL in tests —
- * importing @workspace/db pulls in a pool that refuses to load without
- * DATABASE_URL, which would make the routes untestable.
- */
-// The schema parameter is deliberately `any`: these handlers only touch the two
-// credentialing tables by reference, and pinning the parameter would stop a
-// pglite-backed handle (used in tests) from satisfying the same signature as
-// the node-postgres one used in production.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type CredentialingDb = PgDatabase<PgQueryResultHKT, any>;
 
 /** DB row → the wire shape the client and engine share. */
 function toRequirement(row: RequirementRow) {
@@ -52,15 +43,18 @@ function toRequirement(row: RequirementRow) {
   };
 }
 
-export function createCredentialingRouter(db: CredentialingDb): IRouter {
+export function credentialingRouter(db: Db): IRouter {
   const router: IRouter = Router();
 
-  router.get("/requirements", async (_req, res) => {
+  // Reading the registry is for any signed-in member — schedulers and field
+  // staff see credential state on the screens that use it.
+  router.get("/requirements", requireAuth, async (_req, res) => {
     const rows = await db.select().from(requirementsTable).orderBy(asc(requirementsTable.sortOrder));
     res.json(ListRequirementsResponse.parse(rows.map(toRequirement)));
   });
 
-  router.patch("/requirements/:requirementId", async (req, res) => {
+  // Writing it is Admin-only: these toggles decide what blocks a claim.
+  router.patch("/requirements/:requirementId", requireAuth, requireRole("Admin"), async (req, res) => {
     const params = UpdateRequirementParams.safeParse(req.params);
     if (!params.success) {
       res.status(400).json({ error: "Invalid requirement id." });
@@ -114,7 +108,7 @@ export function createCredentialingRouter(db: CredentialingDb): IRouter {
     res.json(toRequirement(updated));
   });
 
-  router.get("/staff-credentials", async (req, res) => {
+  router.get("/staff-credentials", requireAuth, async (req, res) => {
     const query = ListStaffCredentialsQueryParams.safeParse(req.query);
     if (!query.success) {
       res.status(400).json({ error: "Invalid staff id." });

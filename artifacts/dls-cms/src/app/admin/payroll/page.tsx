@@ -2,8 +2,7 @@
 // Mirrors the client's real form: per-employee "all notes in?", Wk1/Wk2
 // hours + OT, totals, certification checkbox. Submission is blocked while
 // notes are outstanding.
-import { redirect } from "next/navigation";
-import { requireRole } from "@/lib/auth/session";
+import { checkAccess } from "@/lib/rbac/access";
 import { getCurrentPayrollPeriod } from "@/lib/data/repo-business";
 import { computePayrollLines } from "@/lib/payroll/transmittal";
 import { Badge } from "@/components/ui/badge";
@@ -17,11 +16,8 @@ function fmt(iso: string): string {
 }
 
 export default async function PayrollPage() {
-  try {
-    await requireRole("Admin");
-  } catch {
-    redirect("/admin");
-  }
+  const { denied } = await checkAccess({ feature: "payroll.transmittal", roles: ["Admin"] });
+  if (denied) return denied;
 
   const period = await getCurrentPayrollPeriod();
   if (!period) {

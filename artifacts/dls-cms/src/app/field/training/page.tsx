@@ -1,16 +1,16 @@
 // app/field/training/page.tsx — Training & Learning: my credentials +
 // Relias courses (SSO deep link; completions sync nightly via the API).
-import { redirect } from "next/navigation";
-import { getSessionContext } from "@/lib/auth/session";
+import { checkAccess } from "@/lib/rbac/access";
 import { listReliasCourses, listReliasCompletions } from "@/lib/data/repo-business";
 import { getReliasSsoUrl } from "@/lib/integrations/relias";
 import { Badge } from "@/components/ui/badge";
 import { agencyTodayIso } from "@/lib/time/agency";
 
 export default async function TrainingPage() {
-  const ctx = await getSessionContext();
-  if (!ctx.effectiveUser) redirect("/login");
+  const { ctx, denied } = await checkAccess({ feature: "relias.training", roles: ["Field_Staff"] });
+  if (denied) return denied;
   const user = ctx.effectiveUser!;
+  const ssoOn = ctx.features.has("relias.sso");
 
   const [courses, completions] = await Promise.all([
     listReliasCourses(),
@@ -47,14 +47,16 @@ export default async function TrainingPage() {
       <section className="space-y-3 rounded-card-m border border-border bg-card p-4">
         <div className="flex items-center justify-between">
           <h2 className="label-caps text-muted-foreground">Relias courses</h2>
-          <a
-            href={getReliasSsoUrl(user.email)}
-            target="_blank"
-            rel="noreferrer"
-            className="rounded-btn bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground"
-          >
-            Launch Relias (SSO)
-          </a>
+          {ssoOn && (
+            <a
+              href={getReliasSsoUrl(user.email)}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-btn bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground"
+            >
+              Launch Relias (SSO)
+            </a>
+          )}
         </div>
         <ul className="space-y-2">
           {courses.map((c) => {

@@ -6,7 +6,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireRole } from "@/lib/auth/session";
+import { requireFeature } from "@/lib/auth/session";
 import { activeOrderForClient, generateVisitsFromTemplates, saveVisit } from "@/lib/data/repo-core";
 
 const VisitSchema = z.object({
@@ -21,7 +21,7 @@ const VisitSchema = z.object({
 });
 
 export async function upsertVisit(input: unknown): Promise<{ ok: boolean; error?: string }> {
-  const ctx = await requireRole("Admin", "Scheduler");
+  const ctx = await requireFeature("schedule.board", "Admin", "Scheduler");
   const parsed = VisitSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues.map((i) => i.message).join("; ") };
@@ -33,14 +33,14 @@ export async function upsertVisit(input: unknown): Promise<{ ok: boolean; error?
 
 /** Resolve the client's active order for a service date (schedule UI helper). */
 export async function findActiveOrder(clientId: string, dateIso: string) {
-  await requireRole("Admin", "Scheduler");
+  await requireFeature("schedule.board", "Admin", "Scheduler");
   const order = await activeOrderForClient(clientId, dateIso);
   return order ? { id: order.id, label: `${order.order_number} · ${order.ordering_physician}` } : null;
 }
 
 /** Generate this week's visits from active recurring templates (idempotent). */
 export async function generateRecurringVisits(weekMondayIso: string) {
-  const ctx = await requireRole("Admin", "Scheduler");
+  const ctx = await requireFeature("schedule.recurring", "Admin", "Scheduler");
   const res = await generateVisitsFromTemplates(weekMondayIso, ctx.auditCtx);
   revalidatePath("/admin/schedule");
   return res;

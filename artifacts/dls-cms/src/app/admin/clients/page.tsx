@@ -1,14 +1,13 @@
 // Client roster. Search stays in-browser so PHI never travels in a URL.
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { getSessionContext } from "@/lib/auth/session";
+import { checkAccess } from "@/lib/rbac/access";
 import { listClients } from "@/lib/data/repo-core";
 import { ClientRoster } from "@/components/admin/client-roster";
 import { agencyTodayIso } from "@/lib/time/agency";
 
 export default async function ClientsPage() {
-  const ctx = await getSessionContext();
-  if (!ctx.effectiveUser) redirect("/login");
+  const { denied } = await checkAccess({ feature: "clients.core" });
+  if (denied) return denied;
   const clients = await listClients(undefined, { limit: null });
   const today = agencyTodayIso();
 

@@ -5,8 +5,7 @@
 // and which block a staff account from delivering billable services. Claim
 // readiness (lib/billing/readiness.ts) and the staff roster both read from
 // here, so a policy change is a toggle rather than a deploy.
-import { redirect } from "next/navigation";
-import { requireRole } from "@/lib/auth/session";
+import { checkAccess } from "@/lib/rbac/access";
 import { listRequirements, listStaffCredentials } from "@/lib/data/repo-credentialing";
 import { listUsers } from "@/lib/data/repo-core";
 import { listReliasCompletions, listReliasCourses } from "@/lib/data/repo-business";
@@ -18,11 +17,10 @@ import { RequirementToggles } from "@/components/admin/requirement-toggles";
 import { RequirementVerification } from "@/components/admin/requirement-verification";
 
 export default async function RequirementsPage() {
-  try {
-    await requireRole("Admin");
-  } catch {
-    redirect("/admin");
-  }
+  // The registry configures staff.credentials rather than being a capability
+  // of its own, so it rides that feature's switch.
+  const { denied } = await checkAccess({ feature: "staff.credentials", roles: ["Admin"] });
+  if (denied) return denied;
 
   const [requirements, credentials, users, courses, completions] = await Promise.all([
     listRequirements(),

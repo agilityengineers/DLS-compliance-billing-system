@@ -8,7 +8,8 @@
 // Absence is meaningful. No row means "not started" — the engine never treats a
 // missing row as satisfied, so turning a requirement on immediately shows every
 // staff member who does not yet meet it.
-import { pgTable, text, uuid, date, timestamp, unique } from "drizzle-orm/pg-core";
+import { pgTable, text, uuid, date, timestamp, unique, check, index } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { requirementsTable } from "./requirements";
@@ -44,7 +45,19 @@ export const staffCredentialsTable = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
   },
-  (t) => [unique("uq_staff_credential").on(t.staffId, t.requirementId)]
+  (t) => [
+    unique("uq_staff_credential").on(t.staffId, t.requirementId),
+    index("idx_staff_credentials_staff").on(t.staffId),
+    check(
+      "staff_credentials_status_check",
+      sql`${t.status} in ('verified', 'in_progress', 'not_started', 'failed', 'waived')`
+    ),
+    // A waiver is an accountable act: it needs a person and a reason.
+    check(
+      "staff_credentials_waiver_needs_reason",
+      sql`${t.status} <> 'waived' or (${t.waivedBy} is not null and btrim(coalesce(${t.waiveReason}, '')) <> '')`
+    )
+  ]
 );
 
 export const insertStaffCredentialSchema = createInsertSchema(staffCredentialsTable).omit({

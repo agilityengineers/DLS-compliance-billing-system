@@ -11,11 +11,12 @@ export default async function MorePage() {
   if (!ctx.effectiveUser) redirect("/login");
   const user = ctx.effectiveUser!;
 
+  // Each entry belongs to a switchable capability; hidden when it is off for this role.
   const items = [
-    { href: "/field/training", label: "Training & Learning", sub: "Credentials + Relias courses" },
-    { href: "/field/documents", label: "My uploads", sub: "Photos & documents from visits" },
-    { href: "/field/incident", label: "Report an incident", sub: "Abuse/neglect & critical incidents" }
-  ];
+    { href: "/field/training", label: "Training & Learning", sub: "Credentials + Relias courses", on: ctx.features.has("relias.training") },
+    { href: "/field/documents", label: "My uploads", sub: "Photos & documents from visits", on: ctx.features.has("documents.files") },
+    { href: "/field/incident", label: "Report an incident", sub: "Abuse/neglect & critical incidents", on: ctx.features.has("incidents.reporting") }
+  ].filter((i) => i.on);
 
   return (
     <div className="space-y-4">
@@ -31,6 +32,7 @@ export default async function MorePage() {
         )}
       </div>
 
+      {items.length > 0 && (
       <div className="overflow-hidden rounded-card-m border border-border bg-card">
         {items.map((item, i) => (
           <Link
@@ -46,7 +48,9 @@ export default async function MorePage() {
           </Link>
         ))}
       </div>
+      )}
 
+      <a href="/auth/reset?next=/field/more" className="block text-center text-sm text-plum underline">Change my password</a>
       <SignOutButton />
       <p className="text-center text-xs text-muted-foreground">
         Signing out removes all care data from this device.

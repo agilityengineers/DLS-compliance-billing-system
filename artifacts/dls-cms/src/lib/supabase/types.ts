@@ -2,7 +2,8 @@
 // Supabase repo, the demo repo, and the UI. Mirrors supabase/migrations/*.
 // Regenerate candidates with: supabase gen types typescript --linked
 
-export type Role = "Admin" | "Scheduler" | "Field_Staff";
+import type { Role } from "@workspace/features";
+export type { Role };
 export type VisitType = "SCC" | "Job_Coaching" | "Day_Habilitation" | "Early_Intervention";
 export type VisitStatus = "Scheduled" | "In_Progress" | "Completed" | "Cancelled" | "Billed";
 export type VerificationMethod = "GPS" | "Telephony" | "Manual";
@@ -28,6 +29,12 @@ export interface StaffUser {
   license_number: string | null;
   license_expiration_date: string | null;
   training_completed: TrainingRecord[];
+  /** Organization the account belongs to (null for the platform provider). */
+  org_id?: string | null;
+  /** true = a real account in the API database; false/undefined = synthetic demo staff. */
+  is_account?: boolean;
+  /** The account signed in with a temporary password and must choose its own. */
+  must_change_password?: boolean;
 }
 
 export interface Client {

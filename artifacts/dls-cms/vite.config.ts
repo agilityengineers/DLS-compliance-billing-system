@@ -35,6 +35,8 @@ export default defineConfig({
   // for every other key (→ undefined, which each call site already handles).
   define: {
     "process.env.NEXT_PUBLIC_DEMO_MODE": JSON.stringify("true"),
+    // Sign-in mode: "api" (real accounts via the API server) or "demo" (role picker).
+    "process.env.NEXT_PUBLIC_AUTH_MODE": JSON.stringify(process.env.VITE_AUTH_MODE ?? "api"),
     "process.env.NEXT_PUBLIC_EVV_GEOFENCE_RADIUS_M": JSON.stringify("150"),
     "process.env.NEXT_PUBLIC_SESSION_IDLE_MINUTES": JSON.stringify("20"),
     "process.env.NODE_ENV": JSON.stringify(
@@ -91,6 +93,14 @@ export default defineConfig({
     allowedHosts: true,
     fs: {
       strict: false,
+    },
+    // Local development outside Replit: forward /api to the API server. On
+    // Replit the ingress already routes /api to the api-server artifact.
+    proxy: {
+      "/api": {
+        target: process.env.API_PROXY_TARGET ?? "http://localhost:8080",
+        changeOrigin: false,
+      },
     },
   },
   preview: {

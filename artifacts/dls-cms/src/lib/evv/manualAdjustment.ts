@@ -3,7 +3,7 @@
 // the demo-store rule; field sessions can't reach Manual at all (RLS).
 "use server";
 
-import { requireRole } from "@/lib/auth/session";
+import { requireFeature } from "@/lib/auth/session";
 import { upsertEvvLog } from "@/lib/data/repo-field";
 import type { EvvLog } from "@/lib/supabase/types";
 
@@ -13,7 +13,7 @@ export async function manualEvvAdjustment(input: {
   clockOutTime: string;
   reason: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  const ctx = await requireRole("Admin");
+  const ctx = await requireFeature("evv.clock", "Admin");
 
   if (!input.reason || input.reason.trim().length === 0) {
     return { ok: false, error: "manual_adjustment_reason is required for manual EVV entries." };
