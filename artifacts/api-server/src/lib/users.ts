@@ -51,7 +51,10 @@ export async function findUserById(db: Db, id: string): Promise<User | undefined
 }
 
 export interface Actor {
+  /** Immutable session owner, used for created-by and audit attribution. */
   id: string;
+  /** Identity whose permissions and self-management rules apply. */
+  effectiveId: string;
   role: Role;
   orgId: string | null;
   impersonatingUserId: string | null;
@@ -131,7 +134,7 @@ export async function updateUserAccount(
   const target = await findUserById(db, targetId);
   if (!target || (scopeOrgId && target.orgId !== scopeOrgId)) throw notFound("User not found.");
   const targetRole = isRole(target.role) ? target.role : "Field_Staff";
-  if (target.id === actor.id) {
+  if (target.id === actor.effectiveId) {
     if (patch.role && patch.role !== targetRole) throw badRequest("You cannot change your own role.");
     if (patch.status && patch.status !== target.status) throw badRequest("You cannot suspend your own account.");
   } else if (!canManageRole(actor.role, targetRole)) {
@@ -176,7 +179,7 @@ export async function resetUserPassword(
   const target = await findUserById(db, targetId);
   if (!target || (scopeOrgId && target.orgId !== scopeOrgId)) throw notFound("User not found.");
   const targetRole = isRole(target.role) ? target.role : "Field_Staff";
-  if (target.id !== actor.id && !canManageRole(actor.role, targetRole)) throw forbidden("You cannot manage that account.");
+  if (target.id !== actor.effectiveId && !canManageRole(actor.role, targetRole)) throw forbidden("You cannot manage that account.");
   let temporaryPassword: string | null = null;
   if (password) {
     const problem = passwordProblem(password);

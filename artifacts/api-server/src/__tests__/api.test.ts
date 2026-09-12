@@ -82,6 +82,8 @@ describe.skipIf(!TEST_URL)("api server", () => {
   let schedulerCookie: string;
   let schedulerId: string;
   let supportWindowId: string;
+  let otherOrgId: string;
+  let otherAdminId: string;
 
   it("bootstraps the super admin and rejects a wrong password", async () => {
     const bad = await login("emailme@clarencewilliams.com", "not-the-password");
@@ -239,6 +241,7 @@ describe.skipIf(!TEST_URL)("api server", () => {
     expect(res.status).toBe(400);
     const other = await api("POST", "/api/platform/organizations", { name: "Other Agency" }, superCookie);
     expect(other.status).toBe(201);
+    otherOrgId = other.body.organization.id;
     const otherAdmin = await api(
       "POST",
       "/api/platform/users",
@@ -246,6 +249,7 @@ describe.skipIf(!TEST_URL)("api server", () => {
       superCookie
     );
     expect(otherAdmin.status).toBe(201);
+    otherAdminId = otherAdmin.body.user.id;
     const cross = await api("PATCH", `/api/org/users/${otherAdmin.body.user.id}`, { status: "Suspended" }, lisaCookie);
     expect(cross.status).toBe(404);
     const self = await api("PATCH", `/api/org/users/${lisaId}`, { role: "Scheduler" }, lisaCookie);
@@ -275,6 +279,60 @@ describe.skipIf(!TEST_URL)("api server", () => {
     expect(
       (await api("POST", "/api/org/support-windows", { reason: "Let them in", hours: 2 }, schedulerCookie)).status
     ).toBe(403);
+  });
+
+  it("enforces effective identity, target-org checks and non-nested view-as", async () => {
+    const otherField = await api(
+      "POST",
+      "/api/platform/users",
+      { orgId: otherOrgId, email: "field@other.test", fullName: "Other Field", role: "Field_Staff", password: "Other-Field-2026" },
+      superCookie
+    );
+    expect(otherField.status).toBe(201);
+
+    // Self and inactive targets are denied without changing the session.
+    const superMe = await api("GET", "/api/auth/me", undefined, superCookie);
+    expect((await api("POST", "/api/auth/impersonate", { userId: superMe.body.realUser.id }, superCookie)).status).toBe(400);
+    expect((await api("PATCH", `/api/platform/users/${otherField.body.user.id}`, { status: "Suspended" }, superCookie)).status).toBe(200);
+    expect((await api("POST", "/api/auth/impersonate", { userId: otherField.body.user.id }, superCookie)).status).toBe(404);
+    expect((await api("PATCH", `/api/platform/users/${otherField.body.user.id}`, { status: "Active" }, superCookie)).status).toBe(200);
+
+    // An active account in a suspended organization is not an eligible target.
+    await handle.db.execute(sql`update organizations set status = 'suspended' where id = ${otherOrgId}`);
+    expect((await api("POST", "/api/auth/impersonate", { userId: otherField.body.user.id }, superCookie)).status).toBe(404);
+    await handle.db.execute(sql`update organizations set status = 'active' where id = ${otherOrgId}`);
+
+    // A provider can cross organization boundaries only into a lower-ranked
+    // account. The existing session is reused and adopts the target's access.
+    expect((await api("POST", "/api/auth/impersonate", { userId: otherField.body.user.id }, superCookie)).status).toBe(200);
+    let me = await api("GET", "/api/auth/me", undefined, superCookie);
+    expect(me.body.realUser.id).toBe(superMe.body.realUser.id);
+    expect(me.body.effectiveUser.id).toBe(otherField.body.user.id);
+    expect(me.body.realUser.passwordHash).toBeUndefined();
+    expect(me.body.effectiveUser.passwordHash).toBeUndefined();
+    expect((await api("GET", "/api/platform/features", undefined, superCookie)).status).toBe(403);
+    expect((await api("GET", "/api/org/users", undefined, superCookie)).status).toBe(403);
+
+    // A second view-as operation cannot be used to escalate privileges.
+    expect((await api("POST", "/api/auth/impersonate", { userId: otherAdminId }, superCookie)).status).toBe(400);
+
+    // If the target organization is suspended mid-session, the next request
+    // auto-stops view-as with audit attribution and restores the provider.
+    await handle.db.execute(sql`update organizations set status = 'suspended' where id = ${otherOrgId}`);
+    me = await api("GET", "/api/auth/me", undefined, superCookie);
+    expect(me.body.impersonating).toBe(false);
+    expect(me.body.effectiveUser.id).toBe(superMe.body.realUser.id);
+    expect((await api("GET", "/api/platform/features", undefined, superCookie)).status).toBe(200);
+    await handle.db.execute(sql`update organizations set status = 'active' where id = ${otherOrgId}`);
+    const stoppedAudit = await api("GET", "/api/platform/audit?limit=100", undefined, superCookie);
+    expect(
+      stoppedAudit.body.entries.some(
+        (entry: any) =>
+          entry.action === "auth.impersonation_stopped" &&
+          entry.impersonatingUserId === otherField.body.user.id &&
+          entry.details?.reason === "organization_suspended"
+      )
+    ).toBe(true);
   });
 
   it("supports view-as for the super admin and the admin, with audit attribution", async () => {

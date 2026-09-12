@@ -2,33 +2,31 @@
 // a visible banner during impersonation with one-tap exit. Server component;
 // exit posts the stopImpersonation server action.
 import { getSessionContext } from "@/lib/auth/session";
-import { stopImpersonation } from "@/lib/auth/impersonation";
-import { redirect } from "next/navigation";
+import { ClientExitButton } from "@/components/client-exit-button";
+import { ROLE_LABELS } from "@workspace/features";
 
 export async function ImpersonationBanner() {
   const ctx = await getSessionContext();
   if (!ctx.impersonating || !ctx.effectiveUser || !ctx.realUser) return null;
 
-  async function exit() {
-    "use server";
-    await stopImpersonation();
-    redirect("/");
-  }
+  const targetRole = ROLE_LABELS[ctx.effectiveUser.role] || ctx.effectiveUser.role;
+  const targetOrg = ctx.org?.name || "Platform";
 
   return (
-    <div className="flex items-center justify-center gap-3 bg-plum px-3 py-1.5 text-white">
-      <span className="text-xs">
-        <strong className="font-semibold">Viewing as {ctx.effectiveUser.full_name}</strong>
-        {" · "}every action is logged under your identity ({ctx.realUser.full_name})
-      </span>
-      <form action={exit}>
-        <button
-          type="submit"
-          className="rounded-pill bg-white/15 px-3 py-0.5 text-xs font-semibold text-white hover:bg-white/25"
-        >
-          Exit
-        </button>
-      </form>
+    <div className="sticky top-0 z-[100] flex flex-wrap items-center justify-between gap-3 bg-pill-warning px-4 py-2.5 shadow-md sm:justify-center">
+      <div className="flex-1 text-sm font-medium leading-tight text-pill-warning-fg sm:flex-none">
+        <strong className="font-bold">Viewing as {ctx.effectiveUser.full_name}</strong>
+        <span className="opacity-80"> ({targetRole} · {targetOrg})</span>
+        <span className="hidden sm:inline">
+          {" · "}every action is logged under your identity ({ctx.realUser.full_name})
+        </span>
+        <div className="mt-0.5 text-xs opacity-80 sm:hidden">
+          Logged under {ctx.realUser.full_name}
+        </div>
+      </div>
+      <div className="shrink-0">
+        <ClientExitButton />
+      </div>
     </div>
   );
 }

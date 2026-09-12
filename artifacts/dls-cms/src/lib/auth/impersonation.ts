@@ -58,7 +58,7 @@ export async function startImpersonation(targetUserId: string): Promise<{ ok: bo
   return { ok: true };
 }
 
-export async function stopImpersonation(): Promise<{ ok: boolean }> {
+export async function stopImpersonation(): Promise<{ ok: boolean; error?: string }> {
   const ctx = await getSessionContext();
   const jar = cookies();
   const demoTargetId = jar.get(DEMO_IMPERSONATE_COOKIE)?.value;
@@ -67,16 +67,23 @@ export async function stopImpersonation(): Promise<{ ok: boolean }> {
       "impersonation", "INSERT", ctx.effectiveUser.id, null,
       { event: "impersonation_stopped", target: ctx.effectiveUser.full_name }, ctx.auditCtx,
     );
+    jar.delete(DEMO_IMPERSONATE_COOKIE);
+    jar.delete(IMPERSONATION_JWT_COOKIE);
+    invalidateSession();
+    revalidatePath("/", "layout");
+    return { ok: true };
   }
-  jar.delete(DEMO_IMPERSONATE_COOKIE);
-  jar.delete(IMPERSONATION_JWT_COOKIE);
+
   if (isApiAuth() && ctx.realUser) {
     try {
       await apiFetch("/auth/impersonate", { method: "DELETE" });
-    } catch {
-      // nothing to stop, or the API is unreachable — the local state is cleared regardless
+    } catch (e) {
+      return { ok: false, error: errorMessage(e, "Could not stop the support session.") };
     }
   }
+
+  jar.delete(DEMO_IMPERSONATE_COOKIE);
+  jar.delete(IMPERSONATION_JWT_COOKIE);
   invalidateSession();
   revalidatePath("/", "layout");
   return { ok: true };

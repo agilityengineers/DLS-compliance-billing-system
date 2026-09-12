@@ -297,6 +297,7 @@ export function authRouter(db: Db, config: AppConfig, deps: { mailer: Mailer }):
     await recordAudit(db, {
       orgId: auth.realUser.orgId,
       actorUserId: auth.realUser.id,
+      impersonatingUserId: auth.impersonating ? auth.effectiveUser.id : null,
       action: "auth.logout",
       targetType: "session",
       ip: req.ip ?? null,
@@ -504,10 +505,15 @@ export function authRouter(db: Db, config: AppConfig, deps: { mailer: Mailer }):
   router.post("/auth/impersonate", requireRealRole("Super_Admin", "Platform_Support", "Admin"), async (req, res) => {
     const auth = requireAuthContext(res);
     const { userId } = ImpersonateBody.parse(req.body);
+    if (auth.impersonating) throw badRequest("Stop viewing as another user before starting a new view-as session.");
     const target = await findUserById(db, userId);
     if (!target) throw notFound("User not found or suspended.");
 
     const targetOrgId = target.orgId;
+    if (targetOrgId) {
+      const [targetOrg] = await db.select().from(organizationsTable).where(eq(organizationsTable.id, targetOrgId)).limit(1);
+      if (!targetOrg || targetOrg.status !== "active") throw notFound("User not found or suspended.");
+    }
     const [windows, handoverComplete] = await Promise.all([
       targetOrgId ? activeWindowRows(db, targetOrgId) : Promise.resolve([]),
       targetOrgId ? hasCompletedHandover(db, targetOrgId) : Promise.resolve(true),
