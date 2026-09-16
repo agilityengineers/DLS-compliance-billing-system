@@ -12,7 +12,7 @@ export default async function PlatformSupportPage() {
     <div className="space-y-6">
       <PlatformPageHeader
         title="Support access"
-        intro="The provider never has standing access to client records. When an organization needs help, open an audited session as one of its people, do what is needed, and exit. Everything you do is logged under your own name."
+        intro="The provider has no screens of its own into client records: the only way in is an audited session as one of the organization's people. Open one when they need help, do what is needed, and exit. Everything you do is logged under your own name; if this deployment requires it, the organization's Admin opens a support window first."
       />
       <SupportAccessPanel selfId={ctx.realUser!.id} />
     </div>

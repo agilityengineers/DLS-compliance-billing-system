@@ -12,7 +12,7 @@ Care management, compliance and billing portal for Durable Life Skills, Inc.: a 
 - `pnpm --filter @workspace/db run generate` — write a new SQL migration after changing `lib/db/src/schema`
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string. Optional: `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_PASSWORD`, `SUPER_ADMIN_BREAKGLASS_EMAIL`/`_PASSWORD` (the second provider account), `REQUIRE_MFA_FOR_PLATFORM`, `SUPPORT_WINDOW_MAX_HOURS`, `AUDIT_RETENTION_YEARS`, `SENDGRID_API_KEY` + `APP_BASE_URL` (mail; without them invitations are logged, not sent), `SCHEDULER_ENABLED`, `CRON_SECRET`, `SESSION_IDLE_MINUTES`, `SESSION_MAX_DAYS`, `CORS_ORIGINS`, `GIT_SHA` (see `docs/access-model.md` and `docs/review/2026-09-platform-hardening.md`)
+- Required env: `DATABASE_URL` — Postgres connection string. Optional: `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_PASSWORD`, `SUPER_ADMIN_BREAKGLASS_EMAIL`/`_PASSWORD` (the second provider account), `REQUIRE_MFA_FOR_PLATFORM`, `REQUIRE_SUPPORT_WINDOW`, `SUPPORT_WINDOW_MAX_HOURS`, `AUDIT_RETENTION_YEARS`, `SENDGRID_API_KEY` + `APP_BASE_URL` (mail; without them invitations are logged, not sent), `SCHEDULER_ENABLED`, `CRON_SECRET`, `SESSION_IDLE_MINUTES`, `SESSION_MAX_DAYS`, `CORS_ORIGINS`, `GIT_SHA` (see `docs/access-model.md` and `docs/review/2026-09-platform-hardening.md`)
 - `GET /api/healthz` for an uptime monitor (cheap, no database); `GET /api/readyz` for a readiness probe (database + migrations); `POST /api/jobs/:name/run` with `x-cron-secret` for an external scheduler
 
 ## Stack
@@ -40,7 +40,7 @@ Care management, compliance and billing portal for Durable Life Skills, Inc.: a 
 - Identity and configuration are real (PostgreSQL via the API server); client/visit/billing records are still the synthetic demo dataset in the browser. Real accounts are merged into staff lists so screens keep working.
 - One catalog (`FEATURE_CATALOG`) drives the switchboard, the Settings screen, navigation and every gate; adding a feature is one catalog entry plus a `checkAccess`/`requireFeature` call.
 - Effective access = provider switch ∧ organization switch ∧ role grant; Admins always get what is on, employees only what is granted. Spine features cannot be switched off by the organization.
-- The Super Admin has no standing PHI access (review decision D-02); support happens through an audited "view as" that the organization's Admin must first allow by opening a time-boxed support window.
+- The Super Admin has no screens of its own into client records; support happens through an audited "view as". Review decision D-02 (an Admin-granted window before each session) was declined by the owner on 2026-09-16 and survives as the opt-in `REQUIRE_SUPPORT_WINDOW` flag, off by default.
 - Web app and API share one host (`/` and `/api`), so the session is a first-party httpOnly cookie and no CORS is configured.
 
 ## Product

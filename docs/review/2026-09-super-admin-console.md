@@ -48,7 +48,7 @@ There is exactly one provider account, protected by one password, with no second
 
 ### 2. The support window is a promise, not yet a rule
 
-**Status: closed.** An Admin grants a time-boxed window from Settings, and outside one the API refuses the session. Decision D-02 is now implemented rather than described.
+**Status: built, then made optional.** The window control and the API check exist (`REQUIRE_SUPPORT_WINDOW`), but the owner decided on 2026-09-16 that provider view-as should not require one, so the flag is off by default. See the access model.
 
 Decision D-02 in the work plan says the provider gets into an organization's data only inside a support window the organization's Admin grants, for a limited time. Today you can start a "view as" session whenever you like. It is audited and now visible while it runs, but nobody on the organization's side has to say yes first.
 

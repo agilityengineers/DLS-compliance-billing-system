@@ -1,5 +1,6 @@
-// Who may open a support session. These are the rules behind review decision
-// D-02, which until now existed only as a sentence in a document.
+// Who may open a support session. The Admin-granted window of review decision
+// D-02 is an opt-in the caller switches with `windowRequired`; the owner's
+// default since 2026-09-16 is off.
 import { describe, expect, it } from "vitest";
 import { activeWindowsFor, clampWindowHours, evaluateImpersonation, minutesRemaining } from "../lib/support-access";
 
@@ -12,6 +13,7 @@ const base = {
   targetId: "lisa",
   targetOrgId: "org-1" as string | null,
   targetActive: true,
+  windowRequired: true,
   hasActiveWindow: true,
   orgHandoverComplete: true,
   actorFeatures: new Set<string>(),
@@ -37,7 +39,7 @@ describe("active windows", () => {
   });
 });
 
-describe("the provider needs a granted window", () => {
+describe("the provider needs a granted window when the deployment requires one", () => {
   it("allows a support session while a window is open", () => {
     expect(evaluateImpersonation({ ...base, actorRole: "Super_Admin", targetRole: "Admin" })).toEqual({ ok: true });
     expect(evaluateImpersonation({ ...base, actorRole: "Platform_Support", targetRole: "Admin" })).toEqual({ ok: true });
@@ -53,6 +55,26 @@ describe("the provider needs a granted window", () => {
     expect(denied.ok).toBe(false);
     expect(denied.code).toBe("NO_SUPPORT_WINDOW");
     expect(denied.message).toContain("Settings → Support access");
+  });
+
+  it("does not require a window when the deployment says so", () => {
+    // The owner's default since 2026-09-16: REQUIRE_SUPPORT_WINDOW off.
+    const open = {
+      ...base,
+      actorRole: "Super_Admin" as const,
+      targetRole: "Admin" as const,
+      hasActiveWindow: false,
+      windowRequired: false,
+    };
+    expect(evaluateImpersonation(open)).toEqual({ ok: true });
+    expect(evaluateImpersonation({ ...open, actorRole: "Platform_Support" })).toEqual({ ok: true });
+    // The other provider rules are untouched by the flag.
+    expect(evaluateImpersonation({ ...open, targetRole: "Platform_Support", targetOrgId: null }).code).toBe(
+      "TARGET_NOT_IN_ORG"
+    );
+    expect(
+      evaluateImpersonation({ ...open, actorRole: "Platform_Support", targetRole: "Super_Admin", targetOrgId: null }).code
+    ).toBe("ROLE_NOT_BELOW");
   });
 
   it("makes an exception only while the organization has never been handed over", () => {

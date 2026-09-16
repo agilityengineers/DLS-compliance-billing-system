@@ -8,12 +8,13 @@ export const ROLES: Role[] = [...ALL_ROLES];
 export const ROLE_LABELS: Record<Role, string> = LABELS;
 
 /**
- * Hierarchy at a glance. The provider roles configure the platform and never
- * touch client records; everything below them is per organization and
- * additionally subject to the feature switches in Settings. "Client records
- * (PHI)" is the row that matters most: no provider role holds it, and the
- * only way in is an audited support session inside a window the organization
- * has granted.
+ * Hierarchy at a glance. The provider roles configure the platform and have
+ * no screens of their own into client records; everything below them is per
+ * organization and additionally subject to the feature switches in Settings.
+ * "Client records (PHI)" is the row that matters most: no provider role holds
+ * it, and the only way in is an audited support session, which the deployment
+ * may additionally gate on a window the organization has granted
+ * (REQUIRE_SUPPORT_WINDOW, off by default).
  */
 export interface PermissionRow {
   capability: string;
@@ -27,7 +28,7 @@ export const PERMISSION_MATRIX: PermissionRow[] = [
   { capability: "Cut and revoke provider support accounts", roles: ["Super_Admin"] },
   { capability: "Turn features on/off for the organization and grant them to roles", roles: ["Admin"] },
   { capability: "Create employee accounts, reset passwords, suspend", roles: ["Super_Admin", "Admin"] },
-  { capability: "Grant the provider a time-boxed support window", roles: ["Admin"] },
+  { capability: "Grant the provider a time-boxed support window (when the deployment requires one)", roles: ["Admin"] },
   { capability: "View own visits & write progress notes", roles: ["Admin", "Field_Staff"] },
   { capability: "View all clients", roles: ["Admin", "Scheduler"] },
   { capability: "View assigned clients only", roles: ["Field_Staff"] },

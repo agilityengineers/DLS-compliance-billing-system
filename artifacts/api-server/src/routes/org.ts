@@ -151,13 +151,18 @@ export function orgRouter(db: Db, config: AppConfig, deps: { mailer: Mailer }): 
     res.json({ invite });
   });
 
-  // ── Support access (review decision D-02) ───────────────────────────────
+  // ── Support access (review decision D-02, optional) ─────────────────────
   //
-  // The provider cannot open an organization's records at will. An Admin opens
-  // a window, for a reason, with an end time; outside one, a support session
-  // is refused by the API rather than merely discouraged by policy.
+  // An Admin can open a window for the provider, for a reason, with an end
+  // time. Whether the API refuses a provider session outside one depends on
+  // REQUIRE_SUPPORT_WINDOW (off by default since the owner's decision of
+  // 2026-09-16); the response says which, so the screen can adapt.
   router.get("/org/support-windows", async (_req, res) => {
-    res.json({ windows: await listWindowsForOrg(db, orgIdOf(res)), maxHours: config.supportWindowMaxHours });
+    res.json({
+      windows: await listWindowsForOrg(db, orgIdOf(res)),
+      maxHours: config.supportWindowMaxHours,
+      supportWindowRequired: config.requireSupportWindow,
+    });
   });
 
   router.post("/org/support-windows", async (req, res) => {

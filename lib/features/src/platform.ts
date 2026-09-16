@@ -21,7 +21,7 @@ export const PLATFORM_CAPABILITIES = [
   "platform.accounts",
   /** Cut and revoke provider support accounts. */
   "platform.provider_accounts",
-  /** Open an audited view-as session (still needs a granted support window). */
+  /** Open an audited view-as session (a granted support window is needed only when REQUIRE_SUPPORT_WINDOW is on). */
   "platform.support",
   /** End someone else's session. */
   "platform.sessions",
@@ -35,9 +35,10 @@ export type PlatformCapability = (typeof PLATFORM_CAPABILITIES)[number];
 
 /**
  * Support deliberately gets the read-and-respond set and nothing that changes
- * configuration: it can see the console, open a granted support session, end a
- * session, read the audit log and read system status. Everything that changes
- * what an organization may do, or who may sign in, stays with the Super Admin.
+ * configuration: it can see the console, open an audited support session, end
+ * a session, read the audit log and read system status. Everything that
+ * changes what an organization may do, or who may sign in, stays with the
+ * Super Admin.
  */
 const SUPPORT_CAPABILITIES: readonly PlatformCapability[] = [
   "platform.view",
@@ -68,7 +69,7 @@ export const PLATFORM_CAPABILITY_LABELS: Record<PlatformCapability, string> = {
   "platform.organizations": "Create, rename, suspend, decommission and export organizations",
   "platform.accounts": "Create accounts, change roles, reset passwords, suspend",
   "platform.provider_accounts": "Cut and revoke provider support accounts",
-  "platform.support": "Open an audited support session inside a granted window",
+  "platform.support": "Open an audited support session",
   "platform.sessions": "End another person's session",
   "platform.audit": "Read the audit log and verify its chain",
   "platform.system": "Read system status and run a maintenance job",

@@ -24,10 +24,11 @@ Super Admin (provider — Agility Engineers)
 * **Super Admin** owns the *platform*. It decides which capabilities are
   available to an organization, creates organizations and their Admins, can
   reset any organization user's password or end their sessions, and can open
-  an audited "view as" support session. It has **no standing access to client
-  records**: its only screens are the platform console (below).
-* **Support** is a provider support engineer. It reads the console, opens a
-  granted support session, ends sessions, and reads the audit log and system
+  an audited "view as" support session. It has **no screens of its own into
+  client records**: its only screens are the platform console (below), and the
+  only way in is that audited session.
+* **Support** is a provider support engineer. It reads the console, opens an
+  audited support session, ends sessions, and reads the audit log and system
   status — and changes no configuration, creates no accounts and cuts no other
   keys. What each provider role may do is one list,
   `platformCapabilitiesFor()` in `lib/features/src/platform.ts`, read by the
@@ -50,10 +51,11 @@ manages another Super Admin, not even its own peer.
 View-as never creates a session for the target or exposes target credentials.
 The existing session keeps its real owner and records only an effective-user
 reference. Self-view, suspended targets and nested view-as are rejected; the
-actor must stop the current view first. Provider support sessions also require
-an active, time-boxed organization window after hand-over, while Admins remain
-limited to active, lower-ranked users in their own organization and require the
-organization impersonation feature. While view-as is active, all ordinary
+actor must stop the current view first. Provider support sessions additionally
+require an open organization window only when the deployment sets
+`REQUIRE_SUPPORT_WINDOW=true` (off by default; see Support windows below), while
+Admins remain limited to active, lower-ranked users in their own organization
+and require the organization impersonation feature. While view-as is active, all ordinary
 authorization and feature checks use the effective identity.
 
 ## Two-tier feature switches
@@ -105,8 +107,8 @@ The provider's screens, all under `/admin/platform` and all gated on the
 | Organizations & people | Accounts | Every account across organizations: role, one-time password reset, sign out everywhere, suspend, view as |
 | Capabilities | Feature switchboard | Tier 1 switches |
 | Capabilities | Feature adoption | Tier 1 ∧ tier 2 ∧ role grants for every organization, read-only |
-| Security & compliance | Support access | The support policy, ask an organization for a window, start a view-as session, sessions in progress, full history |
-| Security & compliance | Security | Second factor, provider accounts, support windows across organizations, failed sign-ins |
+| Security & compliance | Support access | The support policy, start a view-as session, sessions in progress, full history |
+| Security & compliance | Security | Second factor, provider accounts, support windows across organizations (and whether one is required), failed sign-ins |
 | Security & compliance | Active sessions | Live sessions with device and address; end one, or all of a person's |
 | Security & compliance | Audit log | Platform-wide log with filters (kind, organization, since), chain verification and CSV export |
 | System | System status | Process, database and migration status, sign-in and support policy, mail, scheduled jobs, configuration warnings. Secrets are never shown |
@@ -164,20 +166,31 @@ secret store to bootstrap with a different one; `SUPER_ADMIN_FORCE_RESET=true`
 rotates an existing account to it once. Change the password from the app after
 the first sign-in.
 
-## Support access (review decision D-02)
+## Support windows (optional; `REQUIRE_SUPPORT_WINDOW`)
 
-The provider has **no standing access to client records**, and cannot give
-itself any. An organization's Admin opens a time-boxed window from
-Settings → Support access, with a stated reason and a length up to
-`SUPPORT_WINDOW_MAX_HOURS`. Only while a window is open may a provider account
-start a view-as session into that organization; outside one the API refuses it
-(`NO_SUPPORT_WINDOW`). The window closes at its end time or when the Admin
-closes it, and grant, revocation and expiry are all audited.
+Review decision D-02 proposed that the provider has no standing access to
+client records: an organization's Admin would open a time-boxed window from
+Settings → Support access, and only while one was open could a provider
+account start a view-as session. **The owner declined this on 2026-09-16.**
+Provider view-as sessions need no window. Every session remains audited with
+the real actor, is visible on the overview while it runs, and is limited to
+lower-ranked accounts in an active organization.
 
-One exception, deliberately narrow: an organization whose administrators have
-never signed in can still be opened, because there is nobody inside who could
-grant a window and no client records in it yet. The audit entry records which
-case applied. The rules are pure and tested in
+The window survives as an opt-in. With `REQUIRE_SUPPORT_WINDOW=true` the
+original rule applies: an Admin opens a window with a stated reason and a
+length up to `SUPPORT_WINDOW_MAX_HOURS`; outside one the API refuses a provider
+session (`NO_SUPPORT_WINDOW`); the window closes at its end time or when the
+Admin closes it, and grant, revocation and expiry are all audited. One
+exception, deliberately narrow, applies only in that mode: an organization
+whose administrators have never signed in can still be opened, because there
+is nobody inside who could grant a window and no client records in it yet.
+
+With the flag off (the default), Settings → Support access shows a notice
+instead of the grant form, the console's Security screen says the window is
+not required and hides the request-access form, and System status carries an
+informational note. Each `auth.impersonation_started` audit entry records
+`windowRequired`, `supportWindowId` and `viaHandoverException`, so the log
+says under which policy every session opened. The rules are pure and tested in
 `artifacts/api-server/src/lib/support-access.ts`.
 
 ## Audit
