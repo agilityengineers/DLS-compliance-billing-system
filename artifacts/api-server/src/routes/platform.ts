@@ -668,6 +668,7 @@ export function platformRouter(db: Db, config: AppConfig, deps: { mailer: Mailer
       providerAccounts,
       requireMfaForPlatform: config.requireMfaForPlatform,
       breakGlassConfigured: Boolean(config.breakGlassEmail && config.breakGlassPassword),
+      supportWindowRequired: config.requireSupportWindow,
       supportWindows: windows,
       supportWindowMaxHours: config.supportWindowMaxHours,
       signInFailures: failures,

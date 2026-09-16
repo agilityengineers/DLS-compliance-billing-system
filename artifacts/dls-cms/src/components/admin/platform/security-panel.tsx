@@ -24,6 +24,7 @@ interface SecurityData {
   providerAccounts: AccountRow[];
   requireMfaForPlatform: boolean;
   breakGlassConfigured: boolean;
+  supportWindowRequired: boolean;
   supportWindows: SupportWindowRow[];
   supportWindowMaxHours: number;
   signInFailures: SignInFailure[];
@@ -120,10 +121,17 @@ export function SecurityPanel({
       <section className="space-y-3">
         <div>
           <h2 className="font-serif text-lg font-semibold text-plum">Support windows</h2>
-          <p className="text-sm text-muted-foreground">
-            An organization&rsquo;s Admin opens a window before anyone here can view as one of their people. Windows close by
-            themselves; the longest one that can be granted is {data.supportWindowMaxHours} hours.
-          </p>
+          {data.supportWindowRequired ? (
+            <p className="text-sm text-muted-foreground">
+              An organization&rsquo;s Admin opens a window before anyone here can view as one of their people. Windows close by
+              themselves; the longest one that can be granted is {data.supportWindowMaxHours} hours.
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              This deployment does not require a window: a provider account can open an audited view-as session at any time
+              (REQUIRE_SUPPORT_WINDOW is off). Windows organizations opened while the rule was on are listed for the record.
+            </p>
+          )}
         </div>
         {openWindows.length > 0 && (
           <ul className="divide-y divide-border rounded-card border border-pill-warning-fg/30 bg-pill-warning">
@@ -137,36 +145,38 @@ export function SecurityPanel({
             ))}
           </ul>
         )}
-        <RequestWindow orgs={orgs} onRequested={() => void load()} />
-        <div className="w-full overflow-auto rounded-lg border border-border">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50 [&_th]:h-9 [&_th]:px-3 [&_th]:text-left [&_th]:font-medium [&_th]:text-muted-foreground">
-              <tr><th>Organization</th><th>Reason</th><th>Granted by</th><th>Expires</th><th>State</th></tr>
-            </thead>
-            <tbody className="[&_td]:px-3 [&_td]:py-2 [&_tr]:border-t [&_tr]:border-border">
-              {data.supportWindows.map((w) => (
-                <tr key={w.id}>
-                  <td className="font-medium">{w.orgName}</td>
-                  <td className="text-muted-foreground">{w.reason}</td>
-                  <td className="text-muted-foreground">{w.grantedByName}</td>
-                  <td className="whitespace-nowrap text-muted-foreground">{fmtDateTime(w.expiresAt)}</td>
-                  <td>
-                    {w.active ? (
-                      <Badge variant="warning">Open</Badge>
-                    ) : w.revokedAt ? (
-                      <Badge variant="muted">Closed early</Badge>
-                    ) : (
-                      <Badge variant="muted">Expired</Badge>
-                    )}
-                  </td>
-                </tr>
-              ))}
-              {data.supportWindows.length === 0 && (
-                <tr><td colSpan={5} className="py-6 text-center text-muted-foreground">No organization has ever opened a window.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        {data.supportWindowRequired && <RequestWindow orgs={orgs} onRequested={() => void load()} />}
+        {(data.supportWindowRequired || data.supportWindows.length > 0) && (
+          <div className="w-full overflow-auto rounded-lg border border-border">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50 [&_th]:h-9 [&_th]:px-3 [&_th]:text-left [&_th]:font-medium [&_th]:text-muted-foreground">
+                <tr><th>Organization</th><th>Reason</th><th>Granted by</th><th>Expires</th><th>State</th></tr>
+              </thead>
+              <tbody className="[&_td]:px-3 [&_td]:py-2 [&_tr]:border-t [&_tr]:border-border">
+                {data.supportWindows.map((w) => (
+                  <tr key={w.id}>
+                    <td className="font-medium">{w.orgName}</td>
+                    <td className="text-muted-foreground">{w.reason}</td>
+                    <td className="text-muted-foreground">{w.grantedByName}</td>
+                    <td className="whitespace-nowrap text-muted-foreground">{fmtDateTime(w.expiresAt)}</td>
+                    <td>
+                      {w.active ? (
+                        <Badge variant="warning">Open</Badge>
+                      ) : w.revokedAt ? (
+                        <Badge variant="muted">Closed early</Badge>
+                      ) : (
+                        <Badge variant="muted">Expired</Badge>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {data.supportWindows.length === 0 && (
+                  <tr><td colSpan={5} className="py-6 text-center text-muted-foreground">No organization has ever opened a window.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
 
       {/* ── failed sign-ins ─────────────────────────────────────────────── */}

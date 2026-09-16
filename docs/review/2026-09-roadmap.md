@@ -98,7 +98,7 @@ Shipping all of it in one migration means a single production maintenance window
 ## What we need from DLS
 
 1. **Roles.** Confirm the three tiers: Super Admin (vendor), Admin/Owner, and two employee roles (office/scheduler and field staff), or a single employee role.
-2. **Vendor access.** Confirm that the Super Admin has no standing access to client records, and can view them only during a support window you open, which is logged.
+2. **Vendor access.** Confirm that the Super Admin has no standing access to client records, and can view them only during a support window you open, which is logged. *Answered 2026-09-16: no — the owner keeps audited view-as without a window; the window is an opt-in flag (`REQUIRE_SUPPORT_WINDOW`). See `docs/access-model.md`.*
 3. **Intake paperwork.** It is checked on the diagram but not in the written list. Include it at launch? Which documents make up the intake packet and the yearly renewal packet?
 4. **Authorizations.** Are weekly authorizations issued in hours or units? Which rounding rule applies to the codes you bill? Is your authorization week Sunday–Saturday?
 5. **Samples.** The attendance record and person-centered profile samples. Should we build the generic version now and refine, or wait?

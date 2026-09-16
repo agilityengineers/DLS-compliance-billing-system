@@ -1,10 +1,11 @@
 // Who may open a "view as" session, and when.
 //
-// Review decision D-02 says the provider has no standing access to an
-// organization's records: it gets in only inside a window that the
-// organization's own Admin has opened, for a stated reason, with an end time.
-// That was a promise in a document until now — this module is the rule, and
-// the API refuses the session without it.
+// Review decision D-02 proposed that the provider gets into an organization's
+// records only inside a window that the organization's own Admin has opened,
+// for a stated reason, with an end time. The owner declined that on
+// 2026-09-16: a provider account may open an audited view-as session at any
+// time. The window rule is kept as an opt-in (REQUIRE_SUPPORT_WINDOW), and this
+// module applies it only when the caller says the deployment requires it.
 //
 // The evaluation is pure so that every branch can be tested without a
 // database, and so that the same reasoning can explain itself in the UI.
@@ -44,10 +45,13 @@ export interface ImpersonationRequest {
   targetRole: Role;
   targetOrgId: string | null;
   targetActive: boolean;
+  /** Does this deployment require an Admin-granted window (REQUIRE_SUPPORT_WINDOW)? */
+  windowRequired: boolean;
   /** Does the target's organization have an open support window? */
   hasActiveWindow: boolean;
   /**
-   * Has anybody in the target's organization ever completed the hand-over?
+   * Only consulted when `windowRequired`. Has anybody in the target's
+   * organization ever completed the hand-over?
    *
    * The exception that keeps the rule usable: before the first Admin has
    * signed in there is nobody who *could* grant a window, so the provider may
@@ -86,7 +90,7 @@ export function evaluateImpersonation(req: ImpersonationRequest): ImpersonationD
     if (!req.targetOrgId) {
       return { ok: false, code: "TARGET_NOT_IN_ORG", message: "That account does not belong to an organization." };
     }
-    if (!req.hasActiveWindow && req.orgHandoverComplete) {
+    if (req.windowRequired && !req.hasActiveWindow && req.orgHandoverComplete) {
       return {
         ok: false,
         code: "NO_SUPPORT_WINDOW",

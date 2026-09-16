@@ -146,6 +146,9 @@ export function SystemStatusPanel() {
           <Row label="Break-glass account">
             {data.security.breakGlassConfigured ? <Badge variant="success">Configured</Badge> : <Badge variant="warning">Not configured</Badge>}
           </Row>
+          <Row label="Support window before view-as">
+            {data.security.supportWindowRequired ? <Badge variant="success">Required</Badge> : <Badge variant="muted">Not required</Badge>}
+          </Row>
           <Row label="Longest support window">{data.security.supportWindowMaxHours} hours</Row>
           <Row label="Audit retention">{data.security.auditRetentionYears} years</Row>
           <Row label="Audit chain">
@@ -336,9 +339,9 @@ export function SystemStatusPanel() {
 
       <p className="text-xs text-muted-foreground">
         To change any of these, edit the deployment&rsquo;s secrets (SESSION_IDLE_MINUTES, SESSION_MAX_DAYS,
-        LOGIN_MAX_FAILURES, LOGIN_WINDOW_MINUTES, CORS_ORIGINS, REQUIRE_MFA_FOR_PLATFORM, SUPPORT_WINDOW_MAX_HOURS,
-        AUDIT_RETENTION_YEARS, SENDGRID_API_KEY, SCHEDULER_ENABLED, CRON_SECRET, SUPER_ADMIN_*) and restart the API
-        server; see docs/access-model.md.
+        LOGIN_MAX_FAILURES, LOGIN_WINDOW_MINUTES, CORS_ORIGINS, REQUIRE_MFA_FOR_PLATFORM, REQUIRE_SUPPORT_WINDOW,
+        SUPPORT_WINDOW_MAX_HOURS, AUDIT_RETENTION_YEARS, SENDGRID_API_KEY, SCHEDULER_ENABLED, CRON_SECRET, SUPER_ADMIN_*)
+        and restart the API server; see docs/access-model.md.
       </p>
     </div>
   );

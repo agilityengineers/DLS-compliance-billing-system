@@ -1,8 +1,11 @@
 // components/admin/platform/support-access.tsx — the one door into an
 // organization for the provider: an audited "view as" session. This screen
 // states the policy, starts a session, shows the ones running and keeps the
-// history in plain sight, because the whole arrangement (review decision
-// D-02) rests on that access being rare, visible and attributable.
+// history in plain sight, because the whole arrangement rests on that access
+// being visible and attributable. The Admin-granted window of review decision
+// D-02 is optional (REQUIRE_SUPPORT_WINDOW, off by default since the owner's
+// decision of 2026-09-16); Security and System status show whether this
+// deployment requires it.
 "use client";
 
 import { useEffect, useState } from "react";
@@ -84,15 +87,15 @@ export function SupportAccessPanel({ selfId }: { selfId: string }) {
         <h2 className="font-medium">How support access works</h2>
         <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
           <li>
-            The provider account has no standing access to client records. The only way in is a &ldquo;view as&rdquo; session,
-            which opens the app exactly as the chosen person sees it, with their role and their feature access.
+            The provider account has no screens of its own into client records. The only way in is a &ldquo;view as&rdquo;
+            session, which opens the app exactly as the chosen person sees it, with their role and their feature access.
           </li>
           <li>Every action during the session is written to the audit log under your real identity, with the person you were viewing as.</li>
           <li>The session ends when you click Exit in the banner, when you sign out, or when the idle timeout signs you out.</li>
           <li>
-            <span className="font-medium text-foreground">Planned, not yet enforced</span> (work-plan decision D-02): the
-            organization&rsquo;s Admin grants a time-boxed support window before a session can start. Until then every session is
-            listed here and on the overview while it runs.
+            A deployment can additionally require the organization&rsquo;s Admin to open a time-boxed support window first
+            (REQUIRE_SUPPORT_WINDOW). Whether this one does is shown on Security and System status; when it does, a session
+            outside a window is refused and the message says how to ask for one.
           </li>
         </ul>
       </section>

@@ -3,11 +3,13 @@
 //   Super_Admin       — the platform owner (Agility Engineers). Configures which
 //                       capabilities each organization may use, creates the
 //                       organizations and their administrators, and cuts support
-//                       keys. Has NO standing access to client records.
+//                       keys. Has no screens of its own into client records; the
+//                       only way in is an audited view-as session.
 //   Platform_Support  — a provider support engineer. Reads the console and works
-//                       incidents (view-as inside a granted window, ending
-//                       sessions), but changes no configuration and creates no
-//                       accounts. Also has no standing access to client records.
+//                       incidents (audited view-as, ending sessions), but
+//                       changes no configuration and creates no accounts. Like
+//                       the Super Admin, it has no screens of its own into
+//                       client records.
 //   Admin             — the organization owner (Durable Life Skills). Runs the
 //                       company, creates employee accounts, and decides which of
 //                       the provider-enabled capabilities each employee role gets.

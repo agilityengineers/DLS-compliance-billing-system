@@ -140,7 +140,7 @@ There is no feature-flag system, and the nearest thing (menu configuration) cann
 
 ### C2. Required design (smallest change set; copies the existing three-layer pattern: UI pre-check → server action → DB rule)
 
-**Decisions.** Flags are org-wide capabilities; `menu_config` shrinks to per-role menu trimming over the same keys. Effective enabled = `super_admin_enabled AND admin_enabled`. Super Admin is a configuration identity with **no standing PHI access** (`fn_is_admin()` stays `= 'Admin'`); vendor access to PHI happens only inside an Admin-granted, time-boxed, audited support window. Visits are a data primitive, not a feature (gating them would break notes and billing).
+**Decisions.** Flags are org-wide capabilities; `menu_config` shrinks to per-role menu trimming over the same keys. Effective enabled = `super_admin_enabled AND admin_enabled`. Super Admin is a configuration identity with **no standing PHI access** (`fn_is_admin()` stays `= 'Admin'`); vendor access to PHI happens only inside an Admin-granted, time-boxed, audited support window. Visits are a data primitive, not a feature (gating them would break notes and billing). *Answered 2026-09-16: the owner declined the window requirement; view-as stays audited and the window is an opt-in flag (`REQUIRE_SUPPORT_WINDOW`).*
 
 | Piece | Change | Copies |
 |---|---|---|
@@ -180,7 +180,7 @@ There is no feature-flag system, and the nearest thing (menu configuration) cann
 ## Open questions (answers change the roadmap; none block Phase 0)
 
 1. **Role mapping.** Confirm: add `Super_Admin` above `Admin`; keep `Scheduler` and `Field_Staff` as the two employee roles (or collapse to one Employee role?).
-2. **Super Admin and PHI.** Recommended: system configuration, users and flags only; PHI only inside an Admin-granted, time-boxed, audited support window. Confirm.
+2. **Super Admin and PHI.** Recommended: system configuration, users and flags only; PHI only inside an Admin-granted, time-boxed, audited support window. Confirm. *Answered 2026-09-16: no — see `docs/access-model.md`.*
 3. **Intake paperwork** is checked in the diagram but absent from the eight-item list. Treat as launch scope? Which documents form the intake packet and the yearly renewal packet (ISP/service plan, physician order, consents, HRC, other)?
 4. **Authorizations and units.** Are weekly authorizations issued in hours or units? Which rounding rule do the billed codes follow under HCPF? Is the authorization week Sun–Sat?
 5. **Samples.** When do the attendance record and person-centered profile samples arrive? Ship the generic v1 now, or wait?

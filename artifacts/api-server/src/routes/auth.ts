@@ -527,6 +527,7 @@ export function authRouter(db: Db, config: AppConfig, deps: { mailer: Mailer }):
       targetRole: roleOf(target),
       targetOrgId,
       targetActive: target.status === "Active",
+      windowRequired: config.requireSupportWindow,
       hasActiveWindow: windows.length > 0,
       orgHandoverComplete: handoverComplete,
       actorFeatures: auth.effectiveKeys as ReadonlySet<string>,
@@ -546,8 +547,10 @@ export function authRouter(db: Db, config: AppConfig, deps: { mailer: Mailer }):
       targetId: target.id,
       details: {
         target: target.fullName,
+        windowRequired: config.requireSupportWindow,
         supportWindowId: windows[0]?.id ?? null,
-        viaHandoverException: windows.length === 0 && isPlatformRole(roleOf(auth.realUser)),
+        viaHandoverException:
+          config.requireSupportWindow && windows.length === 0 && isPlatformRole(roleOf(auth.realUser)),
       },
       ip: req.ip ?? null,
     });

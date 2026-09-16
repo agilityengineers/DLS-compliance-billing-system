@@ -50,6 +50,7 @@ export interface SystemStatusPayload {
     providerAccounts: number;
     providerAccountsWithMfa: number;
     breakGlassConfigured: boolean;
+    supportWindowRequired: boolean;
     supportWindowMaxHours: number;
     auditRetentionYears: number;
     auditChain: { lastVerifiedAt: string | null; ok: boolean | null; entriesChecked: number | null };
@@ -147,6 +148,13 @@ export function systemWarnings(input: WarningInput): SystemWarning[] {
     warnings.push({
       severity: "warning",
       message: `Two-factor sign-in is required, but ${input.platformAccounts - input.platformAccountsWithMfa} provider account(s) have not enrolled and cannot work until they do.`,
+    });
+  }
+  if (!config.requireSupportWindow) {
+    warnings.push({
+      severity: "info",
+      message:
+        "REQUIRE_SUPPORT_WINDOW is off: a provider account can open an audited view-as session without the organization's Admin first granting a support window. Set it to true to require one.",
     });
   }
   if (config.mail.mode === "log") {
@@ -259,6 +267,7 @@ export async function collectSystemStatus(
       providerAccounts: extra.platformAccounts,
       providerAccountsWithMfa: extra.platformAccountsWithMfa,
       breakGlassConfigured: Boolean(config.breakGlassEmail && config.breakGlassPassword),
+      supportWindowRequired: config.requireSupportWindow,
       supportWindowMaxHours: config.supportWindowMaxHours,
       auditRetentionYears: config.auditRetentionYears,
       auditChain,

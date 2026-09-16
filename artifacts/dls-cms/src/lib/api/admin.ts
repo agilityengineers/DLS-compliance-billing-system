@@ -152,7 +152,8 @@ export const orgApi = {
     apiFetch<{ temporaryPassword: string | null }>(`/org/users/${id}/reset-password`, { method: "POST", json: password ? { password } : {} }),
   audit: (limit = 50) => apiFetch<{ entries: AuditEntry[] }>(`/org/audit?limit=${limit}`),
   resendInvite: (id: string) => apiFetch<{ invite: InviteResult }>(`/org/users/${id}/resend-invite`, { method: "POST" }),
-  supportWindows: () => apiFetch<{ windows: SupportWindowRow[]; maxHours: number }>("/org/support-windows"),
+  supportWindows: () =>
+    apiFetch<{ windows: SupportWindowRow[]; maxHours: number; supportWindowRequired: boolean }>("/org/support-windows"),
   grantSupportWindow: (input: { reason: string; hours: number }) =>
     apiFetch<{ window: { id: string; expiresAt: string; hours: number } }>("/org/support-windows", {
       method: "POST",
@@ -292,6 +293,7 @@ export interface SystemStatus {
     providerAccounts: number;
     providerAccountsWithMfa: number;
     breakGlassConfigured: boolean;
+    supportWindowRequired: boolean;
     supportWindowMaxHours: number;
     auditRetentionYears: number;
     auditChain: { lastVerifiedAt: string | null; ok: boolean | null; entriesChecked: number | null };
@@ -369,6 +371,7 @@ export const platformApi = {
       providerAccounts: AccountRow[];
       requireMfaForPlatform: boolean;
       breakGlassConfigured: boolean;
+      supportWindowRequired: boolean;
       supportWindows: SupportWindowRow[];
       supportWindowMaxHours: number;
       signInFailures: SignInFailure[];

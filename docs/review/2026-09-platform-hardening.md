@@ -10,7 +10,7 @@ The console review ended with a ranked list of things the platform could not do.
 | # | The gap | What exists now |
 |---|---|---|
 | 1 | One lost password locks you out of your own platform | A **break-glass provider account** created from the deployment's own secrets, and **two-factor sign-in** (TOTP) for any account, which the deployment can require of provider accounts |
-| 2 | The support window was a promise, not a rule | An organization's Admin **grants a time-boxed window** before anyone from the provider can view as their people. Without one the API refuses the session |
+| 2 | The support window was a promise, not a rule | An organization's Admin **can grant a time-boxed window**, and the deployment can require one before anyone from the provider views as their people (`REQUIRE_SUPPORT_WINDOW`). Off by default since the owner's decision of 2026-09-16 |
 | 3 | Failed sign-ins left no trace | Every attempt is **recorded**; failures against a real account are audited; the lock-out counter now lives in the database, so it survives restarts and works across instances |
 | 4 | No audit retention rule, no tamper evidence | Each entry carries the **hash of the one before it**; the database refuses updates and deletes outright; a **Verify the chain** button and a nightly job say whether anything slipped past; the retention period is configured and displayed |
 | 5 | Organizations had a start but no middle or end | **Contract and contact details**, a recorded **Business Associate Agreement** with expiry warnings, a full **export**, and a **decommission** flow |
@@ -18,7 +18,7 @@ The console review ended with a ranked list of things the platform could not do.
 | 7 | Nothing ran on a clock, nothing watched the service | A **maintenance scheduler** with seven jobs and a visible history, a **cron endpoint** for hosts that sleep idle instances, and a **readiness endpoint** for an uptime monitor |
 | 8 | Every provider operator was a Super Admin | A **Support role** that reads the console and works an incident but changes no configuration and creates no accounts |
 
-Nothing about the two-tier feature switchboard changed, and no provider role has gained access to client records. The opposite: the one route in is now gated on a window the organization controls.
+Nothing about the two-tier feature switchboard changed, and no provider role has gained a screen of its own into client records. The one route in is audited every time, and can be gated on a window the organization controls when the deployment requires it.
 
 ## The mental model, updated
 
@@ -28,7 +28,7 @@ The building-manager analogy from the console review still holds, with three add
 
 **Both keys now need a second thing to turn them.** Two-factor sign-in adds a code from an authenticator app. The code and the password fail independently, so losing one does not lose the account.
 
-**And the tenant now controls their own door.** The provider cannot let itself in. It can knock — there is a "request access" button that emails the organization's administrators — but the door opens from the inside, for a stated reason, and closes itself.
+**And the tenant can control their own door.** With `REQUIRE_SUPPORT_WINDOW=true` the provider cannot let itself in. It can knock — there is a "request access" button that emails the organization's administrators — but the door opens from the inside, for a stated reason, and closes itself. By the owner's decision of 2026-09-16 that is off by default: the provider can let itself in, audited, and the tenant sees every visit in its audit log.
 
 ## What an operator has to do
 
@@ -88,6 +88,7 @@ Every template shipped is marked as carrying no client information, following th
 | `REQUIRE_MFA_FOR_PLATFORM` | `false` | Provider accounts must enrol a second factor |
 | `MFA_ISSUER` | `DLS Portal` | The name shown in the authenticator app |
 | `MFA_PENDING_TTL_MINUTES` | `10` | How long the half-finished sign-in stays valid |
+| `REQUIRE_SUPPORT_WINDOW` | `false` | Refuse a provider view-as session unless the organization's Admin has opened a window. Off by owner decision (2026-09-16) |
 | `SUPPORT_WINDOW_MAX_HOURS` | `8` | Longest window an Admin may grant at once |
 | `AUDIT_RETENTION_YEARS` | `6` | Reported on System status; matches the HIPAA documentation rule |
 | `LOGIN_ATTEMPT_RETENTION_DAYS` | `90` | How long sign-in attempts are kept |
@@ -107,6 +108,8 @@ Sign-in becomes two steps. The password step returns a short-lived, single-use h
 Ten recovery codes are issued at enrolment, shown once, and stored only as hashes. Each works once. Turning the second factor off requires the password, not just a live session.
 
 ### Support windows
+
+**Optional since 2026-09-16.** The owner decided provider view-as needs no window; what follows applies when `REQUIRE_SUPPORT_WINDOW=true`. With it off an Admin can still open a window but nothing depends on it, and the Settings section and the Security screen say so.
 
 An Admin opens a window from **Settings → Support access** with a reason and a length (up to the configured maximum). While it is open, the provider may start a view-as session; every action is still audited under the provider's real name. The window closes at its end time or the moment the Admin closes it.
 

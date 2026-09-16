@@ -166,7 +166,7 @@ export const PLATFORM_NAV: NavSection[] = [
         label: "Support access",
         icon: "LifeBuoy",
         capability: "platform.support",
-        description: "Ask for a window, open an audited view-as session, review every past one."
+        description: "Open an audited view-as session, see the ones running, review every past one."
       },
       {
         href: "/admin/platform/security",

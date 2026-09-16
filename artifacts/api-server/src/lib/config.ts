@@ -73,6 +73,13 @@ export interface AppConfig {
   /** How long the half-finished login between password and code stays valid. */
   mfaPendingTtlMs: number;
 
+  /**
+   * Refuse a provider view-as session unless the organization's Admin has
+   * opened a support window (review decision D-02). Off by default: the owner
+   * decided on 2026-09-16 that provider support sessions need no window. Every
+   * session is still audited; the window stays available as an opt-in.
+   */
+  requireSupportWindow: boolean;
   /** Longest support window an organization Admin may grant in one go. */
   supportWindowMaxHours: number;
 
@@ -136,6 +143,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     requireMfaForPlatform: bool(env.REQUIRE_MFA_FOR_PLATFORM, false),
     mfaPendingTtlMs: int(env.MFA_PENDING_TTL_MINUTES, 10) * 60_000,
 
+    requireSupportWindow: bool(env.REQUIRE_SUPPORT_WINDOW, false),
     supportWindowMaxHours: int(env.SUPPORT_WINDOW_MAX_HOURS, 8),
 
     auditRetentionYears: int(env.AUDIT_RETENTION_YEARS, 6),

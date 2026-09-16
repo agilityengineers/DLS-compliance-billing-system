@@ -22,12 +22,18 @@ describe.skipIf(!TEST_URL)("api server", () => {
   let handle: DbHandle;
   let base = "";
   let server: ReturnType<ReturnType<typeof createApp>["listen"]>;
+  let openServer: ReturnType<ReturnType<typeof createApp>["listen"]>;
+  let openBase = "";
   const config = loadConfig({
     NODE_ENV: "test",
     LOGIN_MAX_FAILURES: "3",
     LOGIN_WINDOW_MINUTES: "15",
     APP_BASE_URL: "https://portal.example.test",
     CRON_SECRET: "cron-secret-for-tests",
+    // The support window is opt-in; this server runs with it on so the
+    // refusals below keep their meaning. The default (off) is exercised
+    // against a second server on the same database, `apiOpen` below.
+    REQUIRE_SUPPORT_WINDOW: "true",
   });
   // Capture mail instead of sending or logging it, so the tests can read what
   // the system would have put in someone's inbox.
@@ -36,8 +42,14 @@ describe.skipIf(!TEST_URL)("api server", () => {
   const linkIn = (body: string) => /https:\/\/portal\.example\.test\S+/.exec(body)?.[0] ?? "";
   const tokenIn = (body: string) => new URL(linkIn(body)).searchParams.get("token") ?? "";
 
-  async function api<T = any>(method: string, path: string, body?: unknown, cookie?: string | null): Promise<ApiResponse<T>> {
-    const res = await fetch(base + path, {
+  async function api<T = any>(
+    method: string,
+    path: string,
+    body?: unknown,
+    cookie?: string | null,
+    origin?: string
+  ): Promise<ApiResponse<T>> {
+    const res = await fetch((origin ?? base) + path, {
       method,
       headers: { "content-type": "application/json", ...(cookie ? { cookie } : {}) },
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -53,6 +65,10 @@ describe.skipIf(!TEST_URL)("api server", () => {
     return { status: res.status, body: parsed as T, cookie: setCookie ? setCookie.split(";")[0]! : null };
   }
 
+  /** The same request against the server that does not require a support window. */
+  const apiOpen = <T = any>(method: string, path: string, body?: unknown, cookie?: string | null) =>
+    api<T>(method, path, body, cookie, openBase);
+
   async function login(email: string, password: string): Promise<ApiResponse> {
     return api("POST", "/api/auth/login", { email, password });
   }
@@ -67,9 +83,24 @@ describe.skipIf(!TEST_URL)("api server", () => {
     await new Promise<void>((resolve) => server.once("listening", resolve));
     const address = server.address();
     base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
+
+    // A second server on the same database with the default configuration,
+    // where a provider view-as session needs no support window. Sessions live
+    // in the database, so the cookies below work against either.
+    const openConfig = loadConfig({ NODE_ENV: "test", APP_BASE_URL: "https://portal.example.test" });
+    openServer = createApp({
+      db: handle.db,
+      config: openConfig,
+      quiet: true,
+      mailer: new Mailer(handle.db, openConfig, mailTransport),
+    }).listen(0);
+    await new Promise<void>((resolve) => openServer.once("listening", resolve));
+    const openAddress = openServer.address();
+    openBase = `http://127.0.0.1:${typeof openAddress === "object" && openAddress ? openAddress.port : 0}`;
   });
 
   afterAll(async () => {
+    await new Promise<void>((resolve) => openServer.close(() => resolve()));
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await handle.pool.end();
   });
@@ -403,6 +434,38 @@ describe.skipIf(!TEST_URL)("api server", () => {
     expect(audit.body.entries.map((e: any) => e.action)).toEqual(
       expect.arrayContaining(["support.window_granted", "support.window_revoked", "support.window_requested"])
     );
+  });
+
+  it("lets the provider in without a window when the deployment does not require one", async () => {
+    // The owner's default since 2026-09-16. Lisa's organization has completed
+    // its hand-over and has no open window, which the strict server refuses.
+    expect((await api("GET", "/api/org/support-windows", undefined, lisaCookie)).body.supportWindowRequired).toBe(true);
+    expect((await apiOpen("GET", "/api/org/support-windows", undefined, lisaCookie)).body.supportWindowRequired).toBe(
+      false
+    );
+    expect((await apiOpen("GET", "/api/platform/security", undefined, superCookie)).body.supportWindowRequired).toBe(false);
+
+    const start = await apiOpen("POST", "/api/auth/impersonate", { userId: lisaId }, superCookie);
+    expect(start.status).toBe(200);
+    expect(start.body.supportWindowExpiresAt).toBeNull();
+    expect((await apiOpen("GET", "/api/auth/me", undefined, superCookie)).body.impersonating).toBe(true);
+    expect((await apiOpen("DELETE", "/api/auth/impersonate", undefined, superCookie)).status).toBe(200);
+
+    const audit = await api("GET", "/api/platform/audit?action=auth.impersonation_started", undefined, superCookie);
+    expect(audit.body.entries[0].details).toMatchObject({
+      windowRequired: false,
+      supportWindowId: null,
+      viaHandoverException: false,
+    });
+
+    // The same request on the strict server is still refused.
+    const denied = await api("POST", "/api/auth/impersonate", { userId: lisaId }, superCookie);
+    expect(denied.status).toBe(403);
+    expect(denied.body.error.code).toBe("NO_SUPPORT_WINDOW");
+
+    const system = await apiOpen("GET", "/api/platform/system", undefined, superCookie);
+    expect(system.body.security.supportWindowRequired).toBe(false);
+    expect(system.body.warnings.some((w: any) => w.message.includes("REQUIRE_SUPPORT_WINDOW"))).toBe(true);
   });
 
   it("lets the provider in without a window only before the hand-over is complete", async () => {

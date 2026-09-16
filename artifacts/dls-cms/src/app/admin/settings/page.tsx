@@ -61,19 +61,19 @@ export default async function SettingsPage() {
         )}
       </section>
 
-      {/* ── Support access (the organization's side of review decision D-02) ── */}
+      {/* ── Support access (provider view-as; the window is optional, REQUIRE_SUPPORT_WINDOW) ── */}
       <section className="space-y-3">
         <div>
           <h2 className="font-serif text-lg font-semibold text-plum">Support access</h2>
           <p className="text-sm text-muted-foreground">
-            Let your provider see the app as one of your people, for a set time, when you need help. They cannot open
-            your records any other way, and cannot open this door themselves.
+            How your provider gets in when you need help. Every support session is audited under the provider&rsquo;s
+            own name; this deployment may additionally require you to open a time-boxed window first.
           </p>
         </div>
         {apiAuth ? (
           <SupportAccessPanel />
         ) : (
-          <p className="text-sm text-muted-foreground">Support windows need the API server (real sign-in mode).</p>
+          <p className="text-sm text-muted-foreground">Support access needs the API server (real sign-in mode).</p>
         )}
       </section>
 
