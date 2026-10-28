@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
+import { marketingSite } from "./marketing-site";
 
 const rawPort = process.env.PORT;
 
@@ -45,6 +46,7 @@ export default defineConfig({
     "process.env": "{}",
   },
   plugins: [
+    marketingSite(),
     react(),
     runtimeErrorOverlay(),
     ...(process.env.NODE_ENV !== "production" &&

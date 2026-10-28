@@ -46,12 +46,14 @@ Search for `DRAFT COPY - CONFIRM` and `IMAGE PLACEHOLDER` comments.
 
 ## Handoff to Replit (DLS-compliance-billing-system)
 
-The repo (agilityengineers/DLS-compliance-billing-system) is a pnpm monorepo; the Vite portal app at `artifacts/dls-cms` already serves `/`. Do not drop these files at the repo root. Recommended: add this folder as `artifacts/marketing-site/` (a new static artifact deployed to the public domain, e.g. durablelifeskills.com), keeping the portal on `portal.durablelifeskills.com`. If both must share one host, serve `site/` as static files from the Express app in `artifacts/api-server` at `/` and move the portal under `/portal`.
+The repo (agilityengineers/DLS-compliance-billing-system) is a pnpm monorepo. The existing `artifacts/dls-cms` service now serves this website at `/`, with the staff portal remaining at `/login`, `/admin/*`, and `/field/*`.
+
+`artifacts/dls-cms/marketing-site.ts` serves these source files during development and copies the approved pages, CSS, JavaScript, and assets into the production build. The compiled portal entry is preserved as `portal.html`; the artifact's fallback rewrite serves it for portal routes. Keep editing the files here rather than duplicating them into the artifact's public directory. Archives and deployment instructions are not copied into the published site.
 
 `index.html` is the approved front page; `_archive/` holds the two earlier hero variants and is not needed in production.
 
 - News cards load live from https://durablelifeskills.com/dls-media/feed/rss in `js/main.js` (`NEWS_FEED`). If the repl proxies requests, allow that origin; the feed sends CORS headers so a direct browser fetch works.
-- Lead form posts to `LEAD_ENDPOINT` in `js/main.js` (currently a placeholder). Point it at your Replit route, e.g. `/api/leads`.
+- Lead form delivery is not connected (`LEAD_ENDPOINT` in `js/main.js` is empty). Until a service is configured, submission shows an error with phone/email alternatives, preserves the entered data, and does not claim delivery or log personal details.
 - Photos in `assets/photos/` are AI-generated placeholders marked with HTML comments; swap for DLS photography when available.
 - Copy marked `<!-- DRAFT COPY - CONFIRM -->` still needs client sign-off.
 - `vercel.json` can be deleted if deploying only from Replit.

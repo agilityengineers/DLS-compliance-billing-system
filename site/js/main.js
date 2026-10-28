@@ -208,9 +208,8 @@
 
   async function sendLead(payload) {
     if (!LEAD_ENDPOINT) {
-      // Dev fallback: no endpoint configured yet - log and pretend success.
-      console.info("[DLS lead-form] LEAD_ENDPOINT not set. Payload:", payload);
-      return { ok: true };
+      // Never report delivery or log personal details without a configured service.
+      throw new Error("Contact delivery is not configured.");
     }
     const res = await fetch(LEAD_ENDPOINT, {
       method: "POST",
