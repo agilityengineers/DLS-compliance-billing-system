@@ -2,3 +2,4 @@
 - [Client-only session must avoid document.cookie in iframes](iframe-session-storage.md) — sign-in works in preview but not canvas iframe? Cross-site iframes block cookie writes; use in-memory + localStorage.
 - [GitHub updates after artifact migration](github-updates-after-artifact-migration.md) — a successful upstream merge may update only the archive; port runtime changes into the live artifact.
 - [API startup readiness](api-startup-readiness.md) — distinguish port availability from database readiness; never bypass initialization to pass publishing checks.
+- [Marketing content approval](marketing-content-approval.md) — owner approved existing copy and imagery; retain them rather than replacing earlier drafts.

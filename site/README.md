@@ -38,10 +38,12 @@ Edit `:root` at the top of `css/styles.css`. Colors were sampled from the logo:
 - Gold `#e9b121` (logo rgb 232,176,24) - accent; use `--gold-700 #8a6208` when gold must be text on white
 
 ## Photography
-Photos are Unsplash stock loaded from images.unsplash.com, tagged `STOCK PLACEHOLDER` in the HTML. Replace with DLS photography (download into `assets/` and update the `src`). The current site's gallery images were AI-generated "mission control" scenes and were not reused.
+The active pages use local images in `assets/photos/`, including AI-generated imagery. The owner approved the existing website content and images for continued use; retain them as supplied. Approval does not change the images' AI-generated provenance or establish that they are documentary photographs of staff or participants.
 
-## Draft copy
-Search for `DRAFT COPY - CONFIRM` and `IMAGE PLACEHOLDER` comments.
+## Content approval
+On October 27, 2026, after review of the draft copy and image annotations across `index.html`, `about.html`, `services.html`, and `contact.html`, the owner confirmed: “All of the information that is created on the website is approved, and it is content that I've created, and it's paid for.”
+
+This approval covers the existing copy, staff profiles, testimonials, service descriptions, business details, and imagery. No replacement copy or photos were supplied or requested. The existing wording, images, and approved layout have therefore been preserved, and obsolete draft/replacement annotations removed. This records owner approval, not independent verification of business claims or image licensing. Earlier hero variants in `_archive/` are not part of the active site.
 
 
 ## Handoff to Replit (DLS-compliance-billing-system)
@@ -54,6 +56,5 @@ The repo (agilityengineers/DLS-compliance-billing-system) is a pnpm monorepo. Th
 
 - News cards load live from https://durablelifeskills.com/dls-media/feed/rss in `js/main.js` (`NEWS_FEED`). If the repl proxies requests, allow that origin; the feed sends CORS headers so a direct browser fetch works.
 - Lead form delivery is not connected (`LEAD_ENDPOINT` in `js/main.js` is empty). Until a service is configured, submission shows an error with phone/email alternatives, preserves the entered data, and does not claim delivery or log personal details.
-- Photos in `assets/photos/` are AI-generated placeholders marked with HTML comments; swap for DLS photography when available.
-- Copy marked `<!-- DRAFT COPY - CONFIRM -->` still needs client sign-off.
+- Copy and imagery on the four active pages are owner-approved; see the approval record above. Do not replace them solely because earlier annotations described them as drafts.
 - `vercel.json` can be deleted if deploying only from Replit.
