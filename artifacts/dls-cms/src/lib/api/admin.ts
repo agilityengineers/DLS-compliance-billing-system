@@ -535,6 +535,12 @@ function query(params: Record<string, string | number | undefined>): string {
   return s ? `?${s}` : "";
 }
 
+export interface LeadFormLimits {
+  activeQuestions: number;
+  options: number;
+  activeStages: number;
+}
+
 export const leadsApi = {
   list: (filters: LeadListFilters = {}) => apiFetch<LeadInboxResponse>(`/leads${query(filters)}`),
   get: (id: string) => apiFetch<LeadDetailResponse>(`/leads/${id}`),
@@ -543,6 +549,27 @@ export const leadsApi = {
   update: (id: string, patch: { stageId?: string; closedReason?: LeadClosedReason | null; assignedToUserId?: string | null }) =>
     apiFetch<LeadDetailResponse>(`/leads/${id}`, { method: "PATCH", json: patch }),
   addNote: (id: string, note: string) => apiFetch<LeadDetailResponse>(`/leads/${id}/notes`, { method: "POST", json: { note } }),
+
+  /** The website form's questions (Admin only). */
+  questions: {
+    list: () => apiFetch<{ questions: LeadQuestion[]; limits: LeadFormLimits }>("/leads/config/questions"),
+    create: (input: { label: string; helpText?: string; type: LeadQuestionType; options?: string[]; required?: boolean }) =>
+      apiFetch<{ question: LeadQuestion }>("/leads/config/questions", { method: "POST", json: input }),
+    update: (id: string, patch: { label?: string; helpText?: string | null; options?: string[]; required?: boolean; active?: boolean }) =>
+      apiFetch<{ question: LeadQuestion }>(`/leads/config/questions/${id}`, { method: "PATCH", json: patch }),
+    remove: (id: string) => apiFetch<{ ok: true; question: LeadQuestion }>(`/leads/config/questions/${id}`, { method: "DELETE" }),
+    reorder: (ids: string[]) => apiFetch<{ questions: LeadQuestion[] }>("/leads/config/questions/order", { method: "PUT", json: { ids } }),
+  },
+
+  /** The funnel's stages (Admin only). */
+  stages: {
+    list: () => apiFetch<{ stages: LeadStage[]; counts: Record<string, number>; limits: LeadFormLimits }>("/leads/config/stages"),
+    create: (label: string) => apiFetch<{ stage: LeadStage }>("/leads/config/stages", { method: "POST", json: { label } }),
+    update: (id: string, patch: { label?: string; active?: boolean }) =>
+      apiFetch<{ stage: LeadStage }>(`/leads/config/stages/${id}`, { method: "PATCH", json: patch }),
+    remove: (id: string) => apiFetch<{ ok: true }>(`/leads/config/stages/${id}`, { method: "DELETE" }),
+    reorder: (ids: string[]) => apiFetch<{ stages: LeadStage[] }>("/leads/config/stages/order", { method: "PUT", json: { ids } }),
+  },
 };
 
 // ── clients (the real records) ─────────────────────────────────────────────

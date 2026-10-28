@@ -10,6 +10,7 @@ Both items are also rows in the [work plan and sign-off sheet](./WORKPLAN.md), w
 |---|---|---|---|---|---|
 | [BL-001](#bl-001) | Ship the schedule board and physician-order management ON at launch | Launch-scope decision | Open | DLS owner (decision) · architect (catalog) | Owner confirms; flag catalog seeds `schedule.board` on |
 | [BL-002](#bl-002) | File the written owner feedback and requirement documents; re-check the review against them | Requirements / process | Open | Project manager · DLS owner | Collect the documents and samples; file under `docs/requirements/` |
+| [BL-003](#bl-003) | Build the launch client fields onto the real `clients` table the leads feature introduced | Architecture note | Open | Architect | Roadmap 1.1 / 2.1 add columns with migrations on `lib/db/src/schema/clients.ts`; retire the demo clients when visits move |
 
 ---
 
@@ -61,3 +62,20 @@ Both items are also rows in the [work plan and sign-off sheet](./WORKPLAN.md), w
 4. Add a dated "re-checked against …" changelog line at the top of the review.
 
 **Done when.** The documents are in the repository, the review carries the changelog entry, and any scope changes are reflected in the roadmap.
+
+---
+
+### BL-003
+
+**Build the launch client fields onto the real `clients` table the leads feature introduced**
+
+| Field | Value |
+|---|---|
+| Type | Architecture note |
+| Status | Open |
+| Raised | 2026-10-28, leads feature |
+| Owner | Architect |
+
+**Why it matters.** The leads feature (website inquiry → inbox → funnel → client) needed somewhere durable for a converted inquiry to land, so the API database now has a slim `clients` table (`lib/db/src/schema/clients.ts`, migration `0003_leads`) with the identity, contact and intake fields the "New client" form already asks for. The roster merges these real records with the synthetic demo clients the same way staff lists merge real accounts. Roadmap 1.1 ("Launch tables": guardian, waiver, address, status, physician orders …) and 2.1 should extend this table with further migrations rather than introduce a second client table, and the demo clients should be retired once visits and notes move to the database.
+
+**Done when.** Roadmap 1.1 lands its client fields as columns on `clients`, every client screen reads the API, and `lib/data/demo/dataset.ts` no longer defines clients.

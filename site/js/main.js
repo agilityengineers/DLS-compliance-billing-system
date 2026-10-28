@@ -36,11 +36,13 @@
     if (target === here) a.setAttribute("aria-current", "page");
   });
 
+  /* ---------- Shared: escape text for innerHTML ---------- */
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
   /* ---------- News: live from the DLS Media RSS feed ---------- */
   const NEWS_FEED = "https://durablelifeskills.com/dls-media/feed/rss";
   const newsGrid = document.querySelector("[data-news-feed]");
   if (newsGrid) {
-    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
     const fmt = (d) => { const t = new Date(d); return isNaN(t) ? "" : t.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }); };
     const fullImg = (u) => (u || "").replace(/-thumb(\.\w+)$/, "$1"); // gallery thumbs have full-size siblings
     const trim = (s, n) => { s = s.replace(/\s+/g, " ").trim(); if (s.length <= n) return s; s = s.slice(0, n); return s.slice(0, s.lastIndexOf(" ")) + "..."; };
@@ -232,8 +234,72 @@
   const FALLBACK_ERROR = "Something went wrong sending your request. Please call (719) 568-5041 or email marketing@durablelifeskills.com.";
   const RATE_LIMIT_ERROR = "You have sent several requests in a short time. Please wait a few minutes and try again, or call (719) 568-5041.";
 
+  /* ---------------------------------------------------------------------
+     The portal's administrators manage the questions. On load the form asks
+     the API which questions to show and rebuilds its fields from the answer;
+     the static markup in contact.html stays as the fallback whenever that
+     request fails, so the page never shows an empty form.
+     --------------------------------------------------------------------- */
+  const FORM_SCHEMA_ENDPOINT = API_BASE + "/api/public/forms/contact";
+  const HALF_WIDTH = { short_text: true, email: true, phone: true };
+  const AUTOCOMPLETE = { firstName: "given-name", lastName: "family-name", email: "email", phone: "tel" };
+
+  function questionHtml(q) {
+    const id = "q_" + String(q.key).replace(/[^A-Za-z0-9_-]/g, "");
+    const name = esc(q.key);
+    const req = q.required ? " required" : "";
+    const optional = q.required ? "" : ' <span class="hint">(optional)</span>';
+    const help = q.helpText ? '<span class="hint">' + esc(q.helpText) + "</span>" : "";
+    const err = '<span class="error" aria-live="polite"></span>';
+    const opts = Array.isArray(q.options) ? q.options : [];
+    if (q.type === "yes_no") {
+      return '<div class="field field--full"><label class="consent"><input type="checkbox" name="' + name + '" value="yes"' + req + "> " + esc(q.label) + "</label>" + help + err + "</div>";
+    }
+    if (q.type === "select") {
+      if (!q.required && opts.length <= 4) {
+        return '<fieldset class="fieldset field--full"><legend>' + esc(q.label) + "</legend>" + help + '<div class="radio-row">' +
+          opts.map((o) => '<label><input type="radio" name="' + name + '" value="' + esc(o) + '"> ' + esc(o) + "</label>").join("") +
+          "</div>" + err + "</fieldset>";
+      }
+      return '<div class="field field--full"><label for="' + id + '">' + esc(q.label) + optional + "</label>" + help +
+        '<select id="' + id + '" name="' + name + '"' + req + '><option value="">' + (q.required ? "Choose one" : "Not sure yet") + "</option>" +
+        opts.map((o) => '<option value="' + esc(o) + '">' + esc(o) + "</option>").join("") + "</select>" + err + "</div>";
+    }
+    if (q.type === "long_text") {
+      return '<div class="field field--full"><label for="' + id + '">' + esc(q.label) + optional + "</label>" + help +
+        '<textarea id="' + id + '" name="' + name + '" rows="5"' + req + "></textarea>" + err + "</div>";
+    }
+    const type = q.type === "email" ? "email" : q.type === "phone" ? "tel" : "text";
+    const inputmode = q.type === "email" ? ' inputmode="email"' : q.type === "phone" ? ' inputmode="tel"' : "";
+    const autocomplete = AUTOCOMPLETE[q.key] ? ' autocomplete="' + AUTOCOMPLETE[q.key] + '"' : "";
+    return '<div class="field' + (HALF_WIDTH[q.type] ? "" : " field--full") + '"><label for="' + id + '">' + esc(q.label) + optional + "</label>" + help +
+      '<input id="' + id + '" name="' + name + '" type="' + type + '"' + inputmode + autocomplete + req + ">" + err + "</div>";
+  }
+
+  async function renderQuestions(form) {
+    let questions = null;
+    try {
+      const res = await fetch(FORM_SCHEMA_ENDPOINT, { headers: { Accept: "application/json" } });
+      if (!res.ok) return;
+      const data = await res.json();
+      questions = data && Array.isArray(data.questions) ? data.questions : null;
+    } catch (e) {
+      return; // keep the static form
+    }
+    if (!questions || questions.length === 0) return;
+    const submit = form.querySelector('button[type="submit"]');
+    const tail = submit ? submit.closest(".field--full") || submit.parentElement : null;
+    const honeypot = form.querySelector(".honeypot");
+    Array.from(form.children).forEach((child) => {
+      if (child !== honeypot && child !== tail) child.remove();
+    });
+    form.insertAdjacentHTML("afterbegin", questions.map(questionHtml).join(""));
+    form.classList.add("is-live");
+  }
+
   const form = document.getElementById("lead-form");
   if (form) {
+    renderQuestions(form);
     const status = form.querySelector(".form-status");
     const submitBtn = form.querySelector('button[type="submit"]');
 
@@ -253,7 +319,7 @@
         if (el.type === "checkbox" && !el.checked) msg = "Please check this box to continue.";
         else if (!el.value.trim()) msg = "This field is required.";
         else if (el.type === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(el.value)) msg = "Enter a valid email address.";
-        if (el.type !== "checkbox") setError(el, msg);
+        setError(el, msg);
         if (msg && !firstBad) firstBad = el;
       });
       return firstBad;

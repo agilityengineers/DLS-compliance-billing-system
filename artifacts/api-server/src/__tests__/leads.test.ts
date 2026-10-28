@@ -499,6 +499,161 @@ describe.skipIf(!TEST_URL)("leads api", () => {
     });
   });
 
+  // ── the form and the funnel ───────────────────────────────────────────
+  describe("configuring the form", () => {
+    let hearId: string;
+    let phoneId: string;
+
+    it("is for Admins only", async () => {
+      expect((await api("GET", "/api/leads/config/questions", undefined, schedulerCookie)).status).toBe(403);
+      expect((await api("GET", "/api/leads/config/stages", undefined, schedulerCookie)).status).toBe(403);
+    });
+
+    it("adds a choice question and the website starts asking it", async () => {
+      const created = await api(
+        "POST",
+        "/api/leads/config/questions",
+        { label: "How did you hear about us?", type: "select", options: ["A friend", "Our website", " A friend ", "Case manager"], required: true },
+        adminCookie
+      );
+      expect(created.status).toBe(201);
+      expect(created.body.question.key).toBe("how_did_you_hear_about_us");
+      expect(created.body.question.options).toEqual(["A friend", "Our website", "Case manager"]);
+      hearId = created.body.question.id;
+
+      const form = await api("GET", "/api/public/forms/contact");
+      const keys = form.body.questions.map((q: any) => q.key);
+      expect(keys[keys.length - 1]).toBe("how_did_you_hear_about_us");
+
+      // …and a submission without it is now refused.
+      const missing = await api("POST", "/api/public/leads", submission({ email: "newq@example.com" }), null, fromIp("203.0.113.20"));
+      expect(missing.status).toBe(400);
+      expect(missing.body.error.details.map((d: any) => d.key)).toEqual(["how_did_you_hear_about_us"]);
+      const ok = await api(
+        "POST",
+        "/api/public/leads",
+        submission({ email: "newq@example.com", how_did_you_hear_about_us: "Case manager" }),
+        null,
+        fromIp("203.0.113.20")
+      );
+      expect(ok.status).toBe(202);
+      const box = await inbox(adminCookie, "?q=newq");
+      expect(box.leads[0].answers.how_did_you_hear_about_us).toBe("Case manager");
+      expect(box.leads[0].questionSnapshot.some((q: any) => q.key === "how_did_you_hear_about_us")).toBe(true);
+    });
+
+    it("needs two options for a choice and refuses a seventh-hundred question", async () => {
+      const one = await api("POST", "/api/leads/config/questions", { label: "Pick", type: "select", options: ["Only"] }, adminCookie);
+      expect(one.status).toBe(400);
+      const bad = await api("POST", "/api/leads/config/questions", { label: "", type: "short_text" }, adminCookie);
+      expect(bad.status).toBe(400);
+    });
+
+    it("keeps old answers readable after a question is reworded or retired", async () => {
+      const all = await api("GET", "/api/leads/config/questions", undefined, adminCookie);
+      phoneId = all.body.questions.find((q: any) => q.key === "phone").id;
+      const renamed = await api("PATCH", `/api/leads/config/questions/${hearId}`, { label: "Where did you first hear of DLS?" }, adminCookie);
+      expect(renamed.status).toBe(200);
+      expect(renamed.body.question.key).toBe("how_did_you_hear_about_us");
+
+      const retired = await api("DELETE", `/api/leads/config/questions/${phoneId}`, undefined, adminCookie);
+      expect(retired.status).toBe(200);
+      expect(retired.body.question.active).toBe(false);
+      const form = await api("GET", "/api/public/forms/contact");
+      expect(form.body.questions.some((q: any) => q.key === "phone")).toBe(false);
+
+      // The lead that answered before the change still shows the words it was asked.
+      const box = await inbox(adminCookie, "?q=newq");
+      const snap = box.leads[0].questionSnapshot.find((q: any) => q.key === "how_did_you_hear_about_us");
+      expect(snap.label).toBe("How did you hear about us?");
+      expect(box.leads[0].answers.phone).toBe("(719) 555-0100");
+
+      // A submission that still sends the retired key has it dropped, not refused.
+      const sent = await api("POST", "/api/public/leads", submission({ email: "nophone@example.com", how_did_you_hear_about_us: "A friend" }), null, fromIp("203.0.113.21"));
+      expect(sent.status).toBe(202);
+      const again = await inbox(adminCookie, "?q=nophone");
+      expect(again.leads[0].phone).toBeNull();
+      expect("phone" in again.leads[0].answers).toBe(false);
+
+      const restored = await api("PATCH", `/api/leads/config/questions/${phoneId}`, { active: true }, adminCookie);
+      expect(restored.status).toBe(200);
+    });
+
+    it("protects the identity and consent questions", async () => {
+      const all = await api("GET", "/api/leads/config/questions", undefined, adminCookie);
+      const consent = all.body.questions.find((q: any) => q.key === "consent");
+      expect((await api("DELETE", `/api/leads/config/questions/${consent.id}`, undefined, adminCookie)).status).toBe(409);
+      expect((await api("PATCH", `/api/leads/config/questions/${consent.id}`, { required: false }, adminCookie)).status).toBe(409);
+      const reworded = await api("PATCH", `/api/leads/config/questions/${consent.id}`, { label: "Yes, DLS may contact me about this request." }, adminCookie);
+      expect(reworded.status).toBe(200);
+      expect(reworded.body.question.required).toBe(true);
+    });
+
+    it("reorders questions", async () => {
+      const all = await api("GET", "/api/leads/config/questions", undefined, adminCookie);
+      const ids = all.body.questions.map((q: any) => q.id) as string[];
+      const moved = [ids[ids.length - 1], ...ids.slice(0, -1)];
+      const res = await api("PUT", "/api/leads/config/questions/order", { ids: moved }, adminCookie);
+      expect(res.status).toBe(200);
+      expect(res.body.questions.map((q: any) => q.id)).toEqual(moved);
+      const form = await api("GET", "/api/public/forms/contact");
+      expect(form.body.questions[0].key).toBe("how_did_you_hear_about_us");
+      await api("PUT", "/api/leads/config/questions/order", { ids }, adminCookie);
+    });
+  });
+
+  describe("configuring the funnel", () => {
+    let paperworkId: string;
+
+    it("adds a stage before Converted and Closed", async () => {
+      const created = await api("POST", "/api/leads/config/stages", { label: "Waiting on paperwork" }, adminCookie);
+      expect(created.status).toBe(201);
+      expect(created.body.stage.kind).toBe("open");
+      paperworkId = created.body.stage.id;
+      const { stages } = (await api("GET", "/api/leads/config/stages", undefined, adminCookie)).body;
+      expect(stages.map((s: any) => s.key)).toEqual(["new", "contacted", "consultation", "qualified", "waiting_on_paperwork", "converted", "closed"]);
+      expect(stages.map((s: any) => s.sortOrder)).toEqual([10, 20, 30, 40, 50, 60, 70]);
+    });
+
+    it("renames a system stage but will not retire or remove it", async () => {
+      const { stages } = (await api("GET", "/api/leads/config/stages", undefined, adminCookie)).body;
+      const closed = stages.find((s: any) => s.key === "closed");
+      expect((await api("PATCH", `/api/leads/config/stages/${closed.id}`, { active: false }, adminCookie)).status).toBe(409);
+      expect((await api("DELETE", `/api/leads/config/stages/${closed.id}`, undefined, adminCookie)).status).toBe(409);
+      const renamed = await api("PATCH", `/api/leads/config/stages/${closed.id}`, { label: "Not proceeding" }, adminCookie);
+      expect(renamed.status).toBe(200);
+      expect(renamed.body.stage.key).toBe("closed");
+    });
+
+    it("will not remove a stage that holds inquiries, and removes an empty one", async () => {
+      const box = await inbox(adminCookie, "?q=newq");
+      const lead = box.leads[0];
+      const moved = await api("PATCH", `/api/leads/${lead.id}`, { stageId: paperworkId }, adminCookie);
+      expect(moved.status).toBe(200);
+      const blocked = await api("DELETE", `/api/leads/config/stages/${paperworkId}`, undefined, adminCookie);
+      expect(blocked.status).toBe(409);
+      expect(blocked.body.error.code).toBe("STAGE_IN_USE");
+      expect(blocked.body.error.message).toMatch(/1 inquiry is/);
+      const { stages } = (await api("GET", "/api/leads/config/stages", undefined, adminCookie)).body;
+      const contacted = stages.find((s: any) => s.key === "contacted");
+      await api("PATCH", `/api/leads/${lead.id}`, { stageId: contacted.id }, adminCookie);
+      const removed = await api("DELETE", `/api/leads/config/stages/${paperworkId}`, undefined, adminCookie);
+      expect(removed.status).toBe(200);
+      const after = (await api("GET", "/api/leads/config/stages", undefined, adminCookie)).body.stages.map((s: any) => s.key);
+      expect(after).not.toContain("waiting_on_paperwork");
+    });
+
+    it("reorders the open stages", async () => {
+      const { stages } = (await api("GET", "/api/leads/config/stages", undefined, adminCookie)).body;
+      const ids = stages.map((s: any) => s.id) as string[];
+      const swapped = [ids[0], ids[2], ids[1], ...ids.slice(3)];
+      const res = await api("PUT", "/api/leads/config/stages/order", { ids: swapped }, adminCookie);
+      expect(res.status).toBe(200);
+      expect(res.body.stages.map((s: any) => s.key)).toEqual(["new", "consultation", "contacted", "qualified", "converted", "closed"]);
+      await api("PUT", "/api/leads/config/stages/order", { ids }, adminCookie);
+    });
+  });
+
   // ── housekeeping ──────────────────────────────────────────────────────
   describe("housekeeping", () => {
     it("scrubs the submitting address once the retention period has passed", async () => {

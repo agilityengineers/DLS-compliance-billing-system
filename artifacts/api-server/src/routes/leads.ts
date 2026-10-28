@@ -12,12 +12,15 @@ import { and, count, desc, eq, isNull, or, sql, type SQL } from "drizzle-orm";
 import { z } from "zod/v4";
 import {
   LEAD_CLOSED_REASONS,
+  LEAD_QUESTION_TYPES,
   clientsTable,
   leadActivitiesTable,
+  leadFormQuestionsTable,
   leadStagesTable,
   leadsTable,
   usersTable,
   type Db,
+  type LeadFormQuestionRow,
   type LeadRow,
   type LeadStageRow,
 } from "@workspace/db";
@@ -36,6 +39,7 @@ import {
   snapshotOf,
   toActivityJson,
   toLeadJson,
+  toQuestionJson,
   toStageJson,
   type ActivityJson,
   type LeadJson,
@@ -43,7 +47,7 @@ import {
 } from "../lib/leads";
 import { leadAssignedEmail, type Mailer } from "../lib/mail";
 import { findActiveOrgUser, listOrgUsers, type PublicUser } from "../lib/users";
-import { requireAuth, requireAuthContext, requireFeature, requireOrgId, type AuthContext } from "../middlewares/auth";
+import { requireAuth, requireAuthContext, requireFeature, requireOrgId, requireRole, type AuthContext } from "../middlewares/auth";
 
 const ASSIGNABLE_ROLES = new Set(["Admin", "Scheduler"]);
 
@@ -72,6 +76,55 @@ const PatchBody = z.object({
 });
 
 const NoteBody = z.object({ note: z.string().trim().min(1).max(4000) });
+
+// ── the form and the funnel (Admin only) ──────────────────────────────────
+const FORM_LIMITS = { activeQuestions: 25, options: 20, activeStages: 15 } as const;
+
+const OptionList = z.array(z.string().trim().min(1).max(100)).max(FORM_LIMITS.options);
+
+const QuestionCreate = z.object({
+  label: z.string().trim().min(1).max(200),
+  helpText: z.string().trim().max(300).optional(),
+  type: z.enum(LEAD_QUESTION_TYPES),
+  options: OptionList.optional(),
+  required: z.boolean().optional(),
+});
+
+const QuestionPatch = z.object({
+  label: z.string().trim().min(1).max(200).optional(),
+  helpText: z.string().trim().max(300).nullable().optional(),
+  options: OptionList.optional(),
+  required: z.boolean().optional(),
+  active: z.boolean().optional(),
+});
+
+const StageCreate = z.object({ label: z.string().trim().min(1).max(80) });
+const StagePatch = z.object({ label: z.string().trim().min(1).max(80).optional(), active: z.boolean().optional() });
+const OrderBody = z.object({ ids: z.array(z.uuid()).min(1).max(100) });
+
+/** A stable key from a label: "How did you hear about us?" → "how_did_you_hear_about_us". */
+function slugify(label: string, fallback: string): string {
+  const key = label
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 40);
+  return key || fallback;
+}
+
+/** `base`, or `base_2`, `base_3`… when the organization already uses it. */
+function uniqueKey(base: string, taken: ReadonlySet<string>): string {
+  if (!taken.has(base)) return base;
+  for (let n = 2; n < 1000; n += 1) {
+    const candidate = `${base}_${n}`;
+    if (!taken.has(candidate)) return candidate;
+  }
+  return `${base}_${Date.now()}`;
+}
+
+function dedupeOptions(options: string[] | undefined): string[] {
+  return Array.from(new Set((options ?? []).map((o) => o.trim()).filter(Boolean)));
+}
 
 export interface LeadListItem extends LeadJson {
   assignedToName: string | null;
@@ -353,6 +406,307 @@ export function leadsRouter(db: Db, _config: AppConfig, deps: { mailer: Mailer }
     }
 
     res.json({ ...(await loadDetail(orgId, updated, users)), assignees: assigneesOf(users) });
+  });
+
+  // ── configuration: the website form and the funnel ───────────────────
+  // Admin only, and registered before the `/leads/:id` family so that
+  // "config" is never read as an inquiry id.
+  router.use("/leads/config", requireRole("Admin"));
+
+  async function questionOr404(orgId: string, id: string): Promise<LeadFormQuestionRow> {
+    const rows = isUuid(id)
+      ? await db
+          .select()
+          .from(leadFormQuestionsTable)
+          .where(and(eq(leadFormQuestionsTable.orgId, orgId), eq(leadFormQuestionsTable.id, id)))
+          .limit(1)
+      : [];
+    if (!rows[0]) throw notFound("Question not found.");
+    return rows[0];
+  }
+
+  async function activeQuestionCount(orgId: string): Promise<number> {
+    const [row] = await db
+      .select({ n: count() })
+      .from(leadFormQuestionsTable)
+      .where(and(eq(leadFormQuestionsTable.orgId, orgId), eq(leadFormQuestionsTable.active, true)));
+    return Number(row?.n ?? 0);
+  }
+
+  router.get("/leads/config/questions", async (_req, res) => {
+    const orgId = requireOrgId(res);
+    const questions = await listQuestions(db, orgId, { includeInactive: true });
+    res.json({ questions: questions.map(toQuestionJson), limits: FORM_LIMITS });
+  });
+
+  router.post("/leads/config/questions", async (req, res) => {
+    const auth = requireAuthContext(res);
+    const orgId = requireOrgId(res);
+    const body = QuestionCreate.parse(req.body);
+    const options = body.type === "select" ? dedupeOptions(body.options) : [];
+    if (body.type === "select" && options.length < 2) throw badRequest("A choice question needs at least two options.");
+    if ((await activeQuestionCount(orgId)) >= FORM_LIMITS.activeQuestions) {
+      throw conflict("TOO_MANY_QUESTIONS", `The form can have at most ${FORM_LIMITS.activeQuestions} questions. Retire one first.`);
+    }
+    const existing = await listQuestions(db, orgId, { includeInactive: true });
+    const key = uniqueKey(slugify(body.label, "question"), new Set(existing.map((q) => q.key)));
+    const sortOrder = existing.reduce((m, q) => Math.max(m, q.sortOrder), 0) + 10;
+    const [created] = await db
+      .insert(leadFormQuestionsTable)
+      .values({
+        orgId,
+        key,
+        label: body.label,
+        helpText: body.helpText || null,
+        type: body.type,
+        options,
+        required: body.required ?? false,
+        sortOrder,
+      })
+      .returning();
+    await recordAudit(db, {
+      ...auditBase(auth, orgId, req.ip),
+      action: "lead_form.question_created",
+      targetType: "lead_form_question",
+      targetId: created!.id,
+      details: { key, type: body.type, required: body.required ?? false },
+    });
+    res.status(201).json({ question: toQuestionJson(created!) });
+  });
+
+  router.patch("/leads/config/questions/:id", async (req, res) => {
+    const auth = requireAuthContext(res);
+    const orgId = requireOrgId(res);
+    const body = QuestionPatch.parse(req.body);
+    const question = await questionOr404(orgId, String(req.params.id));
+    const set: Partial<typeof leadFormQuestionsTable.$inferInsert> = {};
+    if (body.label !== undefined) set.label = body.label;
+    if (body.helpText !== undefined) set.helpText = body.helpText || null;
+    if (question.isSystem) {
+      // Identity and consent questions keep their shape: the inbox and the
+      // conversion flow read them by key and type.
+      if (body.required !== undefined || body.active !== undefined || body.options !== undefined) {
+        throw conflict("SYSTEM_QUESTION", "This question is part of how the inbox works; you can change its wording but not remove it or make it optional.");
+      }
+    } else {
+      if (body.required !== undefined) set.required = body.required;
+      if (body.options !== undefined) {
+        if (question.type !== "select") throw badRequest("Only a choice question has options.");
+        const options = dedupeOptions(body.options);
+        if (options.length < 2) throw badRequest("A choice question needs at least two options.");
+        set.options = options;
+      }
+      if (body.active !== undefined && body.active !== question.active) {
+        if (body.active && (await activeQuestionCount(orgId)) >= FORM_LIMITS.activeQuestions) {
+          throw conflict("TOO_MANY_QUESTIONS", `The form can have at most ${FORM_LIMITS.activeQuestions} questions. Retire one first.`);
+        }
+        set.active = body.active;
+      }
+    }
+    if (Object.keys(set).length === 0) {
+      res.json({ question: toQuestionJson(question) });
+      return;
+    }
+    const [updated] = await db
+      .update(leadFormQuestionsTable)
+      .set({ ...set, updatedAt: new Date() })
+      .where(eq(leadFormQuestionsTable.id, question.id))
+      .returning();
+    await recordAudit(db, {
+      ...auditBase(auth, orgId, req.ip),
+      action: "lead_form.question_updated",
+      targetType: "lead_form_question",
+      targetId: question.id,
+      details: { key: question.key, fields: Object.keys(set) },
+    });
+    res.json({ question: toQuestionJson(updated!) });
+  });
+
+  /** Retire a question. Old answers keep their wording through the snapshot on each lead. */
+  router.delete("/leads/config/questions/:id", async (req, res) => {
+    const auth = requireAuthContext(res);
+    const orgId = requireOrgId(res);
+    const question = await questionOr404(orgId, String(req.params.id));
+    if (question.isSystem) throw conflict("SYSTEM_QUESTION", "This question is part of how the inbox works and cannot be removed.");
+    const [updated] = await db
+      .update(leadFormQuestionsTable)
+      .set({ active: false, updatedAt: new Date() })
+      .where(eq(leadFormQuestionsTable.id, question.id))
+      .returning();
+    await recordAudit(db, {
+      ...auditBase(auth, orgId, req.ip),
+      action: "lead_form.question_removed",
+      targetType: "lead_form_question",
+      targetId: question.id,
+      details: { key: question.key },
+    });
+    res.json({ ok: true, question: toQuestionJson(updated!) });
+  });
+
+  router.put("/leads/config/questions/order", async (req, res) => {
+    const auth = requireAuthContext(res);
+    const orgId = requireOrgId(res);
+    const { ids } = OrderBody.parse(req.body);
+    const existing = await listQuestions(db, orgId, { includeInactive: true });
+    const known = new Set(existing.map((q) => q.id));
+    if (!ids.every((id) => known.has(id))) throw badRequest("One of those questions is not on this form.");
+    await db.transaction(async (tx) => {
+      for (const [index, id] of ids.entries()) {
+        await tx
+          .update(leadFormQuestionsTable)
+          .set({ sortOrder: (index + 1) * 10, updatedAt: new Date() })
+          .where(eq(leadFormQuestionsTable.id, id));
+      }
+    });
+    await recordAudit(db, {
+      ...auditBase(auth, orgId, req.ip),
+      action: "lead_form.reordered",
+      targetType: "lead_form",
+      targetId: orgId,
+      details: { count: ids.length },
+    });
+    const questions = await listQuestions(db, orgId, { includeInactive: true });
+    res.json({ questions: questions.map(toQuestionJson) });
+  });
+
+  async function stageOr404(orgId: string, id: string): Promise<LeadStageRow> {
+    const stage = isUuid(id) ? await findStage(db, orgId, id) : undefined;
+    if (!stage) throw notFound("Stage not found.");
+    return stage;
+  }
+
+  async function leadCountsByStage(orgId: string): Promise<Record<string, number>> {
+    const rows = await db
+      .select({ stageId: leadsTable.stageId, n: count() })
+      .from(leadsTable)
+      .where(eq(leadsTable.orgId, orgId))
+      .groupBy(leadsTable.stageId);
+    return Object.fromEntries(rows.map((r) => [r.stageId, Number(r.n)]));
+  }
+
+  /** Keep sort orders in steps of ten so the next insert always has room. */
+  async function renumberStages(orgId: string): Promise<void> {
+    const stages = await listStages(db, orgId, { includeInactive: true });
+    await db.transaction(async (tx) => {
+      for (const [index, stage] of stages.entries()) {
+        const wanted = (index + 1) * 10;
+        if (stage.sortOrder !== wanted) {
+          await tx.update(leadStagesTable).set({ sortOrder: wanted }).where(eq(leadStagesTable.id, stage.id));
+        }
+      }
+    });
+  }
+
+  router.get("/leads/config/stages", async (_req, res) => {
+    const orgId = requireOrgId(res);
+    const [stages, counts] = await Promise.all([listStages(db, orgId, { includeInactive: true }), leadCountsByStage(orgId)]);
+    res.json({ stages: stages.map(toStageJson), counts, limits: FORM_LIMITS });
+  });
+
+  /** A new open stage, placed just before the "converted" and "closed" stages. */
+  router.post("/leads/config/stages", async (req, res) => {
+    const auth = requireAuthContext(res);
+    const orgId = requireOrgId(res);
+    const body = StageCreate.parse(req.body);
+    const existing = await listStages(db, orgId, { includeInactive: true });
+    if (existing.filter((s) => s.active).length >= FORM_LIMITS.activeStages) {
+      throw conflict("TOO_MANY_STAGES", `The funnel can have at most ${FORM_LIMITS.activeStages} stages. Retire one first.`);
+    }
+    const key = uniqueKey(slugify(body.label, "stage"), new Set(existing.map((s) => s.key)));
+    const lastOpen = existing.filter((s) => s.kind === "open").reduce((m, s) => Math.max(m, s.sortOrder), 0);
+    const [created] = await db
+      .insert(leadStagesTable)
+      .values({ orgId, key, label: body.label, kind: "open", sortOrder: lastOpen + 1 })
+      .returning();
+    await renumberStages(orgId);
+    await recordAudit(db, {
+      ...auditBase(auth, orgId, req.ip),
+      action: "lead_funnel.stage_created",
+      targetType: "lead_stage",
+      targetId: created!.id,
+      details: { key },
+    });
+    const fresh = await findStage(db, orgId, created!.id);
+    res.status(201).json({ stage: toStageJson(fresh ?? created!) });
+  });
+
+  router.patch("/leads/config/stages/:id", async (req, res) => {
+    const auth = requireAuthContext(res);
+    const orgId = requireOrgId(res);
+    const body = StagePatch.parse(req.body);
+    const stage = await stageOr404(orgId, String(req.params.id));
+    const set: Partial<typeof leadStagesTable.$inferInsert> = {};
+    if (body.label !== undefined) set.label = body.label;
+    if (body.active !== undefined && body.active !== stage.active) {
+      if (stage.isSystem) throw conflict("SYSTEM_STAGE", "This stage is part of how the funnel works; you can rename it but not retire it.");
+      if (!body.active) {
+        const inUse = (await leadCountsByStage(orgId))[stage.id] ?? 0;
+        if (inUse > 0) throw conflict("STAGE_IN_USE", `${inUse} ${inUse === 1 ? "inquiry is" : "inquiries are"} in this stage. Move them first.`);
+      } else if ((await listStages(db, orgId)).length >= FORM_LIMITS.activeStages) {
+        throw conflict("TOO_MANY_STAGES", `The funnel can have at most ${FORM_LIMITS.activeStages} stages.`);
+      }
+      set.active = body.active;
+    }
+    if (Object.keys(set).length === 0) {
+      res.json({ stage: toStageJson(stage) });
+      return;
+    }
+    const [updated] = await db
+      .update(leadStagesTable)
+      .set({ ...set, updatedAt: new Date() })
+      .where(eq(leadStagesTable.id, stage.id))
+      .returning();
+    await recordAudit(db, {
+      ...auditBase(auth, orgId, req.ip),
+      action: "lead_funnel.stage_updated",
+      targetType: "lead_stage",
+      targetId: stage.id,
+      details: { key: stage.key, fields: Object.keys(set) },
+    });
+    res.json({ stage: toStageJson(updated!) });
+  });
+
+  /** Remove a stage nothing refers to. One that holds inquiries is refused with the count. */
+  router.delete("/leads/config/stages/:id", async (req, res) => {
+    const auth = requireAuthContext(res);
+    const orgId = requireOrgId(res);
+    const stage = await stageOr404(orgId, String(req.params.id));
+    if (stage.isSystem) throw conflict("SYSTEM_STAGE", "This stage is part of how the funnel works and cannot be removed.");
+    const inUse = (await leadCountsByStage(orgId))[stage.id] ?? 0;
+    if (inUse > 0) throw conflict("STAGE_IN_USE", `${inUse} ${inUse === 1 ? "inquiry is" : "inquiries are"} in this stage. Move them first.`);
+    await db.delete(leadStagesTable).where(eq(leadStagesTable.id, stage.id));
+    await recordAudit(db, {
+      ...auditBase(auth, orgId, req.ip),
+      action: "lead_funnel.stage_removed",
+      targetType: "lead_stage",
+      targetId: stage.id,
+      details: { key: stage.key },
+    });
+    res.json({ ok: true });
+  });
+
+  router.put("/leads/config/stages/order", async (req, res) => {
+    const auth = requireAuthContext(res);
+    const orgId = requireOrgId(res);
+    const { ids } = OrderBody.parse(req.body);
+    const existing = await listStages(db, orgId, { includeInactive: true });
+    const known = new Set(existing.map((s) => s.id));
+    if (!ids.every((id) => known.has(id))) throw badRequest("One of those stages is not in this funnel.");
+    await db.transaction(async (tx) => {
+      for (const [index, id] of ids.entries()) {
+        await tx.update(leadStagesTable).set({ sortOrder: (index + 1) * 10, updatedAt: new Date() }).where(eq(leadStagesTable.id, id));
+      }
+    });
+    await renumberStages(orgId);
+    await recordAudit(db, {
+      ...auditBase(auth, orgId, req.ip),
+      action: "lead_funnel.reordered",
+      targetType: "lead_funnel",
+      targetId: orgId,
+      details: { count: ids.length },
+    });
+    const stages = await listStages(db, orgId, { includeInactive: true });
+    res.json({ stages: stages.map(toStageJson) });
   });
 
   router.post("/leads/:id/notes", async (req, res) => {
