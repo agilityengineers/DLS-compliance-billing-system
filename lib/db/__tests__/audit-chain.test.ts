@@ -75,7 +75,7 @@ describe.skipIf(!TEST_URL)("audit log chain", () => {
     const status = await migrationStatus(handle.db);
     expect(status.pending).toEqual([]);
     expect(status.applied).toBe(status.total);
-    expect(status.latestApplied?.tag).toBe("0002_platform_hardening");
+    expect(status.latestApplied?.tag).toBe("0003_leads");
   });
 
   it("links each new entry to the one before it", async () => {

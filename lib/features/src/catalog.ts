@@ -58,6 +58,7 @@ export interface FeatureDef {
 
 export const FEATURE_KEYS = [
   "clients.core",
+  "leads.inbox",
   "clients.paperwork",
   "clients.attendance",
   "clients.profile",
@@ -104,6 +105,17 @@ export const FEATURE_CATALOG: readonly FeatureDef[] = [
     adminConfigurable: false,
     employeeRoles: SCHED,
     defaultEmployeeRoles: SCHED,
+  },
+  {
+    key: "leads.inbox",
+    label: "Leads & inquiries",
+    description: "Website inquiries and referrals: inbox, funnel, assignment and conversion to a client.",
+    category: "Client care",
+    status: "ready",
+    launchDefault: true,
+    adminConfigurable: true,
+    employeeRoles: SCHED,
+    defaultEmployeeRoles: NONE,
   },
   {
     key: "clients.paperwork",

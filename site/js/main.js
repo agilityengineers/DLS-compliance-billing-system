@@ -196,29 +196,41 @@
   /* =====================================================================
      LEAD FORM SUBMIT HANDLER  (contact.html  →  <form id="lead-form">)
      ---------------------------------------------------------------------
-     This is the ONLY place the form is submitted. To connect Zapier,
-     HubSpot, Formspree, etc., set LEAD_ENDPOINT to your webhook URL.
-     Payload is posted as JSON: { firstName, lastName, email, phone,
-     role, service, message, page, submittedAt }.
-     - Zapier "Catch Hook": paste the hook URL; fields arrive as top-level keys.
-     - HubSpot Forms API: swap the fetch body for HubSpot's
-       { fields:[{name,value}] } shape inside sendLead().
+     The form posts to the DLS Portal API, which stores the inquiry, shows
+     it in the portal's Leads inbox and emails the administrators.
+     Set the portal host in js/config.js (window.DLS_CONFIG.apiBase); leave
+     it empty while the site and the portal share a host. When they do not,
+     the API must list this site's origin in PUBLIC_FORM_ORIGINS.
+     Payload is posted as JSON: one key per form field (firstName, lastName,
+     email, phone, role, service, message, consent …) plus page and
+     submittedAt. The API answers 202 when the inquiry was accepted, 400
+     with a message when a field is missing or malformed, and 429 when this
+     address has sent too many in a few minutes.
      ===================================================================== */
-  const LEAD_ENDPOINT = ""; // e.g. "https://hooks.zapier.com/hooks/catch/XXXX/YYYY/"
+  const DLS_CONFIG = window.DLS_CONFIG || {};
+  const API_BASE = String(DLS_CONFIG.apiBase || "").replace(/\/+$/, "");
+  const LEAD_ENDPOINT = API_BASE + "/api/public/leads";
 
   async function sendLead(payload) {
-    if (!LEAD_ENDPOINT) {
-      // Dev fallback: no endpoint configured yet - log and pretend success.
-      console.info("[DLS lead-form] LEAD_ENDPOINT not set. Payload:", payload);
-      return { ok: true };
-    }
     const res = await fetch(LEAD_ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    return { ok: res.ok };
+    let message = "";
+    if (!res.ok) {
+      try {
+        const data = await res.json();
+        message = (data && data.error && data.error.message) || "";
+      } catch (e) {
+        message = "";
+      }
+    }
+    return { ok: res.ok, status: res.status, message: message };
   }
+
+  const FALLBACK_ERROR = "Something went wrong sending your request. Please call (719) 568-5041 or email marketing@durablelifeskills.com.";
+  const RATE_LIMIT_ERROR = "You have sent several requests in a short time. Please wait a few minutes and try again, or call (719) 568-5041.";
 
   const form = document.getElementById("lead-form");
   if (form) {
@@ -262,12 +274,15 @@
       submitBtn.textContent = "Sending…";
       try {
         const r = await sendLead(payload);
-        if (!r.ok) throw new Error("bad response");
+        if (!r.ok) {
+          const userMessage = r.status === 429 ? RATE_LIMIT_ERROR : r.status === 400 && r.message ? r.message : "";
+          throw Object.assign(new Error("bad response"), { userMessage: userMessage });
+        }
         form.reset();
         status.textContent = "Thank you - we received your request and will follow up within one business day.";
         status.classList.add("is-success");
       } catch (err) {
-        status.textContent = "Something went wrong sending your request. Please call (719) 568-5041 or email marketing@durablelifeskills.com.";
+        status.textContent = (err && err.userMessage) || FALLBACK_ERROR;
         status.classList.add("is-error");
       } finally {
         submitBtn.disabled = false;

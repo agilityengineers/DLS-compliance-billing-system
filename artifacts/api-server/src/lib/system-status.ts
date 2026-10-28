@@ -123,6 +123,12 @@ export function systemWarnings(input: WarningInput): SystemWarning[] {
   if (config.corsOrigins.length > 0) {
     warnings.push({ severity: "info", message: `Cross-site browser origins may call the API: ${config.corsOrigins.join(", ")}.` });
   }
+  if (config.publicFormOrigins.length > 0) {
+    warnings.push({
+      severity: "info",
+      message: `The public website may send inquiries to /api/public from: ${config.publicFormOrigins.join(", ")}.`,
+    });
+  }
   if (!config.breakGlassEmail || !config.breakGlassPassword) {
     warnings.push({
       severity: "warning",

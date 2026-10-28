@@ -3,11 +3,13 @@
 //   2. the first organization
 //   3. the platform owner (Super Admin) account
 //   4. the shipped credentialing requirements registry
+//   5. every organization's lead funnel and public-form questions (defaults
+//      only — rows the agency already has are never touched)
 // Nothing here ever overwrites an existing account unless SUPER_ADMIN_FORCE_RESET=true,
 // and re-seeding the registry never overwrites an agency's own policy decisions.
 import { eq } from "drizzle-orm";
 import { organizationsTable, usersTable, type Db } from "@workspace/db";
-import { seedRequirements } from "@workspace/db/seed";
+import { seedLeadDefaults, seedRequirements } from "@workspace/db/seed";
 import type { AppConfig } from "./config";
 import { ensurePlatformRows } from "./features";
 import { logger } from "./logger";
@@ -32,6 +34,8 @@ export interface BootstrapResult {
   breakGlassId: string | null;
   breakGlassCreated: boolean;
   requirementsSeeded: number;
+  /** Organizations whose lead funnel and form were checked for missing defaults. */
+  leadDefaultsChecked: number;
 }
 
 export async function bootstrapPlatform(db: Db, config: AppConfig): Promise<BootstrapResult> {
@@ -55,6 +59,15 @@ export async function bootstrapPlatform(db: Db, config: AppConfig): Promise<Boot
     [org] = await db.insert(organizationsTable).values({ name: config.defaultOrgName, slug: config.defaultOrgSlug }).returning();
     orgCreated = true;
   }
+
+  // Every organization gets a funnel and a form. The seed only adds what is
+  // missing, so an agency that renamed a stage or retired a question keeps
+  // that decision across restarts.
+  const orgs = await db.select({ id: organizationsTable.id }).from(organizationsTable);
+  for (const o of orgs) {
+    await seedLeadDefaults((text, params) => db.$client.query(text, params as unknown[]), o.id);
+  }
+  const leadDefaultsChecked = orgs.length;
 
   let superAdminCreated = false;
   let admin = await findUserByEmail(db, config.superAdminEmail);
@@ -154,5 +167,6 @@ export async function bootstrapPlatform(db: Db, config: AppConfig): Promise<Boot
     breakGlassId,
     breakGlassCreated,
     requirementsSeeded,
+    leadDefaultsChecked,
   };
 }
