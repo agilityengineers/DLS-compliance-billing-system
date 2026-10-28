@@ -13,9 +13,19 @@ site/
   contact.html      Contact info + lead-capture form (#lead-form)
   css/styles.css    Single stylesheet; theme tokens at the top, sections numbered
   js/main.js        Nav toggle, sticky header, form handler (sendLead / LEAD_ENDPOINT)
-  assets/           logo-full.png, logo-mark.png, favicon-*.png
+  assets/           logo-full.png, logo-mark.png, logo-monkey.png, og-image.jpg (1200x630 share image)
+  assets/icons/     Favicons: the DLS monkey on its own (favicon.ico, favicon-16/32/192/512.png, apple-touch-icon.png)
+  robots.txt        Crawl rules + sitemap pointer (served at the site root)
+  sitemap.xml       The four indexable pages
   vercel.json       Clean URLs + asset caching
 ```
+
+## SEO conventions
+- **Browser tab / `<title>`:** every page starts with `DLS – …` so it is easy to spot among open tabs, then the page name, then `| Durable Life Skills, Inc.` (home: `DLS – Durable Life Skills | I/DD Care & Employment Services, Pueblo, CO`). Keep titles under ~70 characters and descriptions under ~165.
+- **Per page `<head>`:** canonical URL (`https://durablelifeskills.com/` for home, `/about.html`, `/services.html`, `/contact.html`), `meta robots`, Open Graph + Twitter card tags pointing at `assets/og-image.jpg`, favicon links, and one JSON-LD block (`Organization`/`LocalBusiness` + `WebSite` + the page type; home adds `FAQPage`, services adds an `ItemList` of `Service`, inner pages add `BreadcrumbList`). When the address, phone, hours, service area or services change, update the JSON-LD on all four pages as well as the visible copy.
+- **Home links** use `/` (not `index.html`) so the home page has a single URL. The staff portal link carries `rel="nofollow"`; the portal itself is `noindex`.
+- **Favicon:** the monkey alone, generated from `assets/logo-monkey.png` by `python3 scripts/site-icons.py` (also rebuilds `assets/og-image.jpg`). Re-run it if the mascot art changes.
+- **New page?** Add it to `sitemap.xml`, give it the same head block, and list it in `pages` in `artifacts/dls-cms/marketing-site.ts`.
 
 ## Run locally
 ```
@@ -50,7 +60,7 @@ This approval covers the existing copy, staff profiles, testimonials, service de
 
 The repo (agilityengineers/DLS-compliance-billing-system) is a pnpm monorepo. The existing `artifacts/dls-cms` service now serves this website at `/`, with the staff portal remaining at `/login`, `/admin/*`, and `/field/*`.
 
-`artifacts/dls-cms/marketing-site.ts` serves these source files during development and copies the approved pages, CSS, JavaScript, and assets into the production build. The compiled portal entry is preserved as `portal.html`; the artifact's fallback rewrite serves it for portal routes. Keep editing the files here rather than duplicating them into the artifact's public directory. Archives and deployment instructions are not copied into the published site.
+`artifacts/dls-cms/marketing-site.ts` serves these source files during development and copies the approved pages, CSS, JavaScript, assets, `robots.txt` and `sitemap.xml` into the production build. The compiled portal entry is preserved as `portal.html`; the artifact's fallback rewrite serves it for portal routes. Keep editing the files here rather than duplicating them into the artifact's public directory. Archives and deployment instructions are not copied into the published site.
 
 `index.html` is the approved front page; `_archive/` holds the two earlier hero variants and is not needed in production.
 

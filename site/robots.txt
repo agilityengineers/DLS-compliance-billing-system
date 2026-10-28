@@ -1,0 +1,11 @@
+# Durable Life Skills, Inc. - https://durablelifeskills.com
+# The marketing pages are open to crawlers. The staff portal (/login, /admin, /field)
+# is served from portal.html, which carries noindex; the API is not a web page.
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /admin/
+Disallow: /field/
+Disallow: /portal.html
+
+Sitemap: https://durablelifeskills.com/sitemap.xml

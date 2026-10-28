@@ -31,9 +31,10 @@
 
   /* ---------- Mark current page in nav ---------- */
   const here = location.pathname.split("/").pop() || "index.html";
-  document.querySelectorAll('.nav a, .mobile-nav a, .footer a[href$=".html"]').forEach((a) => {
+  document.querySelectorAll('.nav a, .mobile-nav a, .footer a[href$=".html"], .footer a[href="/"]').forEach((a) => {
     const target = a.getAttribute("href").split("#")[0];
-    if (target === here) a.setAttribute("aria-current", "page");
+    const page = target === "/" || target === "" ? "index.html" : target; // home links point at "/"
+    if (page === here) a.setAttribute("aria-current", "page");
   });
 
   /* ---------- News: live from the DLS Media RSS feed ---------- */
