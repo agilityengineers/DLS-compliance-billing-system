@@ -31,6 +31,7 @@ export const PERMISSION_MATRIX: PermissionRow[] = [
   { capability: "Grant the provider a time-boxed support window (when the deployment requires one)", roles: ["Admin"] },
   { capability: "View own visits & write progress notes", roles: ["Admin", "Field_Staff"] },
   { capability: "View all clients", roles: ["Admin", "Scheduler"] },
+  { capability: "Leads inbox: work website inquiries and convert them into clients — when enabled", roles: ["Admin", "Scheduler"] },
   { capability: "View assigned clients only", roles: ["Field_Staff"] },
   { capability: "Schedule / reassign visits", roles: ["Admin", "Scheduler"] },
   { capability: "Manage physician orders", roles: ["Admin", "Scheduler"] },

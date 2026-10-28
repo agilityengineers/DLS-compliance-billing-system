@@ -239,7 +239,7 @@ export interface PlatformSessionRow {
   current: boolean;
 }
 
-export type AuditCategory = "auth" | "platform" | "org" | "user" | "session" | "support";
+export type AuditCategory = "auth" | "platform" | "org" | "user" | "session" | "support" | "lead" | "lead_form" | "lead_funnel" | "client";
 
 export interface AuditFilters {
   limit?: number;
@@ -410,4 +410,195 @@ export const mfaApi = {
   disable: (currentPassword: string) => apiFetch<{ ok: true }>("/auth/totp", { method: "DELETE", json: { currentPassword } }),
   regenerateRecoveryCodes: (currentPassword: string) =>
     apiFetch<{ ok: true; recoveryCodes: string[] }>("/auth/totp/recovery-codes", { method: "POST", json: { currentPassword } }),
+};
+
+// ── leads (the inbox) ──────────────────────────────────────────────────────
+// Mirrors artifacts/api-server/src/routes/leads.ts and lib/leads.ts. The
+// string unions are repeated here rather than imported from @workspace/db so
+// the browser bundle never pulls in the ORM.
+export type LeadStageKind = "open" | "won" | "lost";
+export type LeadQuestionType = "short_text" | "long_text" | "email" | "phone" | "select" | "yes_no";
+export type LeadSource = "website" | "manual";
+export type LeadClosedReason = "not_a_fit" | "no_response" | "duplicate" | "other";
+export type LeadActivityType = "submitted" | "stage_changed" | "assigned" | "note" | "converted";
+
+export const LEAD_CLOSED_REASON_LABELS: Record<LeadClosedReason, string> = {
+  not_a_fit: "Not a fit for our services",
+  no_response: "No response",
+  duplicate: "Duplicate inquiry",
+  other: "Other",
+};
+
+export interface LeadStage {
+  id: string;
+  key: string;
+  label: string;
+  kind: LeadStageKind;
+  sortOrder: number;
+  isSystem: boolean;
+  active: boolean;
+}
+
+export interface LeadQuestion {
+  id: string;
+  key: string;
+  label: string;
+  helpText: string | null;
+  type: LeadQuestionType;
+  options: string[];
+  required: boolean;
+  isSystem: boolean;
+  sortOrder: number;
+  active: boolean;
+}
+
+export interface LeadQuestionSnapshot {
+  key: string;
+  label: string;
+  type: LeadQuestionType;
+}
+
+export type LeadAnswers = Record<string, string | boolean | null>;
+
+export interface LeadRow {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string | null;
+  phone: string | null;
+  stageId: string;
+  source: LeadSource;
+  sourcePage: string | null;
+  consentAt: string | null;
+  assignedToUserId: string | null;
+  assignedToName: string | null;
+  closedReason: LeadClosedReason | null;
+  convertedClientId: string | null;
+  submittedAt: string;
+  lastActivityAt: string;
+  createdAt: string;
+  updatedAt: string;
+  answers: LeadAnswers;
+  questionSnapshot: LeadQuestionSnapshot[];
+}
+
+export interface LeadDetailRow extends LeadRow {
+  stage: LeadStage | null;
+  convertedClient: { id: string; firstName: string; lastName: string } | null;
+}
+
+export interface LeadActivity {
+  id: string;
+  type: LeadActivityType;
+  note: string | null;
+  details: Record<string, unknown> | null;
+  actorUserId: string | null;
+  actorName: string | null;
+  createdAt: string;
+}
+
+export interface LeadAssignee {
+  id: string;
+  fullName: string;
+  role: Role;
+}
+
+export interface LeadInboxResponse {
+  leads: LeadRow[];
+  stages: LeadStage[];
+  counts: { byStage: Record<string, number>; total: number; unassigned: number };
+  assignees: LeadAssignee[];
+}
+
+export interface LeadDetailResponse {
+  lead: LeadDetailRow;
+  activities: LeadActivity[];
+  assignees: LeadAssignee[];
+}
+
+export type LeadListFilters = {
+  /** A stage id or "all". */
+  stage?: string;
+  /** "me", "unassigned" or a user id. */
+  assignee?: string;
+  q?: string;
+  /** 0 returns counts and stages only. */
+  limit?: number;
+};
+
+function query(params: Record<string, string | number | undefined>): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== "") search.set(key, String(value));
+  }
+  const s = search.toString();
+  return s ? `?${s}` : "";
+}
+
+export const leadsApi = {
+  list: (filters: LeadListFilters = {}) => apiFetch<LeadInboxResponse>(`/leads${query(filters)}`),
+  get: (id: string) => apiFetch<LeadDetailResponse>(`/leads/${id}`),
+  create: (input: { firstName: string; lastName: string; email?: string; phone?: string; note?: string }) =>
+    apiFetch<LeadDetailResponse>("/leads", { method: "POST", json: input }),
+  update: (id: string, patch: { stageId?: string; closedReason?: LeadClosedReason | null; assignedToUserId?: string | null }) =>
+    apiFetch<LeadDetailResponse>(`/leads/${id}`, { method: "PATCH", json: patch }),
+  addNote: (id: string, note: string) => apiFetch<LeadDetailResponse>(`/leads/${id}/notes`, { method: "POST", json: { note } }),
+};
+
+// ── clients (the real records) ─────────────────────────────────────────────
+export interface ClientRecord {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string | null;
+  phone: string | null;
+  medicaidId: string | null;
+  dateOfBirth: string | null;
+  activeDiagnoses: { code: string; description: string }[];
+  insuranceProvider: string | null;
+  servicePlanStart: string | null;
+  servicePlanEnd: string | null;
+  authorizedSccHoursPerWeek: number;
+  authorizedNmtTripsPerWeek: number;
+  authorizedJcHoursPerWeek: number;
+  authorizedDhHoursPerWeek: number;
+  authorizedEiHoursPerWeek: number;
+  caseManagerName: string | null;
+  ccbName: string | null;
+  residenceLat: number | null;
+  residenceLng: number | null;
+  status: "Active" | "Inactive";
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ClientCreateInput {
+  firstName: string;
+  lastName: string;
+  email?: string;
+  phone?: string;
+  medicaidId?: string;
+  dateOfBirth?: string;
+  activeDiagnoses?: { code: string; description: string }[];
+  insuranceProvider?: string;
+  servicePlanStart?: string;
+  servicePlanEnd?: string;
+  authorizedSccHoursPerWeek?: number;
+  authorizedNmtTripsPerWeek?: number;
+  authorizedJcHoursPerWeek?: number;
+  authorizedDhHoursPerWeek?: number;
+  authorizedEiHoursPerWeek?: number;
+  caseManagerName?: string;
+  ccbName?: string;
+  residenceLat?: number | null;
+  residenceLng?: number | null;
+  /** The inquiry this client comes from; the API converts it in the same write. */
+  sourceLeadId?: string;
+}
+
+export const clientsApi = {
+  list: () => apiFetch<{ clients: ClientRecord[] }>("/clients"),
+  get: (id: string) => apiFetch<{ client: ClientRecord }>(`/clients/${id}`),
+  create: (input: ClientCreateInput) =>
+    apiFetch<{ client: ClientRecord; convertedLeadId: string | null }>("/clients", { method: "POST", json: input }),
 };

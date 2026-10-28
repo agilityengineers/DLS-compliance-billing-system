@@ -55,6 +55,7 @@ export const ADMIN_NAV: NavSection[] = [
     items: [
       { href: "/admin", label: "Dashboard", icon: "LayoutDashboard" },
       { href: "/admin/clients", label: "Clients", icon: "Users", feature: "clients.core" },
+      { href: "/admin/leads", label: "Leads", icon: "Inbox", feature: "leads.inbox" },
       { href: "/admin/schedule", label: "Schedule", icon: "CalendarDays", feature: "schedule.board" },
       { href: "/admin/staff", label: "Staff & credentials", icon: "UserCog", feature: "staff.credentials", adminOnly: true },
       // The registry configures staff.credentials rather than being a
