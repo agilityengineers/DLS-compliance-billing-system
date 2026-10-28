@@ -13,6 +13,31 @@ tags:
   - name: credentialing
     description: The credentialing requirements registry and staff credential evidence
 paths:
+  /consultation-requests:
+    post:
+      operationId: submitConsultation
+      summary: Store a public consultation request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConsultationInput"
+      responses:
+        "201":
+          description: Request stored (including an identical retry)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConsultationReceipt"
+        "400":
+          description: Invalid input or spam trap
+        "409":
+          description: Request identifier already used for different content
+        "429":
+          description: Too many attempts; Retry-After contains seconds
+        "503":
+          description: Storage temporarily unavailable
   /healthz:
     get:
       operationId: healthCheck
@@ -114,6 +139,30 @@ paths:
                   $ref: "#/components/schemas/StaffCredential"
 components:
   schemas:
+    ConsultationInput:
+      type: object
+      additionalProperties: false
+      required: [requestId, firstName, lastName, email, role, consent, company_website]
+      properties:
+        requestId: { type: string, format: uuid }
+        firstName: { type: string, minLength: 1, maxLength: 100 }
+        lastName: { type: string, minLength: 1, maxLength: 100 }
+        email: { type: string, format: email, maxLength: 254 }
+        phone: { type: string, maxLength: 40 }
+        role:
+          type: string
+          enum: [Individual, Family / guardian, Referring someone, Employer]
+        service:
+          type: string
+          enum: ["", Customized Support Plans, Personalized Employment Pathways, Employment Workshops and Training, Support Services for Career Advancement, Assistive Technology Solutions, Agency and Community Collaboration, Business Partnership Opportunities]
+        message: { type: string, maxLength: 5000 }
+        consent: { type: string, enum: ["yes"] }
+        company_website: { type: string, maxLength: 0 }
+    ConsultationReceipt:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean, enum: [true] }
     HealthStatus:
       type: object
       properties:

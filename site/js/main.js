@@ -193,36 +193,39 @@
   /* ---------- Footer year ---------- */
   document.querySelectorAll("[data-year]").forEach((el) => (el.textContent = new Date().getFullYear()));
 
-  /* =====================================================================
+  /* ---------------------------------------------------------------------
      LEAD FORM SUBMIT HANDLER  (contact.html  →  <form id="lead-form">)
      ---------------------------------------------------------------------
-     This is the ONLY place the form is submitted. To connect Zapier,
-     HubSpot, Formspree, etc., set LEAD_ENDPOINT to your webhook URL.
-     Payload is posted as JSON: { firstName, lastName, email, phone,
-     role, service, message, page, submittedAt }.
-     - Zapier "Catch Hook": paste the hook URL; fields arrive as top-level keys.
-     - HubSpot Forms API: swap the fetch body for HubSpot's
-       { fields:[{name,value}] } shape inside sendLead().
-     ===================================================================== */
-  const LEAD_ENDPOINT = ""; // e.g. "https://hooks.zapier.com/hooks/catch/XXXX/YYYY/"
+     Requests are stored by the same-origin API. Success requires a confirmed
+     receipt, not merely an HTTP response. No personal details are logged.
+     --------------------------------------------------------------------- */
+  const LEAD_ENDPOINT = "/api/consultation-requests";
 
   async function sendLead(payload) {
-    if (!LEAD_ENDPOINT) {
-      // Never report delivery or log personal details without a configured service.
-      throw new Error("Contact delivery is not configured.");
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20000);
+    try {
+      const res = await fetch(LEAD_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "omit",
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+      const receipt = await res.json();
+      return { ok: res.status === 201 && receipt.ok === true, status: res.status };
+    } finally {
+      clearTimeout(timer);
     }
-    const res = await fetch(LEAD_ENDPOINT, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    return { ok: res.ok };
   }
 
   const form = document.getElementById("lead-form");
   if (form) {
     const status = form.querySelector(".form-status");
     const submitBtn = form.querySelector('button[type="submit"]');
+    let pending = false;
+    let requestId;
+    let previousData;
 
     const setError = (input, msg) => {
       const field = input.closest(".field");
@@ -240,7 +243,7 @@
         if (el.type === "checkbox" && !el.checked) msg = "Please check this box to continue.";
         else if (!el.value.trim()) msg = "This field is required.";
         else if (el.type === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(el.value)) msg = "Enter a valid email address.";
-        if (el.type !== "checkbox") setError(el, msg);
+        setError(el, msg);
         if (msg && !firstBad) firstBad = el;
       });
       return firstBad;
@@ -248,28 +251,44 @@
 
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
+      if (pending) return;
       status.className = "form-status";
-      if (form.querySelector('[name="company_website"]').value) return; // honeypot
       const bad = validate();
       if (bad) { bad.focus(); return; }
 
       const data = Object.fromEntries(new FormData(form).entries());
-      delete data.company_website;
-      const payload = { ...data, page: location.href, submittedAt: new Date().toISOString() };
+      const fingerprint = JSON.stringify(data);
+      if (fingerprint !== previousData || !requestId) {
+        requestId = crypto.randomUUID();
+        previousData = fingerprint;
+      }
+      const payload = { ...data, requestId };
 
-      submitBtn.disabled = true;
+      pending = true;
+      const controls = [...form.querySelectorAll("input, select, textarea, button")];
+      controls.forEach((control) => { control.disabled = true; });
       submitBtn.textContent = "Sending…";
       try {
         const r = await sendLead(payload);
-        if (!r.ok) throw new Error("bad response");
+        if (!r.ok) {
+          if (r.status === 409) requestId = undefined;
+          throw new Error(r.status === 429 ? "rate-limit" : r.status === 400 ? "validation" : "bad response");
+        }
         form.reset();
-        status.textContent = "Thank you - we received your request and will follow up within one business day.";
+        requestId = undefined;
+        status.textContent = "Thank you - your consultation request has been received.";
         status.classList.add("is-success");
       } catch (err) {
-        status.textContent = "Something went wrong sending your request. Please call (970) 893-2145 or email info@durablelifeskills.com.";
+        const reason = err.message === "rate-limit"
+          ? "Too many attempts. Please wait 15 minutes before trying again."
+          : err.message === "validation"
+            ? "Please check your entries, including your phone number, and try again."
+            : "We could not confirm receipt of your request. You can try again.";
+        status.textContent = reason + " Your entries have been kept. You can also call (970) 893-2145 or email info@durablelifeskills.com.";
         status.classList.add("is-error");
       } finally {
-        submitBtn.disabled = false;
+        pending = false;
+        controls.forEach((control) => { control.disabled = false; });
         submitBtn.textContent = "Request a Consultation";
         status.focus();
       }

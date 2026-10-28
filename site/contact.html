@@ -113,29 +113,29 @@
     </div>
 
     <!-- ============ LEAD CAPTURE FORM ============
-         Submit handling lives in js/main.js → sendLead(). Set LEAD_ENDPOINT there. -->
+         Submit handling lives in js/main.js → sendLead(). Stored by /api/consultation-requests. -->
     <div class="form-card">
       <h2>Request a consultation</h2>
       <p class="muted">Tell us a little about your situation. We'll follow up within one business day.</p>
       <form id="lead-form" class="form-grid form-grid--2" novalidate>
         <div class="field">
           <label for="firstName">First name</label>
-          <input id="firstName" name="firstName" type="text" autocomplete="given-name" required>
+          <input id="firstName" name="firstName" type="text" autocomplete="given-name" maxlength="100" required>
           <span class="error" aria-live="polite"></span>
         </div>
         <div class="field">
           <label for="lastName">Last name</label>
-          <input id="lastName" name="lastName" type="text" autocomplete="family-name" required>
+          <input id="lastName" name="lastName" type="text" autocomplete="family-name" maxlength="100" required>
           <span class="error" aria-live="polite"></span>
         </div>
         <div class="field">
           <label for="email">Email</label>
-          <input id="email" name="email" type="email" autocomplete="email" inputmode="email" required>
+          <input id="email" name="email" type="email" autocomplete="email" inputmode="email" maxlength="254" required>
           <span class="error" aria-live="polite"></span>
         </div>
         <div class="field">
           <label for="phone">Phone <span class="hint">(optional)</span></label>
-          <input id="phone" name="phone" type="tel" autocomplete="tel" inputmode="tel">
+          <input id="phone" name="phone" type="tel" autocomplete="tel" inputmode="tel" maxlength="40">
           <span class="error" aria-live="polite"></span>
         </div>
         <fieldset class="fieldset field--full">
@@ -162,10 +162,12 @@
         </div>
         <div class="field field--full">
           <label for="message">How can we help? <span class="hint">(optional)</span></label>
-          <textarea id="message" name="message" rows="5"></textarea>
+          <textarea id="message" name="message" rows="5" maxlength="5000" aria-describedby="message-hint"></textarea>
+          <span id="message-hint" class="hint">Please do not include medical records or other sensitive personal information.</span>
         </div>
         <div class="field field--full">
           <label class="consent"><input type="checkbox" name="consent" value="yes" required> I agree to be contacted by Durable Life Skills, Inc. about my request. We never sell your information.</label>
+          <span class="error" aria-live="polite"></span>
         </div>
         <div class="honeypot" aria-hidden="true"><label for="company_website">Leave blank</label><input id="company_website" name="company_website" type="text" tabindex="-1" autocomplete="off"></div>
         <div class="field--full">

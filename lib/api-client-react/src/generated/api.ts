@@ -20,6 +20,8 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  ConsultationInput,
+  ConsultationReceipt,
   Error,
   HealthStatus,
   ListStaffCredentialsParams,
@@ -54,6 +56,76 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getSubmitConsultationUrl = () => {
+
+
+
+
+  return `/api/consultation-requests`
+}
+
+/**
+ * @summary Store a public consultation request
+ */
+export const submitConsultation = async (consultationInput: ConsultationInput, options?: RequestInit): Promise<ConsultationReceipt> => {
+
+  return customFetch<ConsultationReceipt>(getSubmitConsultationUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(consultationInput)
+  }
+);}
+
+
+
+
+export const getSubmitConsultationMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitConsultation>>, TError,{data: BodyType<ConsultationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof submitConsultation>>, TError,{data: BodyType<ConsultationInput>}, TContext> => {
+
+const mutationKey = ['submitConsultation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitConsultation>>, {data: BodyType<ConsultationInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  submitConsultation(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SubmitConsultationMutationResult = NonNullable<Awaited<ReturnType<typeof submitConsultation>>>
+    export type SubmitConsultationMutationBody = BodyType<ConsultationInput>
+    export type SubmitConsultationMutationError = ErrorType<void>
+
+    /**
+ * @summary Store a public consultation request
+ */
+export const useSubmitConsultation = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitConsultation>>, TError,{data: BodyType<ConsultationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof submitConsultation>>,
+        TError,
+        {data: BodyType<ConsultationInput>},
+        TContext
+      > => {
+      return useMutation(getSubmitConsultationMutationOptions(options));
+    }
 
 export const getHealthCheckUrl = () => {
 

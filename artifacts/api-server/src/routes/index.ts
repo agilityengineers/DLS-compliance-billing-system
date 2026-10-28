@@ -8,6 +8,7 @@ import { healthRouter } from "./health";
 import { jobsRouter } from "./jobs";
 import { orgRouter } from "./org";
 import { platformRouter } from "./platform";
+import { consultationsRouter } from "./consultations";
 
 export interface RouterDeps {
   mailer: Mailer;
@@ -16,6 +17,7 @@ export interface RouterDeps {
 export function apiRouter(db: Db, config: AppConfig, deps: RouterDeps): IRouter {
   const router: IRouter = Router();
   router.use(healthRouter(db));
+  router.use(consultationsRouter(db));
   router.use(authRouter(db, config, deps));
   router.use(platformRouter(db, config, deps));
   router.use(orgRouter(db, config, deps));
