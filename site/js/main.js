@@ -93,16 +93,16 @@
   /* ---------- Where We Serve: Colorado map with pins (d3 + us-atlas) ---------- */
   const mapEl = document.getElementById("area-map");
   if (mapEl && window.d3 && window.topojson) {
-    const cities = [["Pueblo","Home office",-104.6091,38.2544,"home"],["Pueblo West","Pueblo County",-104.7225,38.3497],["Colorado Springs","El Paso County",-104.8214,38.8339],["Cañon City","Fremont County",-105.2425,38.4411],["Walsenburg","Huerfano County",-104.7802,37.6242]];
-    const served = ["08101", "08041", "08043", "08055"]; // Pueblo, El Paso, Fremont, Huerfano
+    const cities = [["Pueblo","Home office",-104.6091,38.2544,"home"],["Pueblo West","Pueblo County",-104.7225,38.3497],["Colorado Springs","El Paso County",-104.8214,38.8339],["Greeley","Weld County",-104.7091,40.4233],["Loveland","Larimer County",-105.0750,40.3978],["Fort Collins","Larimer County",-105.0844,40.5853]];
+    const served = ["08101", "08041", "08123", "08069"]; // Pueblo, El Paso, Weld, Larimer
     Promise.all([
       fetch("https://cdn.jsdelivr.net/npm/us-atlas@3.0.1/counties-10m.json").then((r) => r.json()),
     ]).then(([us]) => {
       const counties = topojson.feature(us, us.objects.counties).features.filter((f) => f.id.startsWith("08"));
       const state = topojson.feature(us, us.objects.states).features.find((f) => f.id === "08");
       const W = 600, H = 450;
-      // Frame southern Colorado (the service area) rather than the whole state
-      const focus = { type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [[[-106.4, 37.3], [-103.3, 37.3], [-103.3, 39.2], [-106.4, 39.2], [-106.4, 37.3]].reverse()] } };
+      // Frame the Front Range service area (Pueblo north to Fort Collins) rather than the whole state
+      const focus = { type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [[[-107.3, 38.0], [-101.9, 38.0], [-101.9, 41.05], [-107.3, 41.05], [-107.3, 38.0]].reverse()] } };
       const proj = d3.geoMercator().fitExtent([[20, 20], [W - 20, H - 20]], focus);
       const path = d3.geoPath(proj);
       const svg = d3.select(mapEl).append("svg").attr("viewBox", "0 0 " + W + " " + H).attr("preserveAspectRatio", "xMidYMid meet");
@@ -119,7 +119,7 @@
         .style("--d", (d, i) => (1.4 + i * 0.25) + "s");
       pins.append("circle").attr("class", "ring").attr("r", 8);
       pins.append("circle").attr("class", "dot").attr("r", (d) => d[4] === "home" ? 7 : 5.5);
-      const leftLabel = (d) => d[0] === "Cañon City" || d[0] === "Pueblo West";
+      const leftLabel = (d) => d[0] === "Loveland" || d[0] === "Pueblo West";
       pins.append("text").attr("x", (d) => leftLabel(d) ? -12 : 13).attr("y", (d) => d[0] === "Pueblo" ? 6 : 5)
         .attr("text-anchor", (d) => leftLabel(d) ? "end" : "start").text((d) => d[0]);
       // Hover sync between pins and list
