@@ -266,7 +266,7 @@
         status.textContent = "Thank you - we received your request and will follow up within one business day.";
         status.classList.add("is-success");
       } catch (err) {
-        status.textContent = "Something went wrong sending your request. Please call (719) 568-5041 or email marketing@durablelifeskills.com.";
+        status.textContent = "Something went wrong sending your request. Please call (970) 893-2145 or email info@durablelifeskills.com.";
         status.classList.add("is-error");
       } finally {
         submitBtn.disabled = false;
