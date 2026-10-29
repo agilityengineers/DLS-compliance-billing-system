@@ -2,6 +2,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSessionContext } from "@/lib/auth/session";
+import { isApiAuth } from "@/lib/auth/mode";
+import { leadsApi } from "@/lib/api/admin";
 import { listClients, listVisits } from "@/lib/data/repo-core";
 import { computeQaFlags } from "@/lib/qa/flags";
 import { evaluateUnbilledNotes } from "@/lib/billing/readiness";
@@ -19,17 +21,22 @@ export default async function AdminDashboard() {
   if (ctx.effectiveUser.role === "Super_Admin") redirect("/admin/platform");
   const today = agencyTodayIso();
 
-  const [clients, todaysVisits, qa, readiness] = await Promise.all([
+  const [clients, todaysVisits, qa, readiness, leads] = await Promise.all([
     listClients(),
     listVisits({ from: today, to: today, excludeCancelled: true }),
     computeQaFlags(),
-    evaluateUnbilledNotes()
+    evaluateUnbilledNotes(),
+    // Counts only; an unreachable inbox hides its card rather than breaking the page.
+    ctx.features.has("leads.inbox") && isApiAuth() ? leadsApi.list({ limit: 0 }).catch(() => null) : Promise.resolve(null)
   ]);
 
   const expiredPlans = clients.filter((c) => c.service_plan_end && c.service_plan_end < today).length;
   const staffToday = new Set(todaysVisits.map((v) => v.staff_id)).size;
   const ready = readiness.filter((r) => r.ok);
   const readyUnits = ready.reduce((s, r) => s + (r.note.calculated_billing_units ?? 0), 0);
+  const openStages = leads ? leads.stages.filter((s) => s.active && s.kind === "open") : [];
+  const openLeads = openStages.reduce((n, s) => n + (leads?.counts.byStage[s.id] ?? 0), 0);
+  const newLeads = openStages[0] ? leads?.counts.byStage[openStages[0].id] ?? 0 : 0;
 
   // Stat cards follow the feature switches: a switched-off capability has no card.
   const stats = [
@@ -39,6 +46,13 @@ export default async function AdminDashboard() {
       sub: expiredPlans === 0 ? "All plans current" : `${expiredPlans} plan${expiredPlans > 1 ? "s" : ""} expired`,
       href: "/admin/clients",
       show: ctx.features.has("clients.core")
+    },
+    {
+      label: "Open leads",
+      value: openLeads,
+      sub: `${newLeads} new · ${leads?.counts.unassigned ?? 0} unassigned`,
+      href: "/admin/leads",
+      show: leads !== null
     },
     { label: "Visits today", value: todaysVisits.length, sub: `${staffToday} staff scheduled`, href: "/admin/schedule", show: ctx.features.has("schedule.board") },
     { label: "Open QA flags", value: qa.open.length, sub: "Resolve before export", href: "/admin/qa", show: ctx.features.has("qa.flags") },

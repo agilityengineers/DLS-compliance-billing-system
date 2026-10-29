@@ -1,33 +1,23 @@
 # Website consultation requests
 
-The public contact form stores requests in the existing PostgreSQL database through
-`POST /api/consultation-requests`. This is **lead storage, not email delivery**.
-Success is returned only after storage succeeds. There is no public read endpoint.
-Authorized database operators can retrieve requests from `consultation_requests`;
-the staff portal does not yet have a consultation inbox or send notifications.
-Do not copy lead details into application logs, tickets, or analytics.
+**Superseded on 2026-10-29 by the leads feature.** The public contact form now posts to
+`POST /api/public/leads`. Every inquiry lands in the portal's Leads inbox (`/admin/leads`),
+moves through an admin-configurable funnel, can be assigned to an Admin or Scheduler and
+converted into a client record, and the form's questions are edited in the portal at
+`/admin/leads/form`. See `replit.md` ("Leads") and `artifacts/api-server/src/routes/public.ts`.
 
-The database migration is applied by the existing development migration runner.
-Production uses the existing managed schema publishing process; include both
-`consultation_requests` and `consultation_limits` in that schema update.
-Do not bypass startup readiness or run an alternative production migration path.
+What happened to the earlier storage-only endpoint:
 
-Controls include required consent, bounded fields, role/service allowlists, a
-server-checked honeypot, JSON-only requests, rejection of browser cross-site
-submissions, and atomic database-backed limits (5 attempts per IP per 15-minute
-window, 200 globally). IPs are stored only as short-lived hashes with the window
-included, not raw addresses; these are pseudonymous, not anonymous. Expired
-counters are pruned on subsequent submissions. The existing trusted proxy setting
-must correspond to the hosting proxy topology; do not trust arbitrary client
-forwarding headers when hosting elsewhere.
+- `POST /api/consultation-requests`, its OpenAPI entries and its PGlite test were removed;
+  the generated client was regenerated without them.
+- Any rows that endpoint stored in `consultation_requests` are imported into the Leads
+  inbox when the API starts (`importConsultationRequests` in
+  `artifacts/api-server/src/lib/leads.ts`): each becomes a website inquiry dated when it
+  was received, and the row is deleted once it is in. The import is a no-op on an empty table.
+- The `consultation_requests` and `consultation_limits` tables stay in the schema, empty,
+  until a later drizzle-generated migration drops them. The per-address limit now lives on
+  the `leads` table (`LEAD_MAX_PER_IP` per `LEAD_WINDOW_MINUTES`).
 
-Each form keeps an in-memory request ID for unchanged retries. A lost response can
-be retried without duplicate storage. Edited requests get a new ID. Reloading the
-page does not retain draft personal information or the ID. During submission,
-fields are disabled to avoid edits being erased by a successful response; on any
-failure they are re-enabled without resetting their values. Responses time out
-after 20 seconds, with phone/email alternatives still visible.
-
-Run focused backend regression checks with:
-`pnpm exec vitest run artifacts/api-server/src/__tests__/consultations.test.ts`.
-These tests use isolated in-memory PostgreSQL, not the live lead database.
+Controls that carried over: required consent, bounded fields, a server-checked honeypot, a
+database-backed per-address limit that works across API instances, and no personal details
+in logs, the audit log or email.

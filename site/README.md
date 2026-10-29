@@ -12,7 +12,8 @@ site/
   services.html     All 7 services with anchor links
   contact.html      Contact info + lead-capture form (#lead-form)
   css/styles.css    Single stylesheet; theme tokens at the top, sections numbered
-  js/main.js        Nav toggle, sticky header, form handler (sendLead / LEAD_ENDPOINT)
+  js/config.js      Per-deployment settings (the portal host the form posts to; empty = same host)
+  js/main.js        Nav toggle, sticky header, form handler (sendLead) and the form built from the portal's questions
   assets/           logo-full.png, logo-mark.png, favicon-*.png
   vercel.json       Clean URLs + asset caching
 ```
@@ -28,8 +29,23 @@ npx serve .        # or: python3 -m http.server 8080
 - **Replit:** create an "HTML, CSS, JS" Repl, upload the `site/` contents to the root.
 
 ## Connect the lead form
-Open `js/main.js`, set `LEAD_ENDPOINT` to your Zapier Catch Hook / HubSpot / Formspree URL. Payload is JSON:
-`{ firstName, lastName, email, phone, role, service, message, consent, page, submittedAt }`.
+The form on `contact.html` posts to the DLS Portal API (`POST /api/public/leads`), which
+stores each inquiry, shows it in the portal's **Leads** inbox and emails the
+organization's administrators. The portal serves this site at `/`, so the API is on
+the same host and nothing needs configuring: `js/config.js` keeps `apiBase` empty.
+
+Only if the site is ever served from its own domain: set `apiBase` in `js/config.js`
+to the portal host (no trailing slash) and list this site's origin(s) in the API's
+`PUBLIC_FORM_ORIGINS` setting. Do not use `CORS_ORIGINS` for this; that setting opens
+every route with credentials.
+
+The questions themselves are managed by the portal's administrators (Leads → Form &
+funnel settings). On load the form asks `GET /api/public/forms/contact` which questions
+to show and rebuilds its fields; the static fields in `contact.html` match the portal's
+defaults and stay as the fallback whenever that request fails. The payload is JSON with
+one key per question plus `page`; the API answers `202` when the inquiry was accepted,
+`400` with a message when a field is missing or malformed, and `429` when one address
+has sent too many in a few minutes.
 
 ## Brand tokens
 Edit `:root` at the top of `css/styles.css`. Colors were sampled from the logo:
@@ -55,6 +71,6 @@ The repo (agilityengineers/DLS-compliance-billing-system) is a pnpm monorepo. Th
 `index.html` is the approved front page; `_archive/` holds the two earlier hero variants and is not needed in production.
 
 - News cards load live from https://durablelifeskills.com/dls-media/feed/rss in `js/main.js` (`NEWS_FEED`). If the repl proxies requests, allow that origin; the feed sends CORS headers so a direct browser fetch works.
-- Lead form delivery is not connected (`LEAD_ENDPOINT` in `js/main.js` is empty). Until a service is configured, submission shows an error with phone/email alternatives, preserves the entered data, and does not claim delivery or log personal details.
+- The lead form posts to the portal API at `/api/public/leads` and lands in the portal's Leads inbox (see "Connect the lead form" above). On any failure the form shows a message with phone/email alternatives, keeps the entered data, and never claims delivery or logs personal details.
 - Copy and imagery on the four active pages are owner-approved; see the approval record above. Do not replace them solely because earlier annotations described them as drafts.
 - `vercel.json` can be deleted if deploying only from Replit.

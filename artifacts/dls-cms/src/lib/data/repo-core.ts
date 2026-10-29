@@ -4,7 +4,10 @@
 import "server-only";
 
 import { isDemoMode } from "@/lib/demo/mode";
+import { isApiAuth } from "@/lib/auth/mode";
+import { apiFetch, errorMessage } from "@/lib/api/client";
 import { listAccountDirectory } from "@/lib/auth/directory";
+import { invalidateClients, listClientRecords } from "@/lib/data/clients-api";
 import { agencyAddDays, agencyDayRangeUtc, agencyToUtcIso, utcIsoToAgencyDate } from "@workspace/time";
 import { getDemoStore, type AuditContext } from "@/lib/data/demo/store";
 import { createDataClient, createServiceClient } from "@/lib/supabase/server";
@@ -20,6 +23,13 @@ function age(dob: string): number {
   const m = now.getMonth() - b.getMonth();
   if (m < 0 || (m === 0 && now.getDate() < b.getDate())) a--;
   return a;
+}
+
+/** A real client record may not have a date of birth yet; no date, no age. */
+function ageOf(dob: string | null | undefined): number | undefined {
+  if (!dob) return undefined;
+  const n = age(dob);
+  return Number.isFinite(n) ? n : undefined;
 }
 
 /** Postgres `point` arrives as {x,y} — normalize to {lat,lng}. */
@@ -157,7 +167,10 @@ export async function listClients(
 ): Promise<Client[]> {
   const cap = opts.limit === undefined ? 200 : opts.limit;
   if (isDemoMode()) {
-    let rows = getDemoStore().data.clients.map((c) => ({ ...c, calculated_age: age(c.date_of_birth) }));
+    // Real records first (the API's `clients` table, incl. converted leads),
+    // then the synthetic demo clients — the same merge the staff list does.
+    const records = await listClientRecords();
+    let rows = [...records, ...getDemoStore().data.clients].map((c) => ({ ...c, calculated_age: ageOf(c.date_of_birth) }));
     if (search) {
       const q = search.toLowerCase();
       rows = rows.filter((c) =>
@@ -192,9 +205,11 @@ export async function listClients(
 }
 
 export async function getClient(id: string): Promise<Client | null> {
+  const record = (await listClientRecords()).find((c) => c.id === id);
+  if (record) return { ...record, calculated_age: ageOf(record.date_of_birth) };
   if (isDemoMode()) {
     const c = getDemoStore().data.clients.find((x) => x.id === id);
-    return c ? { ...c, calculated_age: age(c.date_of_birth) } : null;
+    return c ? { ...c, calculated_age: ageOf(c.date_of_birth) } : null;
   }
   const { data } = await createDataClient().from("v_clients").select("*").eq("id", id).maybeSingle();
   return data ? mapClientRow(data) : null;
@@ -202,8 +217,45 @@ export async function getClient(id: string): Promise<Client | null> {
 
 export async function createClientRecord(
   input: Omit<Client, "id" | "calculated_age">,
-  ctx: AuditContext
+  ctx: AuditContext,
+  opts: { sourceLeadId?: string } = {}
 ): Promise<{ ok: boolean; id?: string; error?: string }> {
+  // With real sign-in the record goes to the API's `clients` table, where it
+  // survives a reload. Passing the inquiry it came from converts that inquiry
+  // in the same write.
+  if (isApiAuth()) {
+    try {
+      const res = await apiFetch<{ client: { id: string } }>("/clients", {
+        method: "POST",
+        json: {
+          firstName: input.first_name,
+          lastName: input.last_name,
+          email: input.email ?? "",
+          phone: input.phone ?? "",
+          medicaidId: input.medicaid_id,
+          dateOfBirth: input.date_of_birth,
+          activeDiagnoses: input.active_diagnoses,
+          insuranceProvider: input.insurance_provider ?? "",
+          servicePlanStart: input.service_plan_start ?? "",
+          servicePlanEnd: input.service_plan_end ?? "",
+          authorizedSccHoursPerWeek: input.authorized_scc_hours_per_week,
+          authorizedNmtTripsPerWeek: input.authorized_nmt_trips_per_week,
+          authorizedJcHoursPerWeek: input.authorized_jc_hours_per_week,
+          authorizedDhHoursPerWeek: input.authorized_dh_hours_per_week,
+          authorizedEiHoursPerWeek: input.authorized_ei_hours_per_week,
+          caseManagerName: input.case_manager_name ?? "",
+          ccbName: input.ccb_name ?? "",
+          residenceLat: input.residence_gps?.lat ?? null,
+          residenceLng: input.residence_gps?.lng ?? null,
+          sourceLeadId: opts.sourceLeadId,
+        },
+      });
+      invalidateClients();
+      return { ok: true, id: res.client.id };
+    } catch (e) {
+      return { ok: false, error: errorMessage(e) };
+    }
+  }
   if (isDemoMode()) {
     const store = getDemoStore();
     const client: Client = { ...input, id: crypto.randomUUID() };

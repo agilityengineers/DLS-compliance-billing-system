@@ -35,6 +35,12 @@ export interface AppConfig {
   sessionAbsoluteMs: number;
   /** Browser origins allowed to call the API cross-site. Empty = same-origin only. */
   corsOrigins: string[];
+  /**
+   * Origins of the public website whose forms post to /api/public (the
+   * marketing site lives on its own domain). Separate from corsOrigins on
+   * purpose: these origins get the public routes only, never a cookie.
+   */
+  publicFormOrigins: string[];
   trustProxy: boolean;
   /** Where links in email point. Falls back to a relative path when unset. */
   appBaseUrl: string | undefined;
@@ -65,6 +71,12 @@ export interface AppConfig {
   loginWindowMs: number;
   /** How long sign-in attempt rows are kept for the limiter and for review. */
   loginAttemptRetentionDays: number;
+
+  /** Website inquiries accepted per IP address inside the window before a cool-down. */
+  leadMaxPerIp: number;
+  leadWindowMs: number;
+  /** How long a lead keeps the submitting IP address before the scrub job nulls it. */
+  leadIpRetentionDays: number;
 
   /** Second factor. */
   mfaIssuer: string;
@@ -121,6 +133,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean),
+    publicFormOrigins: (env.PUBLIC_FORM_ORIGINS ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
     trustProxy: env.TRUST_PROXY ? env.TRUST_PROXY === "true" : true,
     appBaseUrl: (env.APP_BASE_URL ?? "").trim().replace(/\/$/, "") || undefined,
 
@@ -138,6 +154,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     loginMaxFailures: int(env.LOGIN_MAX_FAILURES, 10),
     loginWindowMs: int(env.LOGIN_WINDOW_MINUTES, 15) * 60_000,
     loginAttemptRetentionDays: int(env.LOGIN_ATTEMPT_RETENTION_DAYS, 90),
+
+    leadMaxPerIp: int(env.LEAD_MAX_PER_IP, 5),
+    leadWindowMs: int(env.LEAD_WINDOW_MINUTES, 10) * 60_000,
+    leadIpRetentionDays: int(env.LEAD_IP_RETENTION_DAYS, 90),
 
     mfaIssuer: env.MFA_ISSUER ?? "DLS Portal",
     requireMfaForPlatform: bool(env.REQUIRE_MFA_FOR_PLATFORM, false),

@@ -12,7 +12,7 @@ import {
   type Role,
 } from "@workspace/features";
 import type { AppConfig } from "../lib/config";
-import { HttpError, forbidden, unauthorized } from "../lib/errors";
+import { HttpError, badRequest, forbidden, unauthorized } from "../lib/errors";
 import { recordAudit } from "../lib/audit";
 import { loadFeatureStates } from "../lib/features";
 import { loadSession, setImpersonation } from "../lib/session";
@@ -42,6 +42,17 @@ export function requireAuthContext(res: Response): AuthContext {
   const auth = getAuth(res);
   if (!auth) throw unauthorized();
   return auth;
+}
+
+/**
+ * The organization the caller is acting in. A provider account acting as
+ * itself has none, and every organization-scoped route refuses it here rather
+ * than quietly reading nothing.
+ */
+export function requireOrgId(res: Response): string {
+  const auth = requireAuthContext(res);
+  if (!auth.effectiveUser.orgId) throw badRequest("This account is not attached to an organization.");
+  return auth.effectiveUser.orgId;
 }
 
 export function actorOf(req: Request, auth: AuthContext): Actor {

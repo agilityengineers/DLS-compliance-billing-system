@@ -9,6 +9,8 @@ import { createClientRecord as repoCreateClient } from "@/lib/data/repo-core";
 const ClientSchema = z.object({
   first_name: z.string().min(1),
   last_name: z.string().min(1),
+  email: z.string().regex(/^$|^[^\s@]+@[^\s@]+\.[^\s@]+$/, "Enter a valid email address.").optional(),
+  phone: z.string().max(40).optional(),
   medicaid_id: z.string().min(1),
   date_of_birth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   insurance_provider: z.string().optional(),
@@ -18,7 +20,9 @@ const ClientSchema = z.object({
   authorized_nmt_trips_per_week: z.coerce.number().int().min(0),
   case_manager_name: z.string().optional(),
   ccb_name: z.string().optional(),
-  active_diagnoses: z.array(z.object({ code: z.string(), description: z.string() }))
+  active_diagnoses: z.array(z.object({ code: z.string(), description: z.string() })),
+  /** The inquiry this client comes from (Leads → Convert to client). */
+  source_lead_id: z.string().uuid().optional()
 });
 
 export async function createClientRecord(input: unknown): Promise<{ ok: boolean; error?: string; id?: string }> {
@@ -31,6 +35,8 @@ export async function createClientRecord(input: unknown): Promise<{ ok: boolean;
     {
       first_name: d.first_name,
       last_name: d.last_name,
+      email: d.email || null,
+      phone: d.phone || null,
       medicaid_id: d.medicaid_id,
       date_of_birth: d.date_of_birth,
       active_diagnoses: d.active_diagnoses,
@@ -46,8 +52,12 @@ export async function createClientRecord(input: unknown): Promise<{ ok: boolean;
       ccb_name: d.ccb_name || null,
       residence_gps: null
     },
-    ctx.auditCtx
+    ctx.auditCtx,
+    { sourceLeadId: d.source_lead_id }
   );
-  if (res.ok) revalidatePath("/admin/clients");
+  if (res.ok) {
+    revalidatePath("/admin/clients");
+    if (d.source_lead_id) revalidatePath("/admin/leads");
+  }
   return res;
 }

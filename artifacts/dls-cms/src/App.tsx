@@ -28,6 +28,9 @@ import AdminDocuments from "@/app/admin/documents/page";
 import AdminEmar from "@/app/admin/emar/page";
 import AdminEvv from "@/app/admin/evv/page";
 import AdminIncidents from "@/app/admin/incidents/page";
+import AdminLeads from "@/app/admin/leads/page";
+import AdminLeadForm from "@/app/admin/leads/form/page";
+import AdminLeadDetail from "@/app/admin/leads/[id]/page";
 import AdminPayroll from "@/app/admin/payroll/page";
 import AdminQa from "@/app/admin/qa/page";
 import AdminRelias from "@/app/admin/relias/page";
@@ -117,6 +120,12 @@ function Router() {
       <Route path="/admin/emar">{() => <AsyncRoute loader={withLayoutElement(AdminLayout, <AdminEmar />)} />}</Route>
       <Route path="/admin/evv">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminEvv as AsyncComponent)} />}</Route>
       <Route path="/admin/incidents">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminIncidents as AsyncComponent)} />}</Route>
+      <Route path="/admin/leads">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminLeads as AsyncComponent)} />}</Route>
+      {/* Static path first, so "form" is never read as an inquiry id. */}
+      <Route path="/admin/leads/form">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminLeadForm as AsyncComponent)} />}</Route>
+      <Route path="/admin/leads/:id">
+        {(params) => <AsyncRoute loader={withLayout(AdminLayout, AdminLeadDetail as AsyncComponent)} params={params as Record<string, string>} />}
+      </Route>
       <Route path="/admin/payroll">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminPayroll as AsyncComponent)} />}</Route>
       <Route path="/admin/qa">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminQa as AsyncComponent)} />}</Route>
       <Route path="/admin/relias">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminRelias as AsyncComponent)} />}</Route>

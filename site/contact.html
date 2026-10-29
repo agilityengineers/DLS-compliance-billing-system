@@ -113,7 +113,10 @@
     </div>
 
     <!-- ============ LEAD CAPTURE FORM ============
-         Submit handling lives in js/main.js → sendLead(). Stored by /api/consultation-requests. -->
+         Submit handling lives in js/main.js → sendLead(), which posts to the
+         DLS Portal API (/api/public/leads). The questions are managed in the
+         portal and rendered over this markup on load; this static form is the
+         fallback. js/config.js holds the portal host (empty = same host). -->
     <div class="form-card">
       <h2>Request a consultation</h2>
       <p class="muted">Tell us a little about your situation. We'll follow up within one business day.</p>
@@ -236,6 +239,7 @@
     </div>
   </div>
 </footer>
+<script src="js/config.js"></script>
 <script src="js/main.js" defer></script>
 </body>
 </html>
