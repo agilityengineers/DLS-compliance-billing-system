@@ -235,3 +235,35 @@ export function baaExpiringEmail(input: {
     ...body,
   };
 }
+
+// ── Leads ───────────────────────────────────────────────────────────────────
+// Both messages say that something happened and link into the portal. Nothing
+// the person wrote on the website — not even their name — travels by email.
+
+export function leadReceivedEmail(input: { adminName: string; orgName: string; link: string }): MailMessage {
+  const body = render({
+    heading: "A new inquiry has arrived",
+    lines: [
+      `Hello ${input.adminName},`,
+      `Someone has sent ${input.orgName} a request through the website.`,
+      "Open the portal to see who it is and take it from there. Nothing about the person is in this email.",
+    ],
+    action: { label: "Open the inquiry", url: input.link },
+    footer: NO_REPLY_FOOTER,
+  });
+  return { kind: "lead.received", sender: "noreply", subject: `New inquiry for ${input.orgName}`, phi: false, ...body };
+}
+
+export function leadAssignedEmail(input: { fullName: string; assignedBy: string; orgName: string; link: string }): MailMessage {
+  const body = render({
+    heading: "An inquiry was assigned to you",
+    lines: [
+      `Hello ${input.fullName},`,
+      `${input.assignedBy} assigned you an inquiry at ${input.orgName}.`,
+      "Open the portal to see the details and decide the next step.",
+    ],
+    action: { label: "Open the inquiry", url: input.link },
+    footer: NO_REPLY_FOOTER,
+  });
+  return { kind: "lead.assigned", sender: "noreply", subject: "An inquiry was assigned to you", phi: false, ...body };
+}

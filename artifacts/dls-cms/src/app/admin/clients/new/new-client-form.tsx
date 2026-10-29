@@ -11,10 +11,21 @@ import { createClientRecord } from "../actions";
 
 interface Dx { code: string; description: string }
 
-export function NewClientForm() {
+/** What an inquiry hands to the intake when it is being converted. */
+export interface IntakePrefill {
+  lead_id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+}
+
+export function NewClientForm({ prefill }: { prefill?: IntakePrefill } = {}) {
   const router = useRouter();
   const [form, setForm] = useState({
-    first_name: "", last_name: "", medicaid_id: "", date_of_birth: "",
+    first_name: prefill?.first_name ?? "", last_name: prefill?.last_name ?? "",
+    email: prefill?.email ?? "", phone: prefill?.phone ?? "",
+    medicaid_id: "", date_of_birth: "",
     insurance_provider: "", service_plan_start: "", service_plan_end: "",
     authorized_scc_hours_per_week: 0, authorized_nmt_trips_per_week: 0,
     case_manager_name: "", ccb_name: ""
@@ -40,19 +51,26 @@ export function NewClientForm() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true); setError(null);
-    const res = await createClientRecord({ ...form, active_diagnoses: diagnoses });
+    const res = await createClientRecord({ ...form, active_diagnoses: diagnoses, source_lead_id: prefill?.lead_id });
     setSaving(false);
     if (!res.ok) { setError(res.error ?? "Failed to save."); return; }
-    router.push("/admin/clients");
+    router.push(prefill ? `/admin/leads/${prefill.lead_id}` : "/admin/clients");
   }
 
   return (
     <div className="max-w-2xl space-y-6">
       <h1 className="text-xl font-semibold">New client intake</h1>
+      {prefill && (
+        <p className="rounded-md bg-plum-soft p-3 text-sm text-plum">
+          Converting the inquiry from <strong>{prefill.first_name} {prefill.last_name}</strong>. Saving creates the client record and marks the inquiry as converted.
+        </p>
+      )}
       <form onSubmit={onSubmit} className="space-y-5">
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1.5"><Label>First name</Label><Input required value={form.first_name} onChange={set("first_name")} /></div>
           <div className="space-y-1.5"><Label>Last name</Label><Input required value={form.last_name} onChange={set("last_name")} /></div>
+          <div className="space-y-1.5"><Label>Email</Label><Input type="email" value={form.email} onChange={set("email")} /></div>
+          <div className="space-y-1.5"><Label>Phone</Label><Input type="tel" value={form.phone} onChange={set("phone")} /></div>
           <div className="space-y-1.5"><Label>Medicaid ID</Label><Input required value={form.medicaid_id} onChange={set("medicaid_id")} /></div>
           <div className="space-y-1.5">
             <Label>Date of birth</Label>

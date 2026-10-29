@@ -6,11 +6,6 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export * from './consultationInput';
-export * from './consultationInputConsent';
-export * from './consultationInputRole';
-export * from './consultationInputService';
-export * from './consultationReceipt';
 export * from './credentialSource';
 export * from './credentialSourceKind';
 export * from './error';

@@ -56,6 +56,13 @@ export interface Client {
   case_manager_name: string | null;
   ccb_name: string | null;
   residence_gps: { lat: number; lng: number } | null;
+  // ── Present on real client records (the API's `clients` table) ─────────
+  email?: string | null;
+  phone?: string | null;
+  /** Active | Inactive */
+  status?: "Active" | "Inactive";
+  /** true = a durable record in the API database; false/undefined = synthetic demo client. */
+  is_record?: boolean;
 }
 
 export interface PhysicianOrder {

@@ -9,41 +9,6 @@ import * as zod from 'zod';
 
 
 /**
- * @summary Store a public consultation request
- */
-export const submitConsultationBodyFirstNameMax = 100;
-
-export const submitConsultationBodyLastNameMax = 100;
-
-export const submitConsultationBodyEmailMax = 254;
-
-export const submitConsultationBodyPhoneMax = 40;
-
-export const submitConsultationBodyMessageMax = 5000;
-
-export const submitConsultationBodyCompanyWebsiteMax = 0;
-
-
-
-export const SubmitConsultationBody = zod.object({
-  "requestId": zod.string().uuid(),
-  "firstName": zod.string().min(1).max(submitConsultationBodyFirstNameMax),
-  "lastName": zod.string().min(1).max(submitConsultationBodyLastNameMax),
-  "email": zod.string().email().max(submitConsultationBodyEmailMax),
-  "phone": zod.string().max(submitConsultationBodyPhoneMax).optional(),
-  "role": zod.enum(['Individual', 'Family / guardian', 'Referring someone', 'Employer']),
-  "service": zod.enum(['', 'Customized Support Plans', 'Personalized Employment Pathways', 'Employment Workshops and Training', 'Support Services for Career Advancement', 'Assistive Technology Solutions', 'Agency and Community Collaboration', 'Business Partnership Opportunities']).optional(),
-  "message": zod.string().max(submitConsultationBodyMessageMax).optional(),
-  "consent": zod.enum(['yes']),
-  "company_website": zod.string().max(submitConsultationBodyCompanyWebsiteMax)
-})
-
-export const SubmitConsultationResponse = zod.object({
-  "ok": zod.literal(true)
-})
-
-
-/**
  * Returns server health status
  * @summary Health check
  */

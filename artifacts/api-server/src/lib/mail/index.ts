@@ -196,8 +196,11 @@ export class Mailer {
   }
 }
 
-function isUniqueViolation(e: unknown): boolean {
-  return typeof e === "object" && e !== null && (e as { code?: string }).code === "23505";
+/** Postgres 23505, whether the driver threw it directly or the ORM wrapped it as `cause`. */
+function isUniqueViolation(e: unknown, depth = 0): boolean {
+  if (typeof e !== "object" || e === null || depth > 3) return false;
+  if ((e as { code?: string }).code === "23505") return true;
+  return isUniqueViolation((e as { cause?: unknown }).cause, depth + 1);
 }
 
 export function createMailer(db: Db, config: AppConfig): Mailer {

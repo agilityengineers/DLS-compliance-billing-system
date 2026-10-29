@@ -5,66 +5,6 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-export type ConsultationInputRole = typeof ConsultationInputRole[keyof typeof ConsultationInputRole];
-
-
-export const ConsultationInputRole = {
-  Individual: 'Individual',
-  'Family_/_guardian': 'Family / guardian',
-  Referring_someone: 'Referring someone',
-  Employer: 'Employer',
-} as const;
-
-export type ConsultationInputService = typeof ConsultationInputService[keyof typeof ConsultationInputService];
-
-
-export const ConsultationInputService = {
-  '': '',
-  Customized_Support_Plans: 'Customized Support Plans',
-  Personalized_Employment_Pathways: 'Personalized Employment Pathways',
-  Employment_Workshops_and_Training: 'Employment Workshops and Training',
-  Support_Services_for_Career_Advancement: 'Support Services for Career Advancement',
-  Assistive_Technology_Solutions: 'Assistive Technology Solutions',
-  Agency_and_Community_Collaboration: 'Agency and Community Collaboration',
-  Business_Partnership_Opportunities: 'Business Partnership Opportunities',
-} as const;
-
-export type ConsultationInputConsent = typeof ConsultationInputConsent[keyof typeof ConsultationInputConsent];
-
-
-export const ConsultationInputConsent = {
-  yes: 'yes',
-} as const;
-
-export interface ConsultationInput {
-  requestId: string;
-  /**
-     * @minLength 1
-     * @maxLength 100
-     */
-  firstName: string;
-  /**
-     * @minLength 1
-     * @maxLength 100
-     */
-  lastName: string;
-  /** @maxLength 254 */
-  email: string;
-  /** @maxLength 40 */
-  phone?: string;
-  role: ConsultationInputRole;
-  service?: ConsultationInputService;
-  /** @maxLength 5000 */
-  message?: string;
-  consent: ConsultationInputConsent;
-  /** @maxLength 0 */
-  company_website: string;
-}
-
-export interface ConsultationReceipt {
-  ok: true;
-}
-
 export interface HealthStatus {
   status: string;
 }

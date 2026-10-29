@@ -37,11 +37,13 @@
     if (page === here) a.setAttribute("aria-current", "page");
   });
 
+  /* ---------- Shared: escape text for innerHTML ---------- */
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
   /* ---------- News: live from the DLS Media RSS feed ---------- */
   const NEWS_FEED = "https://durablelifeskills.com/dls-media/feed/rss";
   const newsGrid = document.querySelector("[data-news-feed]");
   if (newsGrid) {
-    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
     const fmt = (d) => { const t = new Date(d); return isNaN(t) ? "" : t.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }); };
     const fullImg = (u) => (u || "").replace(/-thumb(\.\w+)$/, "$1"); // gallery thumbs have full-size siblings
     const trim = (s, n) => { s = s.replace(/\s+/g, " ").trim(); if (s.length <= n) return s; s = s.slice(0, n); return s.slice(0, s.lastIndexOf(" ")) + "..."; };
@@ -195,12 +197,28 @@
   document.querySelectorAll("[data-year]").forEach((el) => (el.textContent = new Date().getFullYear()));
 
   /* ---------------------------------------------------------------------
-     LEAD FORM SUBMIT HANDLER  (contact.html  →  <form id="lead-form">)
+     LEAD FORM  (contact.html  ->  <form id="lead-form">)
      ---------------------------------------------------------------------
-     Requests are stored by the same-origin API. Success requires a confirmed
-     receipt, not merely an HTTP response. No personal details are logged.
+     The form posts to the DLS Portal API, which stores the inquiry, shows
+     it in the portal's Leads inbox and emails the administrators. Success
+     requires the API's receipt, not merely an HTTP response, and no
+     personal details are logged.
+     The portal serves this site, so the API is on the same host and
+     js/config.js leaves apiBase empty. If the site is ever served from
+     another host, set apiBase there and list this site's origin in the
+     API's PUBLIC_FORM_ORIGINS setting.
+     The questions are managed in the portal: on load the form asks the API
+     which to show and rebuilds its fields; the static markup stays as the
+     fallback whenever that request fails.
+     Payload: one key per question plus page. The API answers 202 when the
+     inquiry was accepted, 400 with a message when a field is missing or
+     malformed, and 429 when this address has sent too many in a few minutes.
      --------------------------------------------------------------------- */
-  const LEAD_ENDPOINT = "/api/consultation-requests";
+  const DLS_CONFIG = window.DLS_CONFIG || {};
+  const API_BASE = String(DLS_CONFIG.apiBase || "").replace(/\/+$/, "");
+  const LEAD_ENDPOINT = API_BASE + "/api/public/leads";
+  const FORM_SCHEMA_ENDPOINT = API_BASE + "/api/public/forms/contact";
+  const CONTACT_FALLBACK = "You can also call (970) 893-2145 or email info@durablelifeskills.com.";
 
   async function sendLead(payload) {
     const controller = new AbortController();
@@ -213,20 +231,79 @@
         body: JSON.stringify(payload),
         signal: controller.signal,
       });
-      const receipt = await res.json();
-      return { ok: res.status === 201 && receipt.ok === true, status: res.status };
+      let body = null;
+      try { body = await res.json(); } catch (e) { body = null; }
+      const ok = res.status === 202 && !!body && body.ok === true;
+      const message = !ok && body && body.error && body.error.message ? String(body.error.message) : "";
+      return { ok: ok, status: res.status, message: message };
     } finally {
       clearTimeout(timer);
     }
   }
 
+  const HALF_WIDTH = { short_text: true, email: true, phone: true };
+  const AUTOCOMPLETE = { firstName: "given-name", lastName: "family-name", email: "email", phone: "tel" };
+
+  function questionHtml(q) {
+    const id = "q_" + String(q.key).replace(/[^A-Za-z0-9_-]/g, "");
+    const name = esc(q.key);
+    const req = q.required ? " required" : "";
+    const max = q.maxLength ? ' maxlength="' + Number(q.maxLength) + '"' : "";
+    const optional = q.required ? "" : ' <span class="hint">(optional)</span>';
+    const help = q.helpText ? '<span class="hint">' + esc(q.helpText) + "</span>" : "";
+    const err = '<span class="error" aria-live="polite"></span>';
+    const opts = Array.isArray(q.options) ? q.options : [];
+    if (q.type === "yes_no") {
+      return '<div class="field field--full"><label class="consent"><input type="checkbox" name="' + name + '" value="yes"' + req + "> " + esc(q.label) + "</label>" + help + err + "</div>";
+    }
+    if (q.type === "select") {
+      if (!q.required && opts.length <= 4) {
+        return '<fieldset class="fieldset field--full"><legend>' + esc(q.label) + "</legend>" + help + '<div class="radio-row">' +
+          opts.map((o) => '<label><input type="radio" name="' + name + '" value="' + esc(o) + '"> ' + esc(o) + "</label>").join("") +
+          "</div>" + err + "</fieldset>";
+      }
+      return '<div class="field field--full"><label for="' + id + '">' + esc(q.label) + optional + "</label>" + help +
+        '<select id="' + id + '" name="' + name + '"' + req + '><option value="">' + (q.required ? "Choose one" : "Not sure yet") + "</option>" +
+        opts.map((o) => '<option value="' + esc(o) + '">' + esc(o) + "</option>").join("") + "</select>" + err + "</div>";
+    }
+    if (q.type === "long_text") {
+      return '<div class="field field--full"><label for="' + id + '">' + esc(q.label) + optional + "</label>" + help +
+        '<textarea id="' + id + '" name="' + name + '" rows="5"' + max + req + "></textarea>" + err + "</div>";
+    }
+    const type = q.type === "email" ? "email" : q.type === "phone" ? "tel" : "text";
+    const inputmode = q.type === "email" ? ' inputmode="email"' : q.type === "phone" ? ' inputmode="tel"' : "";
+    const autocomplete = AUTOCOMPLETE[q.key] ? ' autocomplete="' + AUTOCOMPLETE[q.key] + '"' : "";
+    return '<div class="field' + (HALF_WIDTH[q.type] ? "" : " field--full") + '"><label for="' + id + '">' + esc(q.label) + optional + "</label>" + help +
+      '<input id="' + id + '" name="' + name + '" type="' + type + '"' + inputmode + autocomplete + max + req + ">" + err + "</div>";
+  }
+
+  async function renderQuestions(form) {
+    let questions = null;
+    try {
+      const res = await fetch(FORM_SCHEMA_ENDPOINT, { headers: { Accept: "application/json" }, credentials: "omit" });
+      if (!res.ok) return;
+      const data = await res.json();
+      questions = data && Array.isArray(data.questions) ? data.questions : null;
+    } catch (e) {
+      return; // keep the static form
+    }
+    if (!questions || questions.length === 0) return;
+    const submit = form.querySelector('button[type="submit"]');
+    const tail = submit ? submit.closest(".field--full") || submit.parentElement : null;
+    const honeypot = form.querySelector(".honeypot");
+    Array.from(form.children).forEach((child) => {
+      if (child !== honeypot && child !== tail) child.remove();
+    });
+    form.insertAdjacentHTML("afterbegin", questions.map(questionHtml).join(""));
+    form.classList.add("is-live");
+  }
+
   const form = document.getElementById("lead-form");
   if (form) {
+    renderQuestions(form);
     const status = form.querySelector(".form-status");
     const submitBtn = form.querySelector('button[type="submit"]');
     let pending = false;
-    let requestId;
-    let previousData;
 
     const setError = (input, msg) => {
       const field = input.closest(".field");
@@ -257,13 +334,9 @@
       const bad = validate();
       if (bad) { bad.focus(); return; }
 
+      // The honeypot travels with the rest; the API discards a filled one quietly.
       const data = Object.fromEntries(new FormData(form).entries());
-      const fingerprint = JSON.stringify(data);
-      if (fingerprint !== previousData || !requestId) {
-        requestId = crypto.randomUUID();
-        previousData = fingerprint;
-      }
-      const payload = { ...data, requestId };
+      const payload = { ...data, page: location.pathname };
 
       pending = true;
       const controls = [...form.querySelectorAll("input, select, textarea, button")];
@@ -272,20 +345,19 @@
       try {
         const r = await sendLead(payload);
         if (!r.ok) {
-          if (r.status === 409) requestId = undefined;
-          throw new Error(r.status === 429 ? "rate-limit" : r.status === 400 ? "validation" : "bad response");
+          const userMessage = r.status === 429
+            ? "Too many attempts from this connection. Please wait a few minutes and try again."
+            : r.status === 400
+              ? (r.message || "Please check your entries and try again.")
+              : "";
+          throw Object.assign(new Error("bad response"), { userMessage: userMessage });
         }
         form.reset();
-        requestId = undefined;
-        status.textContent = "Thank you - your consultation request has been received.";
+        status.textContent = "Thank you - your consultation request has been received. We'll follow up within one business day.";
         status.classList.add("is-success");
       } catch (err) {
-        const reason = err.message === "rate-limit"
-          ? "Too many attempts. Please wait 15 minutes before trying again."
-          : err.message === "validation"
-            ? "Please check your entries, including your phone number, and try again."
-            : "We could not confirm receipt of your request. You can try again.";
-        status.textContent = reason + " Your entries have been kept. You can also call (970) 893-2145 or email info@durablelifeskills.com.";
+        const reason = (err && err.userMessage) || "We could not confirm receipt of your request. You can try again.";
+        status.textContent = reason + " Your entries have been kept. " + CONTACT_FALLBACK;
         status.classList.add("is-error");
       } finally {
         pending = false;

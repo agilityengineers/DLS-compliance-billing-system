@@ -17,6 +17,7 @@ import {
   usersTable,
   type Db,
 } from "@workspace/db";
+import { seedLeadDefaults } from "@workspace/db/seed";
 import { FEATURE_CATALOG, canManageRole, isFeatureKey, isOrgRole, type FeatureKey } from "@workspace/features";
 import { recordAudit } from "../lib/audit";
 import type { AppConfig } from "../lib/config";
@@ -111,7 +112,7 @@ const SupportRequestBody = z.object({
 });
 
 /** Audit actions are namespaced "<category>.<event>"; these are the categories. */
-export const AUDIT_CATEGORIES = ["auth", "platform", "org", "user", "session", "support"] as const;
+export const AUDIT_CATEGORIES = ["auth", "platform", "org", "user", "session", "support", "lead", "lead_form", "lead_funnel", "client"] as const;
 
 const AuditQuery = z.object({
   limit: z.coerce.number().int().min(1).max(500).catch(100),
@@ -322,6 +323,8 @@ export function platformRouter(db: Db, config: AppConfig, deps: { mailer: Mailer
     const [existing] = await db.select().from(organizationsTable).where(eq(organizationsTable.slug, slug)).limit(1);
     if (existing) throw conflict("SLUG_TAKEN", "An organization with that slug already exists.");
     const [org] = await db.insert(organizationsTable).values({ name: body.name, slug }).returning();
+    // A new organization starts with the default lead funnel and public form.
+    await seedLeadDefaults((text, params) => db.$client.query(text, params as unknown[]), org!.id);
     await recordAudit(db, {
       orgId: org!.id,
       actorUserId: auth.realUser.id,

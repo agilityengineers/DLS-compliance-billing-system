@@ -71,4 +71,15 @@ describe("provider navigation", () => {
     const scheduler = navForRole("Scheduler", new Set(["clients.core"]), new Set(["clients.core", "billing.claims"]));
     expect(scheduler.flatMap((s) => s.items).map((i) => i.href)).toEqual(["/admin", "/admin/clients", "/admin/billing"]);
   });
+
+  it("shows the Leads inbox only when the feature is usable by the viewer", () => {
+    const admin = navForRole("Admin", new Set(["clients.core", "leads.inbox"]));
+    expect(admin.flatMap((s) => s.items).map((i) => i.href)).toEqual(["/admin", "/admin/clients", "/admin/leads", "/admin/settings"]);
+    // A Scheduler without the grant does not see it, even though the organization has it on.
+    const ungranted = navForRole("Scheduler", new Set(["clients.core"]), new Set(["clients.core", "leads.inbox"]));
+    expect(ungranted.flatMap((s) => s.items).map((i) => i.href)).toEqual(["/admin", "/admin/clients"]);
+    const granted = navForRole("Scheduler", new Set(["clients.core", "leads.inbox"]));
+    expect(granted.flatMap((s) => s.items).map((i) => i.href)).toEqual(["/admin", "/admin/clients", "/admin/leads"]);
+    expect(activeHref(ADMIN_NAV, "/admin/leads/0f0e0d0c")).toBe("/admin/leads");
+  });
 });

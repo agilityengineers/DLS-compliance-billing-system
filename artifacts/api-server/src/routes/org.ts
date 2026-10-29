@@ -6,14 +6,14 @@ import { auditLogTable, type Db } from "@workspace/db";
 import { isFeatureKey, validateOrgChange, type FeatureKey } from "@workspace/features";
 import { recordAudit } from "../lib/audit";
 import type { AppConfig } from "../lib/config";
-import { HttpError, badRequest, notFound } from "../lib/errors";
+import { HttpError, notFound } from "../lib/errors";
 import { loadFeatureStates, setOrgFeature } from "../lib/features";
 import { sendInvite } from "../lib/invites";
 import type { Mailer } from "../lib/mail";
 import { clampWindowHours } from "../lib/support-access";
 import { findWindow, grantWindow, listWindowsForOrg, revokeWindow } from "../lib/support-windows";
 import { createUserAccount, findUserById, listOrgUsers, resetUserPassword, updateUserAccount } from "../lib/users";
-import { actorOf, requireAuth, requireAuthContext, requireRole } from "../middlewares/auth";
+import { actorOf, requireAuth, requireAuthContext, requireOrgId, requireRole } from "../middlewares/auth";
 
 const FeaturePatch = z.object({
   enabled: z.boolean().optional(),
@@ -62,11 +62,7 @@ export function orgRouter(db: Db, config: AppConfig, deps: { mailer: Mailer }): 
 
   router.use("/org", requireRole("Admin"));
 
-  function orgIdOf(res: Parameters<typeof requireAuthContext>[0]): string {
-    const auth = requireAuthContext(res);
-    if (!auth.effectiveUser.orgId) throw badRequest("This account is not attached to an organization.");
-    return auth.effectiveUser.orgId;
-  }
+  const orgIdOf = requireOrgId;
 
   router.get("/org", (_req, res) => {
     const auth = requireAuthContext(res);
