@@ -1,0 +1,16 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "GQRwTo_3xJfvBEG6VumbX"
+uri = "file://docs/review/2026-10-29-production-readiness.html"
+type = "html"
+title = "DLS production-readiness audit"
+description = "Verification results, prioritized blockers, security findings, limitations and release checklist."
+logical_id = "64e955c5-0886-404b-b15f-ab87404f6634"
+content_hash = "sha256:1abd2429eb9c40da64048869f1960d7b0f373ac69f2f3a6f3ac5040142361617"
+size = 18851
+mtime_ms = 1793303035809
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:f4a3cb32-2edb-4f5c-9fd9-fde7808ee945/64e955c5-0886-404b-b15f-ab87404f6634/099c3618-6320-40ec-80a1-a263bb586d04"
+storage_version_token = "1793303036486053"
+content_type = "text/html"
