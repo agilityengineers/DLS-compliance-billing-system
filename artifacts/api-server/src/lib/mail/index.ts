@@ -3,8 +3,12 @@
 // Every message lands in `mail_outbox` whether or not a provider is
 // configured, which is what makes "no mail key" a visible state rather than a
 // silent one: without SENDGRID_API_KEY the system still issues invitations and
-// reset links, records exactly what it would have sent, and writes the link to
-// the log for the operator. Nothing is lost, nothing is pretended.
+// reset links and records exactly what it would have sent. Nothing is
+// pretended. What the log gets is the envelope — kind, recipient, subject —
+// and never, in production, the text: the text of an invitation or a reset
+// is the single-use link itself, and a log is read by more people than the
+// one it was meant for. The on-screen one-time password remains the hand-over
+// path until a provider is configured.
 import { eq } from "drizzle-orm";
 import { mailOutboxTable, type Db, type MailStatus } from "@workspace/db";
 import type { AppConfig } from "../config";
@@ -37,15 +41,35 @@ export interface MailTransport {
   deliver(message: MailMessage, envelope: { to: string; from: string; fromName: string; replyTo: string | null }): Promise<{ providerMessageId: string | null }>;
 }
 
-/** No provider configured: record the message and write it to the log. */
+export interface LogTransportOptions {
+  /**
+   * Also write the message text to the log. Development only: the text of an
+   * invitation or a reset is the link itself. `createMailer` passes
+   * `config.mail.logBodies`, which is always false in production.
+   */
+  logBodies: boolean;
+  /** Where the line goes; the tests capture it, everything else uses the app logger. */
+  log?: (fields: Record<string, unknown>, message: string) => void;
+}
+
+/** No provider configured: record the message and note the envelope in the log. */
 export class LogTransport implements MailTransport {
   readonly name = "log";
+  private readonly logBodies: boolean;
+  private readonly log: (fields: Record<string, unknown>, message: string) => void;
+
+  constructor(options: LogTransportOptions = { logBodies: false }) {
+    this.logBodies = options.logBodies;
+    this.log = options.log ?? ((fields, message) => logger.info(fields, message));
+  }
 
   async deliver(message: MailMessage, envelope: { to: string; from: string }): Promise<{ providerMessageId: string | null }> {
-    logger.info(
-      { kind: message.kind, to: envelope.to, from: envelope.from, subject: message.subject, body: message.text },
-      "Mail not configured — message logged instead of sent"
-    );
+    const envelopeFields = { kind: message.kind, to: envelope.to, from: envelope.from, subject: message.subject };
+    if (this.logBodies) {
+      this.log({ ...envelopeFields, body: message.text }, "Mail not configured — message written to the log instead of sent (development only)");
+    } else {
+      this.log(envelopeFields, "Mail not configured — message recorded in the outbox, not sent; set SENDGRID_API_KEY and APP_BASE_URL to deliver it");
+    }
     return { providerMessageId: null };
   }
 }
@@ -207,6 +231,6 @@ export function createMailer(db: Db, config: AppConfig): Mailer {
   const transport =
     config.mail.mode === "sendgrid" && config.mail.apiKey
       ? new SendGridTransport(config.mail.apiKey, config.mail.sandbox)
-      : new LogTransport();
+      : new LogTransport({ logBodies: config.mail.logBodies });
   return new Mailer(db, config, transport);
 }

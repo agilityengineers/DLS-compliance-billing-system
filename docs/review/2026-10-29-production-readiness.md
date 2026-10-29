@@ -165,3 +165,7 @@ No legal/HIPAA certification is implied. Validate vendor agreements, authorized 
 6. Confirm backups/restore, reliable jobs, monitoring, retention and owner handover; then reassess go/no-go.
 
 **Bottom line:** source changes are intact and automated tests are green. The running deployment and full production workflows are not yet ready.
+
+## Remediation status (added 2026-10-29, same day)
+
+H1, H2 and H5 were addressed on branch `claude/hopeful-pasteur-78y1ky`; the details, the operator steps still required in the deployment, the MFA/recovery policy awaiting the owner's decision, and the dependency triage table are in [2026-10-29-h1-h2-h5-remediation.md](./2026-10-29-h1-h2-h5-remediation.md). In short: the committed default bootstrap password is gone and the setup password is single-use and enforced server-side; the mail fallback logs envelopes only and a delivery test is available from System status; the active lockfile's audit moved from 12 critical / 30 high / 18 moderate / 5 low to 0 / 0 / 1 / 1, with the two remaining findings triaged as build-time only. B1–B3, H3 and H4 are unchanged by that work. The `.html` copy of this audit is a snapshot taken before remediation.

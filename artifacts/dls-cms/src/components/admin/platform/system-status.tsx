@@ -194,17 +194,67 @@ export function SystemStatusPanel() {
           <Row label="PHI in email">
             {data.mail.baaSignedAllVendors ? "allowed (BAA recorded)" : "blocked until a BAA is recorded"}
           </Row>
+          {data.mail.logBodies && (
+            <Row label="Message text in log"><Badge variant="warning">yes (development only)</Badge></Row>
+          )}
+          <Row label="Delivery check">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={running === "mail.test"}
+              onClick={async () => {
+                setRunning("mail.test");
+                setNotice(null);
+                setError(null);
+                try {
+                  const r = await platformApi.mailTest();
+                  setNotice(
+                    r.status === "sent"
+                      ? `Test message accepted by ${r.transport} for ${r.to}. Check that it arrives and that its button opens ${r.linkBase ?? "the portal"}.`
+                      : r.status === "logged"
+                        ? `No provider is configured: the test message to ${r.to} was recorded in the outbox, not sent.`
+                        : `Test message to ${r.to}: ${r.status}${r.error ? ` — ${r.error}` : ""}.`
+                  );
+                  await load();
+                } catch (e) {
+                  setError(errorMessage(e));
+                } finally {
+                  setRunning(null);
+                }
+              }}
+            >
+              {running === "mail.test" ? "Sending…" : "Send me a test message"}
+            </Button>
+          </Row>
         </Card>
 
         <Card title="Provider account">
           <Row label="Email">{data.provider.superAdminEmail}</Row>
           <Row label="Name">{data.provider.superAdminName}</Row>
-          <Row label="Bootstrap password">
-            {data.provider.passwordFromEnvironment ? "from SUPER_ADMIN_PASSWORD" : "built-in bootstrap hash"}
+          <Row label="Account">
+            {!data.provider.accountExists ? (
+              <span className="text-destructive">missing — set SUPER_ADMIN_PASSWORD and restart</span>
+            ) : data.provider.passwordPendingChange ? (
+              <Badge variant="warning">setup password not yet replaced</Badge>
+            ) : (
+              "password chosen by its owner"
+            )}
+          </Row>
+          <Row label="Setup password in environment">
+            {!data.provider.passwordFromEnvironment
+              ? "not set"
+              : data.provider.accountExists
+                ? <span className="text-destructive">still set — remove it</span>
+                : "set; used at the next boot"}
           </Row>
           <Row label="Force reset on boot">
             {data.provider.forceResetEnabled ? <span className="text-destructive">enabled</span> : "off"}
           </Row>
+          {data.provider.legacyPasswordAccounts > 0 && (
+            <Row label="Retired default password">
+              <Badge variant="destructive">{data.provider.legacyPasswordAccounts} account(s) must change it</Badge>
+            </Row>
+          )}
           <Row label="Default organization">
             {data.provider.defaultOrgName} <code className="rounded bg-muted px-1 text-xs">{data.provider.defaultOrgSlug}</code>
           </Row>

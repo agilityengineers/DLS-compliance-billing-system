@@ -305,13 +305,17 @@ export interface SystemStatus {
     sandbox: boolean;
     redirectAllTo: string | null;
     baaSignedAllVendors: boolean;
+    logBodies: boolean;
   };
   scheduler: { enabled: boolean; intervalMinutes: number; externalCronConfigured: boolean };
   provider: {
     superAdminEmail: string;
     superAdminName: string;
+    accountExists: boolean;
+    passwordPendingChange: boolean;
     passwordFromEnvironment: boolean;
     forceResetEnabled: boolean;
+    legacyPasswordAccounts: number;
     defaultOrgName: string;
     defaultOrgSlug: string;
     platformAccounts: number;
@@ -401,6 +405,17 @@ export const platformApi = {
     ),
   mail: (limit = 50) =>
     apiFetch<{ messages: MailOutboxRow[]; mode: string; fromDomain: string }>(`/platform/mail?limit=${limit}`),
+  /** Sends a test message to the signed-in provider's own address and reports what the outbox recorded. */
+  mailTest: () =>
+    apiFetch<{
+      status: string;
+      id: string | null;
+      error: string | null;
+      to: string;
+      transport: string;
+      mode: "sendgrid" | "log";
+      linkBase: string | null;
+    }>("/platform/mail/test", { method: "POST" }),
 };
 
 // ── the signed-in person's own second factor ──────────────────────────────
