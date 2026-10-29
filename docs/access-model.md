@@ -160,11 +160,20 @@ set. It exists so that a lost or compromised primary password is a sign-in
 rather than a lockout, and no screen can create, change or recover it.
 
 On first boot the API creates the platform owner from `SUPER_ADMIN_EMAIL`
-(default `emailme@clarencewilliams.com`) with the agreed bootstrap password
-(committed only as a hash). Set `SUPER_ADMIN_PASSWORD` in the deployment's
-secret store to bootstrap with a different one; `SUPER_ADMIN_FORCE_RESET=true`
-rotates an existing account to it once. Change the password from the app after
-the first sign-in.
+(default `emailme@clarencewilliams.com`) **only** when `SUPER_ADMIN_PASSWORD`
+is set in the deployment's secret store to a strong value; there is no
+built-in default. That value is single-use: the account must choose its own
+password at its first sign-in, and until it does the API answers
+`PASSWORD_CHANGE_REQUIRED` to everything but `/auth/me`,
+`/auth/change-password` and `/auth/logout` (the same rule applies to every
+temporary password an administrator hands out). Without a usable setup
+password nothing is created, `GET /api/readyz` reports `setup_required`, and
+System status says what to set. `SUPER_ADMIN_FORCE_RESET=true` rotates an
+existing account to `SUPER_ADMIN_PASSWORD` for one restart — audited, every
+session ended, the new password single-use again. An account still holding
+the retired default that earlier builds shipped is flagged on boot to choose a
+new password; its password is never changed silently. See
+[the H1/H2/H5 remediation note](./review/2026-10-29-h1-h2-h5-remediation.md).
 
 ## Support windows (optional; `REQUIRE_SUPPORT_WINDOW`)
 

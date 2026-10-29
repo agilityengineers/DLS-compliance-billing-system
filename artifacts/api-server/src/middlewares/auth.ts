@@ -201,3 +201,40 @@ export function requireFeature(key: FeatureKey): RequestHandler {
     next();
   };
 }
+
+// ── temporary and setup passwords ───────────────────────────────────────────
+//
+// An account that signed in with a temporary password (handed over by an
+// administrator) or the provider account's one-time setup password can do
+// exactly three things until it chooses its own: see who it is, change the
+// password, and sign out. Everything else answers 403 PASSWORD_CHANGE_REQUIRED.
+// The web app already sends such a sign-in straight to the change-password
+// screen; this is the rule behind that redirect, so an API client cannot skip
+// it. Routes that never needed a session — health, the public form, the cron
+// endpoint, sign-in and link redemption — are untouched.
+const PASSWORD_CHANGE_ALLOWED = new Set(["/api/auth/me", "/api/auth/actor", "/api/auth/logout", "/api/auth/change-password"]);
+const SESSIONLESS_PREFIXES = [
+  "/api/healthz",
+  "/api/readyz",
+  "/api/public/",
+  "/api/jobs/",
+  "/api/auth/login",
+  "/api/auth/forgot-password",
+  "/api/auth/token/",
+  "/api/auth/accept-invite",
+  "/api/auth/reset-password",
+];
+
+export const passwordChangeGate: RequestHandler = (req, res, next) => {
+  const auth = getAuth(res);
+  if (!auth || !auth.realUser.mustChangePassword) return next();
+  const path = req.path;
+  if (PASSWORD_CHANGE_ALLOWED.has(path) || SESSIONLESS_PREFIXES.some((p) => path === p || path.startsWith(p))) return next();
+  return next(
+    new HttpError(
+      403,
+      "PASSWORD_CHANGE_REQUIRED",
+      "Choose a new password before continuing. The one you signed in with was temporary."
+    )
+  );
+};

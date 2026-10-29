@@ -22,6 +22,14 @@ export interface MailConfig {
   redirectAllTo: string | undefined;
   /** Opens templates marked as carrying PHI. Nothing shipped is marked so. */
   baaSignedAllVendors: boolean;
+  /**
+   * With no provider configured, also write each message's text to the log.
+   * The text of an invitation or a reset IS the single-use link, so this is
+   * never true in production: there the outbox records that a message was
+   * composed, and the on-screen one-time password is the hand-over path.
+   * Defaults to on in development only (MAIL_LOG_BODIES overrides).
+   */
+  logBodies: boolean;
 }
 
 export interface AppConfig {
@@ -48,9 +56,18 @@ export interface AppConfig {
   /** The platform owner account created on first boot. */
   superAdminEmail: string;
   superAdminName: string;
-  /** Plain-text bootstrap password; when unset the committed bootstrap hash is used. */
+  /**
+   * One-time setup password for the provider account. Required for the first
+   * boot — there is no built-in default — and single-use: the account must
+   * replace it at its first sign-in. Remove it from the environment once the
+   * account exists; it is never read again unless superAdminForceReset is on.
+   */
   superAdminPassword: string | undefined;
-  /** Rotate the super admin password to superAdminPassword on boot, even if the account exists. */
+  /**
+   * Rotate the existing provider account's password to superAdminPassword on
+   * boot: an explicit, audited recovery that ends every session and makes the
+   * new password single-use as well. Unset it straight after the restart.
+   */
   superAdminForceReset: boolean;
   /**
    * The break-glass provider account. A second, rarely used Super Admin whose
@@ -191,10 +208,27 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       sandbox: env.SENDGRID_SANDBOX === "true",
       redirectAllTo: (env.MAIL_REDIRECT_ALL_TO ?? "").trim().toLowerCase() || undefined,
       baaSignedAllVendors: env.BAA_SIGNED_ALL_VENDORS === "true",
+      logBodies: production ? false : bool(env.MAIL_LOG_BODIES, env.NODE_ENV === "development"),
     },
 
     schedulerEnabled: bool(env.SCHEDULER_ENABLED, true),
     schedulerIntervalMs: int(env.SCHEDULER_INTERVAL_MINUTES, 15) * 60_000,
     cronSecret: env.CRON_SECRET || undefined,
   };
+}
+
+/**
+ * Combinations the server refuses to start with. Each entry is a complete
+ * sentence for the log; the caller decides that the list being non-empty is
+ * fatal. Kept deliberately short — a warning on System status is the right
+ * place for everything that is merely unwise.
+ */
+export function configProblems(config: AppConfig): string[] {
+  const problems: string[] = [];
+  if (config.mail.mode === "sendgrid" && !config.appBaseUrl) {
+    problems.push(
+      "SENDGRID_API_KEY is set but APP_BASE_URL is not: every link in every email would be a bare path that opens nothing. Set APP_BASE_URL to the portal's public address (https://…) or remove the key."
+    );
+  }
+  return problems;
 }

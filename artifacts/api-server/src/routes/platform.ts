@@ -26,7 +26,7 @@ import { loadFeatureStates, loadPlatformRows, setPlatformFeature } from "../lib/
 import { sendInvite } from "../lib/invites";
 import { JOBS, findJob, jobStatuses, runJob } from "../lib/jobs";
 import { recentFailuresByAccount } from "../lib/login-attempts";
-import { supportWindowRequestedEmail, type Mailer } from "../lib/mail";
+import { mailTestEmail, supportWindowRequestedEmail, type Mailer } from "../lib/mail";
 import { CONFIG_CHANGE_ACTIONS, buildOverview } from "../lib/platform-overview";
 import { findSessionById, listActiveSessions, revokeAllSessions, revokeSession } from "../lib/session";
 import { listAllWindows } from "../lib/support-windows";
@@ -772,11 +772,13 @@ export function platformRouter(db: Db, config: AppConfig, deps: { mailer: Mailer
     const byKey = new Map(platformRows.map((r) => [r.key, r.enabled]));
     const featuresAvailable = FEATURE_CATALOG.filter((f) => byKey.get(f.key) ?? f.launchDefault).length;
     const providerAccounts = users.filter((u) => u.orgId === null);
+    const owner = users.find((u) => u.email === config.superAdminEmail);
     res.json(
       await collectSystemStatus(db, config, {
         platformAccounts: providerAccounts.length,
         platformAccountsWithMfa: providerAccounts.filter((u) => u.mfaEnabled).length,
         featuresAvailable,
+        providerAccount: { exists: owner !== undefined, mustChangePassword: owner?.mustChangePassword ?? false },
       })
     );
   });
@@ -815,6 +817,43 @@ export function platformRouter(db: Db, config: AppConfig, deps: { mailer: Mailer
       messages: rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() })),
       mode: config.mail.mode,
       fromDomain: config.mail.fromDomain,
+    });
+  });
+
+  /**
+   * Prove delivery without exposing anyone: the message goes to the signed-in
+   * provider's OWN address and names no person, organization or inquiry. The
+   * result is what the outbox records — `sent`, `logged` (no provider yet),
+   * `failed` with the provider's reason, or `deduped`.
+   */
+  router.post("/platform/mail/test", canSystem, async (req, res) => {
+    const auth = requireAuthContext(res);
+    const result = await deps.mailer.send(
+      mailTestEmail({
+        fullName: auth.realUser.fullName,
+        sentAt: new Date(),
+        link: deps.mailer.link("/admin/platform/system"),
+        environment: process.env.NODE_ENV ?? "development",
+      }),
+      { to: auth.realUser.email, userId: auth.realUser.id, orgId: null }
+    );
+    await recordAudit(db, {
+      orgId: null,
+      actorUserId: auth.realUser.id,
+      action: "platform.mail_test",
+      targetType: "mail",
+      targetId: result.id,
+      details: { status: result.status, transport: deps.mailer.transportName, error: result.error ?? null },
+      ip: req.ip ?? null,
+    });
+    res.json({
+      status: result.status,
+      id: result.id,
+      error: result.error ?? null,
+      to: auth.realUser.email,
+      transport: deps.mailer.transportName,
+      mode: config.mail.mode,
+      linkBase: config.appBaseUrl ?? null,
     });
   });
 

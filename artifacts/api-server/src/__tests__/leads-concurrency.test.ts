@@ -43,6 +43,7 @@ describe.skipIf(!TEST_URL)("leads under concurrency", () => {
   let server: ReturnType<ReturnType<typeof createApp>["listen"]>;
   const env = {
     NODE_ENV: "test",
+    SUPER_ADMIN_PASSWORD: "Setup-Owner-2026",
     PUBLIC_FORM_ORIGINS: SITE,
     LEAD_MAX_PER_IP: "3",
     LEAD_WINDOW_MINUTES: "10",
@@ -154,9 +155,18 @@ describe.skipIf(!TEST_URL)("leads under concurrency", () => {
     const address = server.address();
     base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
 
-    const superLogin = await api("POST", "/api/auth/login", { email: config.superAdminEmail, password: "Success2026" });
+    // The setup password is single-use: nothing opens until it is replaced.
+    const superLogin = await api("POST", "/api/auth/login", { email: config.superAdminEmail, password: "Setup-Owner-2026" });
     expect(superLogin.status).toBe(200);
-    superCookie = superLogin.cookie!;
+    expect(superLogin.body.mustChangePassword).toBe(true);
+    const rotated = await api(
+      "POST",
+      "/api/auth/change-password",
+      { currentPassword: "Setup-Owner-2026", newPassword: "Owner-Concurrency-2026" },
+      superLogin.cookie
+    );
+    expect(rotated.status).toBe(200);
+    superCookie = rotated.cookie!;
     const orgs = await api("GET", "/api/platform/organizations", undefined, superCookie);
     orgId = orgs.body.organizations[0].id;
     adminCookie = await createAndSignIn("cc.admin@durablelifeskills.com", "Cass Admin", "Admin", "Leads-2026-ok!");

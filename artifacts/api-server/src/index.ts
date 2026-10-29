@@ -2,7 +2,7 @@ import { getDb, runMigrations } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import { createApp } from "./app";
 import { bootstrapPlatform } from "./lib/bootstrap";
-import { loadConfig } from "./lib/config";
+import { configProblems, loadConfig } from "./lib/config";
 import { Scheduler } from "./lib/jobs";
 import { logger } from "./lib/logger";
 import { createMailer } from "./lib/mail";
@@ -42,6 +42,11 @@ async function main(): Promise<void> {
 
   phase = "configuration";
   const config = loadConfig();
+  const problems = configProblems(config);
+  if (problems.length > 0) {
+    for (const problem of problems) logger.fatal({ phase }, problem);
+    throw new Error("Refusing to start with the configuration problems logged above.");
+  }
   const db = getDb();
 
   phase = "database_connection";
@@ -65,14 +70,24 @@ async function main(): Promise<void> {
       platformRowsAdded: boot.platformRowsAdded,
       orgCreated: boot.orgCreated,
       superAdminCreated: boot.superAdminCreated,
+      superAdminSetupRequired: boot.superAdminSetupRequired,
+      legacyPasswordAccountsFlagged: boot.legacyPasswordAccountsFlagged,
       breakGlassCreated: boot.breakGlassCreated,
     },
     "Platform bootstrap complete"
   );
+  if (boot.superAdminSetupRequired) {
+    logger.error({ problem: boot.superAdminSetupProblem }, "Platform has no provider account; /api/readyz reports setup_required until one is created");
+  }
 
   const mailer = createMailer(db, config);
   if (config.mail.mode === "log") {
-    logger.warn("No mail provider configured — invitations and reset links will be recorded and logged, not sent");
+    logger.warn(
+      { logBodies: config.mail.logBodies },
+      config.mail.logBodies
+        ? "No mail provider configured — messages are recorded in the outbox and their text written to the log (development only), not sent"
+        : "No mail provider configured — messages are recorded in the outbox, not sent; links are not written to the log. Hand over the on-screen one-time password until SENDGRID_API_KEY and APP_BASE_URL are set"
+    );
   }
   // Maintenance work (expiry reminders, pruning, chain verification) needs
   // something to drive it. See lib/jobs.ts for why an external cron can drive

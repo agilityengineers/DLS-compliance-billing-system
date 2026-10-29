@@ -6,6 +6,7 @@
 import { and, count, desc, eq, sql } from "drizzle-orm";
 import { jobRunsTable, migrationStatus, requirementsTable, usersTable, type Db, type MigrationStatus } from "@workspace/db";
 import { FEATURE_CATALOG } from "@workspace/features";
+import { countLegacyPasswordAccounts } from "./bootstrap";
 import type { AppConfig } from "./config";
 
 const STARTED_AT = new Date();
@@ -62,6 +63,8 @@ export interface SystemStatusPayload {
     sandbox: boolean;
     redirectAllTo: string | null;
     baaSignedAllVendors: boolean;
+    /** Message text goes to the log in log mode. Never true in production. */
+    logBodies: boolean;
   };
   scheduler: {
     enabled: boolean;
@@ -71,14 +74,26 @@ export interface SystemStatusPayload {
   provider: {
     superAdminEmail: string;
     superAdminName: string;
+    /** Does the configured provider account exist yet? False means setup is incomplete. */
+    accountExists: boolean;
+    /** It exists but has not yet replaced its one-time setup password. */
+    passwordPendingChange: boolean;
+    /** SUPER_ADMIN_PASSWORD is present in the environment (only read at first boot or with a force reset). */
     passwordFromEnvironment: boolean;
     forceResetEnabled: boolean;
+    /** Accounts still holding the password that earlier builds committed as a default. */
+    legacyPasswordAccounts: number;
     defaultOrgName: string;
     defaultOrgSlug: string;
     platformAccounts: number;
   };
   catalog: { features: number; featuresAvailable: number; requirements: number | null };
   warnings: SystemWarning[];
+}
+
+export interface ProviderAccountState {
+  exists: boolean;
+  mustChangePassword: boolean;
 }
 
 export interface WarningInput {
@@ -88,6 +103,8 @@ export interface WarningInput {
   databaseOk: boolean;
   platformAccounts: number;
   platformAccountsWithMfa: number;
+  providerAccount: ProviderAccountState;
+  legacyPasswordAccounts: number;
   auditChainOk: boolean | null;
 }
 
@@ -106,18 +123,35 @@ export function systemWarnings(input: WarningInput): SystemWarning[] {
   if (production && !config.cookieSecure) {
     warnings.push({ severity: "warning", message: "The session cookie is not marked Secure in production; it could travel over plain HTTP." });
   }
+  if (!input.providerAccount.exists) {
+    warnings.push({
+      severity: "warning",
+      message: `The provider account ${config.superAdminEmail} does not exist. Set SUPER_ADMIN_PASSWORD to a strong one-time setup password and restart the API: the account is created at boot and must be replaced at its first sign-in. There is no built-in default.`,
+    });
+  } else if (input.providerAccount.mustChangePassword) {
+    warnings.push({
+      severity: "info",
+      message: `The provider account ${config.superAdminEmail} is still on its one-time setup password. Its next sign-in cannot proceed until a new password is chosen.`,
+    });
+  }
+  if (input.legacyPasswordAccounts > 0) {
+    warnings.push({
+      severity: "warning",
+      message: `${input.legacyPasswordAccounts} account(s) still hold the retired bootstrap password that earlier builds shipped in the repository. Each is flagged to choose a new password at its next sign-in; until that happens treat the account as exposed and end its sessions if in doubt.`,
+    });
+  }
   if (config.superAdminForceReset) {
     warnings.push({
       severity: "warning",
       message:
-        "SUPER_ADMIN_FORCE_RESET is still true. Every restart resets the provider password to SUPER_ADMIN_PASSWORD; unset it now that the rotation is done.",
+        "SUPER_ADMIN_FORCE_RESET is still true. Every restart resets the provider password to SUPER_ADMIN_PASSWORD and ends its sessions; unset it now that the rotation is done.",
     });
   }
-  if (config.superAdminPassword) {
+  if (config.superAdminPassword && input.providerAccount.exists) {
     warnings.push({
-      severity: "info",
+      severity: production ? "warning" : "info",
       message:
-        "SUPER_ADMIN_PASSWORD is set in the environment. It is only read at first boot or with SUPER_ADMIN_FORCE_RESET; consider removing it once the account exists.",
+        "SUPER_ADMIN_PASSWORD is still set in the environment. It was a one-time setup value and is never read again unless SUPER_ADMIN_FORCE_RESET is on; remove it from the secret store.",
     });
   }
   if (config.corsOrigins.length > 0) {
@@ -165,9 +199,16 @@ export function systemWarnings(input: WarningInput): SystemWarning[] {
   }
   if (config.mail.mode === "log") {
     warnings.push({
-      severity: "info",
-      message:
-        "No mail provider is configured. Invitations and password-reset links are recorded and written to the log instead of being sent; hand them over in person until SENDGRID_API_KEY is set.",
+      severity: production ? "warning" : "info",
+      message: config.mail.logBodies
+        ? "No mail provider is configured. Messages are recorded in the outbox and their text — including invitation and reset links — is written to the log (development only, MAIL_LOG_BODIES)."
+        : "No mail provider is configured. Messages are recorded in the outbox and not sent, and links are not written to the log. Hand over the on-screen one-time password in person until SENDGRID_API_KEY and APP_BASE_URL are set; a 'forgot password' request cannot be fulfilled in this state.",
+    });
+  }
+  if (config.mail.mode === "sendgrid" && !config.appBaseUrl) {
+    warnings.push({
+      severity: "warning",
+      message: "SENDGRID_API_KEY is set but APP_BASE_URL is not, so links in email are bare paths. Set APP_BASE_URL to the portal's public address.",
     });
   }
   if (config.mail.redirectAllTo) {
@@ -198,7 +239,12 @@ export function systemWarnings(input: WarningInput): SystemWarning[] {
 export async function collectSystemStatus(
   db: Db,
   config: AppConfig,
-  extra: { platformAccounts: number; platformAccountsWithMfa: number; featuresAvailable: number }
+  extra: {
+    platformAccounts: number;
+    platformAccountsWithMfa: number;
+    featuresAvailable: number;
+    providerAccount: ProviderAccountState;
+  }
 ): Promise<SystemStatusPayload> {
   const environment = process.env.NODE_ENV ?? "development";
 
@@ -208,6 +254,7 @@ export async function collectSystemStatus(
   let error: string | null = null;
   let migrations: MigrationStatus | null = null;
   let requirements: number | null = null;
+  let legacyPasswordAccounts = 0;
   let auditChain: SystemStatusPayload["security"]["auditChain"] = {
     lastVerifiedAt: null,
     ok: null,
@@ -223,6 +270,7 @@ export async function collectSystemStatus(
     migrations = await migrationStatus(db);
     const [row] = await db.select({ n: count() }).from(requirementsTable);
     requirements = row?.n ?? 0;
+    legacyPasswordAccounts = await countLegacyPasswordAccounts(db);
 
     // The chain is verified by a scheduled job rather than on every page load:
     // walking a long log is not something a screen should do.
@@ -242,8 +290,6 @@ export async function collectSystemStatus(
   } catch (e) {
     error = e instanceof Error ? e.message : String(e);
   }
-
-  void usersTable;
 
   return {
     service: {
@@ -285,6 +331,7 @@ export async function collectSystemStatus(
       sandbox: config.mail.sandbox,
       redirectAllTo: config.mail.redirectAllTo ?? null,
       baaSignedAllVendors: config.mail.baaSignedAllVendors,
+      logBodies: config.mail.logBodies,
     },
     scheduler: {
       enabled: config.schedulerEnabled,
@@ -294,8 +341,11 @@ export async function collectSystemStatus(
     provider: {
       superAdminEmail: config.superAdminEmail,
       superAdminName: config.superAdminName,
+      accountExists: extra.providerAccount.exists,
+      passwordPendingChange: extra.providerAccount.exists && extra.providerAccount.mustChangePassword,
       passwordFromEnvironment: Boolean(config.superAdminPassword),
       forceResetEnabled: config.superAdminForceReset,
+      legacyPasswordAccounts,
       defaultOrgName: config.defaultOrgName,
       defaultOrgSlug: config.defaultOrgSlug,
       platformAccounts: extra.platformAccounts,
@@ -308,6 +358,8 @@ export async function collectSystemStatus(
       databaseOk,
       platformAccounts: extra.platformAccounts,
       platformAccountsWithMfa: extra.platformAccountsWithMfa,
+      providerAccount: extra.providerAccount,
+      legacyPasswordAccounts,
       auditChainOk: auditChain.ok,
     }),
   };
