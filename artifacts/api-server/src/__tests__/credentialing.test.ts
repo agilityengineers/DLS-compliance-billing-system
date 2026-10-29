@@ -25,7 +25,7 @@ describe.skipIf(!TEST_URL)("credentialing registry api", () => {
   let handle: DbHandle;
   let base = "";
   let server: ReturnType<ReturnType<typeof createApp>["listen"]>;
-  const config = loadConfig({ NODE_ENV: "test" });
+  const config = loadConfig({ NODE_ENV: "test", SUPER_ADMIN_PASSWORD: "Setup-Owner-2026" });
 
   let adminCookie: string;
   let schedulerCookie: string;
@@ -65,12 +65,21 @@ describe.skipIf(!TEST_URL)("credentialing registry api", () => {
     // being in the org, not by outranking it — so the suite creates a real
     // org Admin and a Scheduler through the platform console, exactly as an
     // operator would.
+    // The setup password is single-use: nothing opens until it is replaced.
     const superLogin = await api("POST", "/api/auth/login", {
       email: config.superAdminEmail,
-      password: "Success2026",
+      password: "Setup-Owner-2026",
     });
     expect(superLogin.status).toBe(200);
-    const superCookie = superLogin.cookie!;
+    expect(superLogin.body.mustChangePassword).toBe(true);
+    const rotated = await api(
+      "POST",
+      "/api/auth/change-password",
+      { currentPassword: "Setup-Owner-2026", newPassword: "Owner-Registry-2026" },
+      superLogin.cookie
+    );
+    expect(rotated.status).toBe(200);
+    const superCookie = rotated.cookie!;
 
     const orgs = await api("GET", "/api/platform/organizations", undefined, superCookie);
     const orgId = orgs.body.organizations[0].id;
