@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+  <url>
+    <loc>https://durablelifeskills.com/</loc>
+    <lastmod>2026-10-28</lastmod>
+    <image:image>
+      <image:loc>https://durablelifeskills.com/assets/og-image.jpg</image:loc>
+      <image:title>Durable Life Skills, Inc. - Because it's a jungle out there.</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://durablelifeskills.com/services.html</loc>
+    <lastmod>2026-10-28</lastmod>
+  </url>
+  <url>
+    <loc>https://durablelifeskills.com/about.html</loc>
+    <lastmod>2026-10-28</lastmod>
+  </url>
+  <url>
+    <loc>https://durablelifeskills.com/contact.html</loc>
+    <lastmod>2026-10-28</lastmod>
+  </url>
+</urlset>

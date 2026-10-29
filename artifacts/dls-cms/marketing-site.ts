@@ -5,10 +5,14 @@ import type { Plugin } from "vite";
 // Keep the approved GitHub website as the source of truth, separate from the SPA.
 const site = path.resolve(import.meta.dirname, "../../site");
 const pages = new Set(["index.html", "about.html", "services.html", "contact.html"]);
+// Crawler files that must live at the site root next to the pages.
+const rootFiles = new Set(["robots.txt", "sitemap.xml"]);
 const types: Record<string, string> = {
   ".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8",
   ".js": "text/javascript; charset=utf-8", ".png": "image/png",
-  ".jpg": "image/jpeg", ".svg": "image/svg+xml",
+  ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".ico": "image/x-icon",
+  ".webp": "image/webp", ".txt": "text/plain; charset=utf-8",
+  ".xml": "application/xml; charset=utf-8",
 };
 
 export function marketingSite(): Plugin {
@@ -23,7 +27,7 @@ export function marketingSite(): Plugin {
         if (req.method !== "GET" && req.method !== "HEAD") return next();
         const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
         const relative = pathname === "/" ? "index.html" : pathname.slice(1);
-        if (!pages.has(relative) && !/^(assets|css|js)\//.test(relative)) return next();
+        if (!pages.has(relative) && !rootFiles.has(relative) && !/^(assets|css|js)\//.test(relative)) return next();
         const file = path.resolve(site, relative);
         if (!file.startsWith(site + path.sep)) return next();
         try {
@@ -39,7 +43,7 @@ export function marketingSite(): Plugin {
     closeBundle() {
       // Preserve the compiled portal entry for /login, /admin/* and /field/*.
       renameSync(path.join(output, "index.html"), path.join(output, "portal.html"));
-      for (const entry of [...pages, "assets", "css", "js"]) {
+      for (const entry of [...pages, ...rootFiles, "assets", "css", "js"]) {
         cpSync(path.join(site, entry), path.join(output, entry), { recursive: true });
       }
     },
