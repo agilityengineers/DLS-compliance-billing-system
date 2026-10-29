@@ -8,7 +8,8 @@
 // attempts catches the ones that do not, and the answer is the same 202
 // whether a row was stored, a retry was folded into the inquiry it repeats,
 // or a bot was quietly ignored. What makes a retry a retry, and why a changed
-// form from the same email is a new inquiry, is explained in lib/leads.ts.
+// form — under the same key or from the same email — is a new inquiry rather
+// than something to fold away, is explained in lib/leads.ts.
 import { Router, type IRouter, type Request } from "express";
 import cors from "cors";
 import type { Db } from "@workspace/db";
@@ -108,7 +109,7 @@ export function publicRouter(db: Db, config: AppConfig, deps: { mailer: Mailer }
           action: "lead.received",
           targetType: "lead",
           targetId: result.lead.id,
-          details: { source: "website", page: sourcePage, earlierLeadId: result.earlierLeadId },
+          details: { source: "website", page: sourcePage, earlierLeadId: result.earlierLeadId, relatedBy: result.relatedBy },
           ip,
         });
         // Tell the organization's administrators something arrived. The email

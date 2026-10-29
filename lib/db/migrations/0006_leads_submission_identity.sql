@@ -1,0 +1,3 @@
+DROP INDEX "uq_leads_org_submission";--> statement-breakpoint
+CREATE UNIQUE INDEX "uq_leads_org_submission" ON "leads" USING btree ("org_id","submission_id","submission_fingerprint") WHERE "leads"."submission_id" is not null;--> statement-breakpoint
+ALTER TABLE "leads" ADD CONSTRAINT "leads_submission_fingerprint_check" CHECK ("leads"."submission_id" is null or "leads"."submission_fingerprint" is not null);

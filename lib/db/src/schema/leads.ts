@@ -141,12 +141,19 @@ export const leadsTable = pgTable(
     /** Kept for the rate limiter only; nulled by the leads.scrub_ip job. */
     ip: text("ip"),
     /**
-     * The website's idempotency key for the submission that created this row.
-     * A later attempt carrying the same key is a retry of this inquiry, not a
-     * new one, however many times the network drops the receipt.
+     * The website's key for the filled-in form that created this row, sent
+     * again with every retry of it. The key alone does not make a retry: a
+     * later attempt is a retry of this inquiry only when it carries the same
+     * key AND the same answers (uq_leads_org_submission covers both). The same
+     * key with changed answers is a changed submission and gets a row of its
+     * own, so nothing a person wrote is folded away unseen.
      */
     submissionId: text("submission_id"),
-    /** SHA-256 of the answers as given, so an identical re-send without a key is still a retry. */
+    /**
+     * SHA-256 of the answers as given (whitespace aside), always set together
+     * with the key. It tells a retry from a changed submission under one key,
+     * and finds an identical re-send that arrived without any key.
+     */
     submissionFingerprint: text("submission_fingerprint"),
     /**
      * Where an imported row came from (`consultation_requests`) and its id
@@ -164,13 +171,20 @@ export const leadsTable = pgTable(
     index("idx_leads_org_created").on(t.orgId, t.createdAt),
     index("idx_leads_org_email").on(t.orgId, t.email),
     index("idx_leads_org_ip_created").on(t.orgId, t.ip, t.createdAt),
-    // A retry can only ever match one inquiry.
-    uniqueIndex("uq_leads_org_submission").on(t.orgId, t.submissionId).where(sql`${t.submissionId} is not null`),
+    // One row per (key, answers): copies of one submission that arrive at the
+    // same instant collapse here, while the same key with changed answers is
+    // a row of its own. A retry can only ever match one inquiry.
+    uniqueIndex("uq_leads_org_submission")
+      .on(t.orgId, t.submissionId, t.submissionFingerprint)
+      .where(sql`${t.submissionId} is not null`),
     // A legacy row is imported once, whichever boot gets to it first.
     uniqueIndex("uq_leads_import_source").on(t.importSource, t.importSourceId).where(sql`${t.importSource} is not null`),
     // A client comes from at most one inquiry (clients.source_lead_id is the other half).
     uniqueIndex("uq_leads_converted_client").on(t.convertedClientId).where(sql`${t.convertedClientId} is not null`),
     check("leads_source_check", sql`${t.source} in ('website', 'manual')`),
+    // A key is never stored without the answers it stands for; the unique
+    // index above would otherwise treat a null fingerprint as always distinct.
+    check("leads_submission_fingerprint_check", sql`${t.submissionId} is null or ${t.submissionFingerprint} is not null`),
     check(
       "leads_closed_reason_check",
       sql`${t.closedReason} is null or ${t.closedReason} in ('not_a_fit', 'no_response', 'duplicate', 'other')`

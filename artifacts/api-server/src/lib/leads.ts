@@ -14,6 +14,7 @@ import {
   leadsTable,
   organizationsTable,
   type Db,
+  type DbOrTx,
   type LeadActivityRow,
   type LeadActivityType,
   type LeadAnswers,
@@ -33,8 +34,8 @@ import type { AppConfig } from "./config";
 import { HttpError, notFound } from "./errors";
 import { loadFeatureStates } from "./features";
 
-/** A Drizzle handle or a transaction opened on one. */
-export type DbOrTx = Db | Parameters<Parameters<Db["transaction"]>[0]>[0];
+/** A Drizzle handle or a transaction opened on one; re-exported for the modules that take it from here. */
+export type { DbOrTx };
 
 // ── the organization behind a public request ────────────────────────────────
 
@@ -279,12 +280,25 @@ export async function lockLead(tx: DbOrTx, orgId: string, id: string): Promise<L
   return rows[0];
 }
 
-/** The lead a website submission key created, if that key has been seen. */
-async function findBySubmissionId(tx: DbOrTx, orgId: string, submissionId: string): Promise<LeadRow | undefined> {
+/** The lead that stored exactly this submission: this key with these answers. */
+async function findBySubmission(tx: DbOrTx, orgId: string, submissionId: string, fingerprint: string): Promise<LeadRow | undefined> {
+  const rows = await tx
+    .select()
+    .from(leadsTable)
+    .where(
+      and(eq(leadsTable.orgId, orgId), eq(leadsTable.submissionId, submissionId), eq(leadsTable.submissionFingerprint, fingerprint))
+    )
+    .limit(1);
+  return rows[0];
+}
+
+/** The newest lead this key has created, whatever its answers: the form a changed submission is a change of. */
+async function latestBySubmissionId(tx: DbOrTx, orgId: string, submissionId: string): Promise<LeadRow | undefined> {
   const rows = await tx
     .select()
     .from(leadsTable)
     .where(and(eq(leadsTable.orgId, orgId), eq(leadsTable.submissionId, submissionId)))
+    .orderBy(desc(leadsTable.createdAt), desc(leadsTable.id))
     .limit(1);
   return rows[0];
 }
@@ -304,23 +318,29 @@ async function listRecentByEmail(tx: DbOrTx, orgId: string, email: string, since
 // What the website sends can reach here more than once: a dropped receipt and
 // a click on "send" again, a refresh, a second try after a validation error, a
 // bot posting in a loop. Three questions are settled in one transaction, under
-// a lock on the submitting address so that simultaneous requests from it are
-// answered one after another:
+// a lock on the submitting address and then one on the submitting email, so
+// that simultaneous requests from either are answered one after another:
 //
 //   1. Has this address attempted too often? Every attempt counts — a retry,
 //      a rejected form, a honeypot hit — because what is being limited is
 //      traffic, not successes. Counting under the lock means N requests at
 //      once cannot each see "one below the limit".
 //   2. Is this a retry of a submission already stored? The website sends a key
-//      per filled-in form (`submissionId`), kept across its retries; the key
-//      is the answer. Without a key, the same answers from the same email
-//      inside the window are the same submission. Either way the earlier
-//      inquiry gets a timeline entry and nothing is lost, because nothing new
-//      was said.
-//   3. Otherwise it is an inquiry in its own right, even from an email the
-//      inbox saw a minute ago: a corrected message or a second family member
-//      is a new row, cross-referenced with the earlier one on both timelines,
-//      and the staff decide whether it is a duplicate.
+//      per filled-in form (`submissionId`), kept across its retries, and the
+//      answers are hashed. A retry is the same key WITH the same answers: the
+//      key is never taken at its word, so a key sent again with changed
+//      answers (a cached page, an older script, a bot) is not a retry. Without
+//      a key, the same answers from the same email inside the window are the
+//      same submission. Either way the earlier inquiry gets a timeline entry
+//      and nothing is lost, because nothing new was said.
+//   3. Otherwise it is an inquiry in its own right, even under a key the inbox
+//      has seen or from an email it saw a minute ago: a corrected message or a
+//      second family member is a new row with every answer as given, cross-
+//      referenced with the earlier one on both timelines, and the staff decide
+//      whether it is a duplicate.
+//
+// Whitespace is not a change: a message re-sent with other line endings or a
+// trailing space is the same message. Anything else is.
 
 const SUBMISSION_ID_RE = /^[A-Za-z0-9-]{8,64}$/;
 
@@ -331,12 +351,20 @@ export function submissionIdOf(raw: unknown): string | null {
   return SUBMISSION_ID_RE.test(value) ? value : null;
 }
 
-/** A digest of the answers as given; the same answers hash the same whatever order the keys arrived in. */
+/** An answer as it is compared: runs of whitespace, line endings included, collapse to one space. */
+const comparable = (value: string | boolean | null | undefined): string | boolean | null =>
+  typeof value === "string" ? value.replace(/\s+/g, " ").trim() : (value ?? null);
+
+/**
+ * A digest of the answers as given. The same answers hash the same whatever
+ * order the keys arrived in, and whatever whitespace carried them, because a
+ * form re-sent through a different browser or library is not a changed form.
+ */
 export function fingerprintOf(answers: LeadAnswers): string {
   const canonical = JSON.stringify(
     Object.keys(answers)
       .sort()
-      .map((key) => [key, answers[key] ?? null])
+      .map((key) => [key, comparable(answers[key])])
   );
   return createHash("sha256").update(canonical).digest("hex");
 }
@@ -385,11 +413,14 @@ export interface WebsiteSubmissionInput {
   now?: Date;
 }
 
+/** What a new inquiry has in common with an earlier one: the website's form key, or only the email. */
+export type EarlierRelation = "submission_id" | "email";
+
 export type WebsiteSubmissionResult =
   | { outcome: "rate_limited"; retryAfterSeconds: number }
   | { outcome: "invalid"; error: HttpError }
   | { outcome: "retry"; lead: LeadRow; matchedBy: "submission_id" | "answers" }
-  | { outcome: "created"; lead: LeadRow; earlierLeadId: string | null };
+  | { outcome: "created"; lead: LeadRow; earlierLeadId: string | null; relatedBy: EarlierRelation | null };
 
 const RETRY_DETAILS = (matchedBy: "submission_id" | "answers") => ({ source: "website", duplicate: true, matchedBy });
 
@@ -422,9 +453,18 @@ export async function acceptWebsiteSubmission(db: Db, input: WebsiteSubmissionIn
     }
     const fingerprint = fingerprintOf(parsed.answers);
 
-    // A retry of something already stored?
+    // One email at a time, too — taken after the address lock and never
+    // before it, so two requests can only ever wait on each other in one
+    // direction. Without it, the same answers sent without a key from two
+    // addresses at once would each find nothing stored, and both be stored.
+    if (parsed.email) {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext('leads.submit.email'), hashtext(${`${input.orgId}|${parsed.email}`}))`);
+    }
+
+    // A retry of something already stored? By the key and the answers
+    // together, or by the answers alone when the website sent no key.
     const recent = parsed.email ? await listRecentByEmail(tx, input.orgId, parsed.email, since) : [];
-    let existing = input.submissionId ? await findBySubmissionId(tx, input.orgId, input.submissionId) : undefined;
+    let existing = input.submissionId ? await findBySubmission(tx, input.orgId, input.submissionId, fingerprint) : undefined;
     let matchedBy: "submission_id" | "answers" = "submission_id";
     if (!existing) {
       existing = recent.find((l) => l.submissionFingerprint === fingerprint);
@@ -436,12 +476,19 @@ export async function acceptWebsiteSubmission(db: Db, input: WebsiteSubmissionIn
       return { outcome: "retry", lead: existing, matchedBy };
     }
 
-    // A new inquiry. The partial unique index on (org, submission key) is the
-    // last word on retries that arrive at the same instant from different
-    // addresses: the second insert waits for the first to commit and then
-    // finds nothing to insert.
+    // A new inquiry: answers the inbox has not seen, whether under a key it
+    // has (the person changed the form and the site sent the key again) or
+    // from an email it has (a second thought, or someone else in the
+    // household). Whichever applies names the inquiry this one relates to.
+    //
+    // The partial unique index on (org, key, answers) is the last word on
+    // copies that arrive at the same instant from different addresses: the
+    // second insert waits for the first to commit and then finds nothing to
+    // insert.
     const stage = await firstOpenStage(tx, input.orgId);
-    const earlier = recent[0] ?? null;
+    const sameKey = input.submissionId ? await latestBySubmissionId(tx, input.orgId, input.submissionId) : undefined;
+    const earlier = sameKey ?? recent[0] ?? null;
+    const relatedBy: EarlierRelation | null = sameKey ? "submission_id" : earlier ? "email" : null;
     const [created] = await tx
       .insert(leadsTable)
       .values({
@@ -462,10 +509,13 @@ export async function acceptWebsiteSubmission(db: Db, input: WebsiteSubmissionIn
         submittedAt: now,
         lastActivityAt: now,
       })
-      .onConflictDoNothing({ target: [leadsTable.orgId, leadsTable.submissionId], where: sql`${leadsTable.submissionId} is not null` })
+      .onConflictDoNothing({
+        target: [leadsTable.orgId, leadsTable.submissionId, leadsTable.submissionFingerprint],
+        where: sql`${leadsTable.submissionId} is not null`,
+      })
       .returning();
     if (!created) {
-      const winner = input.submissionId ? await findBySubmissionId(tx, input.orgId, input.submissionId) : undefined;
+      const winner = input.submissionId ? await findBySubmission(tx, input.orgId, input.submissionId, fingerprint) : undefined;
       if (!winner) throw new Error("Lead insert returned nothing without a submission key to explain it");
       await addActivity(tx, { leadId: winner.id, type: "submitted", details: RETRY_DETAILS("submission_id"), actorUserId: null });
       await attempt("retry", winner.id);
@@ -475,16 +525,21 @@ export async function acceptWebsiteSubmission(db: Db, input: WebsiteSubmissionIn
     await tx.insert(leadActivitiesTable).values({
       leadId: created.id,
       type: "submitted",
-      details: { source: "website", ...(earlier ? { earlierLeadId: earlier.id } : {}) },
+      details: { source: "website", ...(earlier ? { earlierLeadId: earlier.id, relatedBy } : {}) },
       actorUserId: null,
     });
     if (earlier) {
-      // The earlier inquiry learns that something different arrived from the
-      // same email, so whoever is working it looks at both.
-      await addActivity(tx, { leadId: earlier.id, type: "submitted", details: { source: "website", resubmittedAs: created.id }, actorUserId: null });
+      // The earlier inquiry learns that something different arrived — under
+      // its key, or from its email — so whoever is working it looks at both.
+      await addActivity(tx, {
+        leadId: earlier.id,
+        type: "submitted",
+        details: { source: "website", resubmittedAs: created.id, relatedBy },
+        actorUserId: null,
+      });
     }
     await attempt("created", created.id);
-    return { outcome: "created", lead: created, earlierLeadId: earlier?.id ?? null };
+    return { outcome: "created", lead: created, earlierLeadId: earlier?.id ?? null, relatedBy };
   });
 }
 
@@ -645,6 +700,11 @@ export interface ConsultationImportOptions {
  * does nothing and the source row is simply removed. Either way: one lead per
  * stored request, however many processes start.
  *
+ * The lead, its timeline entry, the removal of the source row and the audit
+ * entry commit together. Once the source row is gone, the audit entry is the
+ * only record that an import happened at all, so it is not left to a write
+ * after the commit that a crash in between would skip for good.
+ *
  * Returns how many leads this call created.
  */
 export async function importConsultationRequests(db: Db, orgId: string, opts: ConsultationImportOptions = {}): Promise<number> {
@@ -705,18 +765,21 @@ export async function importConsultationRequests(db: Db, orgId: string, opts: Co
       }
       // Imported now, or already imported earlier: the source row is done either way.
       await tx.delete(consultationRequests).where(eq(consultationRequests.id, row.id));
+      if (created) {
+        // The last write before the commit, so the audit chain's lock is held
+        // no longer than it takes to commit (see recordAudit).
+        await recordAudit(tx, {
+          orgId,
+          actorUserId: null,
+          action: "lead.imported",
+          targetType: "lead",
+          targetId: created.id,
+          details: { from: CONSULTATION_IMPORT_SOURCE, sourceId: row.id, receivedAt: row.createdAt.toISOString(), attribution },
+        });
+      }
       return created ?? null;
     });
-    if (!lead) continue;
-    await recordAudit(db, {
-      orgId,
-      actorUserId: null,
-      action: "lead.imported",
-      targetType: "lead",
-      targetId: lead.id,
-      details: { from: CONSULTATION_IMPORT_SOURCE, sourceId: lead.importSourceId, receivedAt: lead.submittedAt.toISOString(), attribution },
-    });
-    imported += 1;
+    if (lead) imported += 1;
   }
   return imported;
 }

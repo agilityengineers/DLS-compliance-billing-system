@@ -20,7 +20,7 @@ export const badRequest = (message: string, details?: unknown) => new HttpError(
 export const unauthorized = (message = "Sign in to continue.") => new HttpError(401, "UNAUTHENTICATED", message);
 export const forbidden = (message = "You do not have access to that.") => new HttpError(403, "FORBIDDEN", message);
 export const notFound = (message = "Not found.") => new HttpError(404, "NOT_FOUND", message);
-export const conflict = (code: string, message: string) => new HttpError(409, code, message);
+export const conflict = (code: string, message: string, details?: unknown) => new HttpError(409, code, message, details);
 
 export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   if (err instanceof HttpError) {

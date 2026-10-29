@@ -7,7 +7,9 @@
 // unconverted, so two conversions of one inquiry started at the same instant
 // produce one client and one 409 — never two clients — and a stage change
 // racing the conversion either lands before it or is refused after it. A
-// unique index on clients.source_lead_id says the same thing at the database.
+// unique index on clients.source_lead_id says the same thing at the database,
+// and the 409 names the client the inquiry became, so a retried request can
+// find it.
 import { Router, type IRouter } from "express";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { z } from "zod/v4";
@@ -117,7 +119,13 @@ function uniqueViolationOf(e: unknown, depth = 0): string | null {
   return uniqueViolationOf((e as { cause?: unknown }).cause, depth + 1);
 }
 
-const alreadyConverted = () => conflict("LEAD_ALREADY_CONVERTED", "That inquiry has already become a client.");
+/**
+ * The 409 names the client when it is known, so a request retried after its
+ * first copy succeeded — a double click, a resent request after a dropped
+ * reply — can find what that copy made instead of being left with nothing.
+ */
+const alreadyConverted = (clientId: string | null = null) =>
+  conflict("LEAD_ALREADY_CONVERTED", "That inquiry has already become a client.", clientId ? { clientId } : undefined);
 
 export function clientsRouter(db: Db, _config: AppConfig, _deps: { mailer: Mailer }): IRouter {
   const router: IRouter = Router();
@@ -170,7 +178,7 @@ export function clientsRouter(db: Db, _config: AppConfig, _deps: { mailer: Maile
           lead = (await lockLead(tx, orgId, body.sourceLeadId)) ?? null;
           if (!lead) throw notFound("Inquiry not found.");
           fromStage = await findStage(tx, orgId, lead.stageId);
-          if (lead.convertedClientId || fromStage?.kind === "won") throw alreadyConverted();
+          if (lead.convertedClientId || fromStage?.kind === "won") throw alreadyConverted(lead.convertedClientId);
           wonStage = await stageOfKind(tx, orgId, "won");
           if (!wonStage) throw badRequest("The funnel has no 'converted' stage to move the inquiry to.");
         }
