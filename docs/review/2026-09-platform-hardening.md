@@ -66,17 +66,19 @@ curl -X POST -H "x-cron-secret: $CRON_SECRET" https://<host>/api/jobs/all/run
 
 A GitHub Actions schedule or the host's own cron is enough. Both paths claim the run through the same table, so whichever arrives first does the work and the other stands down. Set `SCHEDULER_ENABLED=false` when an external cron is driving them.
 
-Point an uptime monitor at `GET /api/healthz` (cheap, no database) and a readiness probe at `GET /api/readyz` (checks the database and that migrations are applied).
+Point an uptime monitor at `GET /api/healthz` (cheap, no database) and a readiness probe at `GET /api/readyz` (checks the database, that migrations are applied, and that a provider account exists).
 
 ### Mail, when the BAA is signed
 
-Until `SENDGRID_API_KEY` is set, invitations and reset links are recorded in the outbox and written to the log rather than sent, and the on-screen one-time password remains as the fallback. Nothing is silently dropped. When the agreement is in place:
+Until `SENDGRID_API_KEY` is set, invitations and reset links are recorded in the outbox rather than sent, and the on-screen one-time password remains as the fallback. Since 2026-10-29 the log gets the envelope only — kind, recipient, subject — never the message text, because that text is the single-use link (`MAIL_LOG_BODIES` restores it in development, never in production). Nothing is silently dropped, but a "forgot password" request cannot be fulfilled in this state; an administrator resets the password from Settings instead. When the agreement is in place:
 
 ```
 SENDGRID_API_KEY=<key with Mail Send scope only>
 APP_BASE_URL=https://dls-portal.agilityengineers.com
 MAIL_FROM_DOMAIN=durablelifeskills.com
 ```
+
+`APP_BASE_URL` is required alongside the key: with the key and no base the API refuses to start rather than send links that open nothing. Once set, System status → Mail → **Send me a test message** delivers a `system.mail_test` message to your own address so you can confirm the sender, the display name and the link base without putting anyone else's address in a message.
 
 Every template shipped is marked as carrying no client information, following the "bank alert" rule in [the sender assessment](./email-senders.md): the message says what kind of thing happened and links into the portal. A template marked as carrying PHI is refused until `BAA_SIGNED_ALL_VENDORS=true`, and the refusal is recorded rather than thrown.
 
@@ -93,8 +95,10 @@ Every template shipped is marked as carrying no client information, following th
 | `AUDIT_RETENTION_YEARS` | `6` | Reported on System status; matches the HIPAA documentation rule |
 | `LOGIN_ATTEMPT_RETENTION_DAYS` | `90` | How long sign-in attempts are kept |
 | `INVITE_TTL_HOURS` / `RESET_TTL_MINUTES` | `168` / `60` | Link lifetimes |
+| `SUPER_ADMIN_PASSWORD` | unset | One-time setup password for the provider account; required at first boot (no built-in default), single-use, remove afterwards |
 | `SENDGRID_API_KEY`, `MAIL_FROM_DOMAIN`, `SENDGRID_SANDBOX`, `MAIL_REDIRECT_ALL_TO` | unset / `durablelifeskills.com` | Mail |
-| `APP_BASE_URL` | unset | Where links in email point |
+| `MAIL_LOG_BODIES` | on in development only | Write message text to the log in log mode; never honoured in production |
+| `APP_BASE_URL` | unset | Where links in email point; required once `SENDGRID_API_KEY` is set |
 | `SCHEDULER_ENABLED` / `SCHEDULER_INTERVAL_MINUTES` | `true` / `15` | The in-process timer |
 | `CRON_SECRET` | unset | Lets an external cron drive the jobs |
 | `GIT_SHA` | unset | Stamps the build on System status |
