@@ -210,9 +210,15 @@
      The questions are managed in the portal: on load the form asks the API
      which to show and rebuilds its fields; the static markup stays as the
      fallback whenever that request fails.
-     Payload: one key per question plus page. The API answers 202 when the
-     inquiry was accepted, 400 with a message when a field is missing or
-     malformed, and 429 when this address has sent too many in a few minutes.
+     Payload: one key per question plus page and submissionId. The API
+     answers 202 when the inquiry was accepted, 400 with a message when a
+     field is missing or malformed, and 429 when this address has tried too
+     many times in a few minutes.
+     submissionId is this form's key: made up once for the answers as typed
+     and sent again with every retry of them, so that a lost receipt and a
+     second click store one inquiry, not two. Change an answer and a new key
+     goes with it, because changed answers are a new inquiry and the API
+     must not fold them into the old one.
      --------------------------------------------------------------------- */
   const DLS_CONFIG = window.DLS_CONFIG || {};
   const API_BASE = String(DLS_CONFIG.apiBase || "").replace(/\/+$/, "");
@@ -304,6 +310,19 @@
     const status = form.querySelector(".form-status");
     const submitBtn = form.querySelector('button[type="submit"]');
     let pending = false;
+    let submissionId = null;
+    let submittedData = null;
+
+    const newKey = () => {
+      if (window.crypto && typeof window.crypto.randomUUID === "function") return window.crypto.randomUUID();
+      let key = "";
+      const bytes = window.crypto && window.crypto.getRandomValues ? window.crypto.getRandomValues(new Uint8Array(16)) : null;
+      for (let i = 0; i < 16; i += 1) {
+        const n = bytes ? bytes[i] : Math.floor(Math.random() * 256);
+        key += (n < 16 ? "0" : "") + n.toString(16);
+      }
+      return key;
+    };
 
     const setError = (input, msg) => {
       const field = input.closest(".field");
@@ -336,7 +355,12 @@
 
       // The honeypot travels with the rest; the API discards a filled one quietly.
       const data = Object.fromEntries(new FormData(form).entries());
-      const payload = { ...data, page: location.pathname };
+      const serialized = JSON.stringify(data);
+      if (!submissionId || serialized !== submittedData) {
+        submissionId = newKey();
+        submittedData = serialized;
+      }
+      const payload = { ...data, page: location.pathname, submissionId: submissionId };
 
       pending = true;
       const controls = [...form.querySelectorAll("input, select, textarea, button")];
@@ -353,6 +377,8 @@
           throw Object.assign(new Error("bad response"), { userMessage: userMessage });
         }
         form.reset();
+        submissionId = null;
+        submittedData = null;
         status.textContent = "Thank you - your consultation request has been received. We'll follow up within one business day.";
         status.classList.add("is-success");
       } catch (err) {

@@ -89,11 +89,23 @@ export interface AppConfig {
   /** How long sign-in attempt rows are kept for the limiter and for review. */
   loginAttemptRetentionDays: number;
 
-  /** Website inquiries accepted per IP address inside the window before a cool-down. */
+  /**
+   * Website form attempts one IP address may make inside the window before a
+   * cool-down. Every attempt counts — a stored inquiry, a retry of one, a
+   * rejected form, a honeypot hit — so the default leaves room for a person
+   * to correct a form a few times, which is why it is higher than the number
+   * of inquiries anyone sends in ten minutes.
+   */
   leadMaxPerIp: number;
   leadWindowMs: number;
-  /** How long a lead keeps the submitting IP address before the scrub job nulls it. */
+  /** How long a lead keeps the submitting IP address (and the attempts ledger its rows) before the scrub job removes them. */
   leadIpRetentionDays: number;
+  /**
+   * The organization the stored consultation requests from the earlier
+   * storage-only endpoint belong to. Unset, the import happens only while
+   * the default organization is the only one (see lib/leads.ts).
+   */
+  consultationImportOrgSlug: string | undefined;
 
   /** Second factor. */
   mfaIssuer: string;
@@ -172,9 +184,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     loginWindowMs: int(env.LOGIN_WINDOW_MINUTES, 15) * 60_000,
     loginAttemptRetentionDays: int(env.LOGIN_ATTEMPT_RETENTION_DAYS, 90),
 
-    leadMaxPerIp: int(env.LEAD_MAX_PER_IP, 5),
+    leadMaxPerIp: int(env.LEAD_MAX_PER_IP, 8),
     leadWindowMs: int(env.LEAD_WINDOW_MINUTES, 10) * 60_000,
     leadIpRetentionDays: int(env.LEAD_IP_RETENTION_DAYS, 90),
+    consultationImportOrgSlug: (env.CONSULTATION_IMPORT_ORG_SLUG ?? "").trim().toLowerCase() || undefined,
 
     mfaIssuer: env.MFA_ISSUER ?? "DLS Portal",
     requireMfaForPlatform: bool(env.REQUIRE_MFA_FOR_PLATFORM, false),

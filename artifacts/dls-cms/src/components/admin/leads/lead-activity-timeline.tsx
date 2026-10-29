@@ -31,7 +31,11 @@ export function LeadActivityTimeline({
     switch (a.type) {
       case "submitted":
         if (d.source === "manual") return `${actor(a)} added this inquiry by hand.`;
-        return d.duplicate ? "Sent the website form again (folded into this inquiry)." : "Sent the website's contact form.";
+        if (d.duplicate) return "Sent the website form again (folded into this inquiry).";
+        if (d.resubmittedAs) return "Sent the website form again with different answers; they are a separate inquiry in the inbox.";
+        if (d.importedFrom) return "Sent the website's contact form (stored before the inbox existed and brought in later).";
+        if (d.earlierLeadId) return "Sent the website's contact form; an earlier inquiry from this email is also in the inbox.";
+        return "Sent the website's contact form.";
       case "stage_changed": {
         const to = stageLabel(d.to, d.toKey);
         const from = stageLabel(d.from, d.fromKey);

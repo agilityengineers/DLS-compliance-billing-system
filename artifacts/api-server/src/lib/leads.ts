@@ -3,12 +3,14 @@
 // validating answers against the organization's own question list, the
 // funnel's structural stages, and the writes that keep a lead's timeline in
 // step with its row.
-import { and, asc, count, desc, eq, gte, isNotNull, lt } from "drizzle-orm";
+import { createHash } from "node:crypto";
+import { and, asc, count, desc, eq, gte, isNotNull, lt, sql } from "drizzle-orm";
 import {
   consultationRequests,
   leadActivitiesTable,
   leadFormQuestionsTable,
   leadStagesTable,
+  leadSubmissionAttemptsTable,
   leadsTable,
   organizationsTable,
   type Db,
@@ -22,6 +24,7 @@ import {
   type LeadSource,
   type LeadStageKind,
   type LeadStageRow,
+  type LeadSubmissionOutcome,
   type Organization,
 } from "@workspace/db";
 import { isFeatureEnabledFor } from "@workspace/features";
@@ -259,24 +262,230 @@ export async function findLead(db: DbOrTx, orgId: string, id: string): Promise<L
   return rows[0];
 }
 
-/** Submissions from one address inside the window — the public limiter's state. */
-export async function countRecentSubmissions(db: Db, orgId: string, ip: string, since: Date): Promise<number> {
-  const [row] = await db
-    .select({ n: count() })
+/**
+ * The lead, locked until the transaction ends. Anything else that wants to
+ * change this row — a conversion, a stage move, an assignment — waits here
+ * and then reads the row as this transaction left it, so a decision taken on
+ * what the row looked like a moment ago cannot be written over what it has
+ * since become.
+ */
+export async function lockLead(tx: DbOrTx, orgId: string, id: string): Promise<LeadRow | undefined> {
+  const rows = await tx
+    .select()
     .from(leadsTable)
-    .where(and(eq(leadsTable.orgId, orgId), eq(leadsTable.ip, ip), gte(leadsTable.createdAt, since)));
-  return Number(row?.n ?? 0);
+    .where(and(eq(leadsTable.orgId, orgId), eq(leadsTable.id, id)))
+    .limit(1)
+    .for("update");
+  return rows[0];
 }
 
-/** A lead this address already created inside the window, if any (a double-click, a refresh). */
-export async function findRecentByEmail(db: Db, orgId: string, email: string, since: Date): Promise<LeadRow | undefined> {
-  const rows = await db
+/** The lead a website submission key created, if that key has been seen. */
+async function findBySubmissionId(tx: DbOrTx, orgId: string, submissionId: string): Promise<LeadRow | undefined> {
+  const rows = await tx
+    .select()
+    .from(leadsTable)
+    .where(and(eq(leadsTable.orgId, orgId), eq(leadsTable.submissionId, submissionId)))
+    .limit(1);
+  return rows[0];
+}
+
+/** Leads this email created inside the window, newest first. */
+async function listRecentByEmail(tx: DbOrTx, orgId: string, email: string, since: Date): Promise<LeadRow[]> {
+  return tx
     .select()
     .from(leadsTable)
     .where(and(eq(leadsTable.orgId, orgId), eq(leadsTable.email, email), gte(leadsTable.createdAt, since)))
     .orderBy(desc(leadsTable.createdAt))
-    .limit(1);
-  return rows[0];
+    .limit(20);
+}
+
+// ── a website submission ────────────────────────────────────────────────────
+//
+// What the website sends can reach here more than once: a dropped receipt and
+// a click on "send" again, a refresh, a second try after a validation error, a
+// bot posting in a loop. Three questions are settled in one transaction, under
+// a lock on the submitting address so that simultaneous requests from it are
+// answered one after another:
+//
+//   1. Has this address attempted too often? Every attempt counts — a retry,
+//      a rejected form, a honeypot hit — because what is being limited is
+//      traffic, not successes. Counting under the lock means N requests at
+//      once cannot each see "one below the limit".
+//   2. Is this a retry of a submission already stored? The website sends a key
+//      per filled-in form (`submissionId`), kept across its retries; the key
+//      is the answer. Without a key, the same answers from the same email
+//      inside the window are the same submission. Either way the earlier
+//      inquiry gets a timeline entry and nothing is lost, because nothing new
+//      was said.
+//   3. Otherwise it is an inquiry in its own right, even from an email the
+//      inbox saw a minute ago: a corrected message or a second family member
+//      is a new row, cross-referenced with the earlier one on both timelines,
+//      and the staff decide whether it is a duplicate.
+
+const SUBMISSION_ID_RE = /^[A-Za-z0-9-]{8,64}$/;
+
+/** The website's idempotency key, when the body carried a usable one. */
+export function submissionIdOf(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const value = raw.trim();
+  return SUBMISSION_ID_RE.test(value) ? value : null;
+}
+
+/** A digest of the answers as given; the same answers hash the same whatever order the keys arrived in. */
+export function fingerprintOf(answers: LeadAnswers): string {
+  const canonical = JSON.stringify(
+    Object.keys(answers)
+      .sort()
+      .map((key) => [key, answers[key] ?? null])
+  );
+  return createHash("sha256").update(canonical).digest("hex");
+}
+
+export interface AttemptInput {
+  orgId: string;
+  ip: string | null;
+  submissionId: string | null;
+  outcome: LeadSubmissionOutcome;
+  leadId?: string | null;
+}
+
+/** One line in the limiter's ledger. */
+export async function recordAttempt(db: DbOrTx, input: AttemptInput): Promise<void> {
+  await db.insert(leadSubmissionAttemptsTable).values({
+    orgId: input.orgId,
+    ip: input.ip,
+    submissionId: input.submissionId,
+    outcome: input.outcome,
+    leadId: input.leadId ?? null,
+  });
+}
+
+/** Attempts from one address inside the window — what the limiter compares against. */
+export async function countRecentAttempts(db: DbOrTx, orgId: string, ip: string, since: Date): Promise<number> {
+  const [row] = await db
+    .select({ n: count() })
+    .from(leadSubmissionAttemptsTable)
+    .where(
+      and(eq(leadSubmissionAttemptsTable.orgId, orgId), eq(leadSubmissionAttemptsTable.ip, ip), gte(leadSubmissionAttemptsTable.createdAt, since))
+    );
+  return Number(row?.n ?? 0);
+}
+
+export interface WebsiteSubmissionInput {
+  orgId: string;
+  ip: string | null;
+  /** Attempts one address may make inside the window before a cool-down. */
+  maxAttemptsPerIp: number;
+  windowMs: number;
+  /** The website's key for this filled-in form, or null when it sent none. */
+  submissionId: string | null;
+  questions: readonly LeadFormQuestionRow[];
+  body: Record<string, unknown>;
+  sourcePage: string | null;
+  now?: Date;
+}
+
+export type WebsiteSubmissionResult =
+  | { outcome: "rate_limited"; retryAfterSeconds: number }
+  | { outcome: "invalid"; error: HttpError }
+  | { outcome: "retry"; lead: LeadRow; matchedBy: "submission_id" | "answers" }
+  | { outcome: "created"; lead: LeadRow; earlierLeadId: string | null };
+
+const RETRY_DETAILS = (matchedBy: "submission_id" | "answers") => ({ source: "website", duplicate: true, matchedBy });
+
+/** Decide what a website submission is and store accordingly — see the notes above. */
+export async function acceptWebsiteSubmission(db: Db, input: WebsiteSubmissionInput): Promise<WebsiteSubmissionResult> {
+  const now = input.now ?? new Date();
+  const since = new Date(now.getTime() - input.windowMs);
+
+  return db.transaction(async (tx): Promise<WebsiteSubmissionResult> => {
+    const attempt = (outcome: LeadSubmissionOutcome, leadId: string | null = null) =>
+      recordAttempt(tx, { orgId: input.orgId, ip: input.ip, submissionId: input.submissionId, outcome, leadId });
+
+    // One address at a time, for the rest of this transaction. The key is
+    // transaction-scoped, so a failure releases it with the rollback.
+    if (input.ip) {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext('leads.submit'), hashtext(${`${input.orgId}|${input.ip}`}))`);
+      if ((await countRecentAttempts(tx, input.orgId, input.ip, since)) >= input.maxAttemptsPerIp) {
+        await attempt("rate_limited");
+        return { outcome: "rate_limited", retryAfterSeconds: Math.ceil(input.windowMs / 1000) };
+      }
+    }
+
+    let parsed: ParsedSubmission;
+    try {
+      parsed = parseSubmission(input.questions, input.body);
+    } catch (e) {
+      if (!(e instanceof HttpError)) throw e;
+      await attempt("invalid");
+      return { outcome: "invalid", error: e };
+    }
+    const fingerprint = fingerprintOf(parsed.answers);
+
+    // A retry of something already stored?
+    const recent = parsed.email ? await listRecentByEmail(tx, input.orgId, parsed.email, since) : [];
+    let existing = input.submissionId ? await findBySubmissionId(tx, input.orgId, input.submissionId) : undefined;
+    let matchedBy: "submission_id" | "answers" = "submission_id";
+    if (!existing) {
+      existing = recent.find((l) => l.submissionFingerprint === fingerprint);
+      matchedBy = "answers";
+    }
+    if (existing) {
+      await addActivity(tx, { leadId: existing.id, type: "submitted", details: RETRY_DETAILS(matchedBy), actorUserId: null });
+      await attempt("retry", existing.id);
+      return { outcome: "retry", lead: existing, matchedBy };
+    }
+
+    // A new inquiry. The partial unique index on (org, submission key) is the
+    // last word on retries that arrive at the same instant from different
+    // addresses: the second insert waits for the first to commit and then
+    // finds nothing to insert.
+    const stage = await firstOpenStage(tx, input.orgId);
+    const earlier = recent[0] ?? null;
+    const [created] = await tx
+      .insert(leadsTable)
+      .values({
+        orgId: input.orgId,
+        stageId: stage.id,
+        firstName: parsed.firstName,
+        lastName: parsed.lastName,
+        email: parsed.email,
+        phone: parsed.phone,
+        answers: parsed.answers,
+        questionSnapshot: snapshotOf(input.questions),
+        source: "website",
+        sourcePage: input.sourcePage,
+        consentAt: parsed.consent ? now : null,
+        ip: input.ip,
+        submissionId: input.submissionId,
+        submissionFingerprint: fingerprint,
+        submittedAt: now,
+        lastActivityAt: now,
+      })
+      .onConflictDoNothing({ target: [leadsTable.orgId, leadsTable.submissionId], where: sql`${leadsTable.submissionId} is not null` })
+      .returning();
+    if (!created) {
+      const winner = input.submissionId ? await findBySubmissionId(tx, input.orgId, input.submissionId) : undefined;
+      if (!winner) throw new Error("Lead insert returned nothing without a submission key to explain it");
+      await addActivity(tx, { leadId: winner.id, type: "submitted", details: RETRY_DETAILS("submission_id"), actorUserId: null });
+      await attempt("retry", winner.id);
+      return { outcome: "retry", lead: winner, matchedBy: "submission_id" };
+    }
+
+    await tx.insert(leadActivitiesTable).values({
+      leadId: created.id,
+      type: "submitted",
+      details: { source: "website", ...(earlier ? { earlierLeadId: earlier.id } : {}) },
+      actorUserId: null,
+    });
+    if (earlier) {
+      // The earlier inquiry learns that something different arrived from the
+      // same email, so whoever is working it looks at both.
+      await addActivity(tx, { leadId: earlier.id, type: "submitted", details: { source: "website", resubmittedAs: created.id }, actorUserId: null });
+    }
+    await attempt("created", created.id);
+    return { outcome: "created", lead: created, earlierLeadId: earlier?.id ?? null };
+  });
 }
 
 export interface CreateLeadInput {
@@ -364,23 +573,96 @@ export async function listActivities(db: DbOrTx, leadId: string): Promise<LeadAc
     .orderBy(desc(leadActivitiesTable.createdAt), desc(leadActivitiesTable.id));
 }
 
+// ── the legacy import ───────────────────────────────────────────────────────
+
+/** The `import_source` value on a lead that came from the storage-only endpoint's table. */
+export const CONSULTATION_IMPORT_SOURCE = "consultation_requests";
+
+export async function countConsultationRequests(db: Db): Promise<number> {
+  const [row] = await db.select({ n: count() }).from(consultationRequests);
+  return Number(row?.n ?? 0);
+}
+
+export interface ConsultationImportTarget {
+  orgId: string;
+  slug: string;
+  /** Why this organization: the operator named it, or it is the only one there is. */
+  basis: "configured" | "sole_organization";
+}
+
+export type ConsultationImportDecision = { ok: true; target: ConsultationImportTarget } | { ok: false; reason: string };
+
+/**
+ * Which organization the stored consultation requests belong to.
+ *
+ * The table carries no organization: the storage-only endpoint predates
+ * multi-tenancy, so its rows can only be attributed by inference. Filing them
+ * under the default organization is a safe inference exactly when it is the
+ * only organization. Once there are two, a guess would put one agency's
+ * inquiries in another agency's inbox, so the operator has to say which
+ * (CONSULTATION_IMPORT_ORG_SLUG) and the rows wait until they do.
+ */
+export async function resolveConsultationImportOrg(
+  db: Db,
+  config: Pick<AppConfig, "defaultOrgSlug" | "consultationImportOrgSlug">
+): Promise<ConsultationImportDecision> {
+  const orgs = await db
+    .select({ id: organizationsTable.id, slug: organizationsTable.slug, status: organizationsTable.status })
+    .from(organizationsTable);
+  if (config.consultationImportOrgSlug) {
+    const named = orgs.find((o) => o.slug === config.consultationImportOrgSlug);
+    if (!named) return { ok: false, reason: `CONSULTATION_IMPORT_ORG_SLUG names "${config.consultationImportOrgSlug}", which does not exist` };
+    if (named.status !== "active") return { ok: false, reason: `CONSULTATION_IMPORT_ORG_SLUG names "${named.slug}", which is ${named.status}` };
+    return { ok: true, target: { orgId: named.id, slug: named.slug, basis: "configured" } };
+  }
+  if (orgs.length !== 1) {
+    return { ok: false, reason: `${orgs.length} organizations exist; set CONSULTATION_IMPORT_ORG_SLUG to say which one the rows belong to` };
+  }
+  const only = orgs[0]!;
+  if (only.slug !== config.defaultOrgSlug) {
+    return { ok: false, reason: `the only organization ("${only.slug}") is not the default ("${config.defaultOrgSlug}"); set CONSULTATION_IMPORT_ORG_SLUG` };
+  }
+  if (only.status !== "active") return { ok: false, reason: `the default organization is ${only.status}` };
+  return { ok: true, target: { orgId: only.id, slug: only.slug, basis: "sole_organization" } };
+}
+
+export interface ConsultationImportOptions {
+  /** Recorded on each import's audit entry: how the organization was chosen. */
+  attribution?: ConsultationImportTarget["basis"] | "explicit";
+}
+
 /**
  * Bring in anything the earlier storage-only endpoint (`/api/consultation-requests`,
  * PR 26) saved before the inbox existed. Each row becomes a website inquiry dated
  * when it arrived, in the organization's first open stage, and is deleted once it
  * is in. Safe to run on every boot: an empty table is a no-op.
+ *
+ * Safe to run from several boots at once, too. Each row is claimed with a row
+ * lock in its own transaction, so a second process importing the same table
+ * waits for the first to finish with a row and then finds it gone. Should a
+ * row ever be read again after it was imported, the lead carries the source
+ * row's id (`import_source`, `import_source_id`, unique), so the second insert
+ * does nothing and the source row is simply removed. Either way: one lead per
+ * stored request, however many processes start.
+ *
+ * Returns how many leads this call created.
  */
-export async function importConsultationRequests(db: Db, orgId: string): Promise<number> {
-  const rows = await db.select().from(consultationRequests).orderBy(asc(consultationRequests.createdAt));
-  if (rows.length === 0) return 0;
+export async function importConsultationRequests(db: Db, orgId: string, opts: ConsultationImportOptions = {}): Promise<number> {
+  const pending = await db.select({ id: consultationRequests.id }).from(consultationRequests).orderBy(asc(consultationRequests.createdAt));
+  if (pending.length === 0) return 0;
   const [stage, questions] = await Promise.all([firstOpenStage(db, orgId), listQuestions(db, orgId)]);
   const questionSnapshot = snapshotOf(questions);
+  const attribution = opts.attribution ?? "explicit";
   let imported = 0;
-  for (const row of rows) {
-    const email = row.email.trim().toLowerCase() || null;
-    const phone = row.phone.trim() || null;
-    const consented = row.consent === "yes";
+  for (const { id } of pending) {
     const lead = await db.transaction(async (tx) => {
+      // Claim the row. Another process that got here first has deleted it by
+      // the time the lock is granted, and the select then returns nothing.
+      const [row] = await tx.select().from(consultationRequests).where(eq(consultationRequests.id, id)).limit(1).for("update");
+      if (!row) return null;
+      const email = row.email.trim().toLowerCase() || null;
+      const phone = row.phone.trim() || null;
+      const consented = row.consent === "yes";
       const [created] = await tx
         .insert(leadsTable)
         .values({
@@ -405,27 +687,34 @@ export async function importConsultationRequests(db: Db, orgId: string): Promise
           sourcePage: "/contact.html",
           consentAt: consented ? row.createdAt : null,
           ip: null,
+          importSource: CONSULTATION_IMPORT_SOURCE,
+          importSourceId: row.id,
           submittedAt: row.createdAt,
           lastActivityAt: row.createdAt,
         })
+        .onConflictDoNothing({ target: [leadsTable.importSource, leadsTable.importSourceId], where: sql`${leadsTable.importSource} is not null` })
         .returning();
-      await tx.insert(leadActivitiesTable).values({
-        leadId: created!.id,
-        type: "submitted",
-        details: { source: "website", importedFrom: "consultation_requests" },
-        actorUserId: null,
-        createdAt: row.createdAt,
-      });
+      if (created) {
+        await tx.insert(leadActivitiesTable).values({
+          leadId: created.id,
+          type: "submitted",
+          details: { source: "website", importedFrom: CONSULTATION_IMPORT_SOURCE, sourceId: row.id },
+          actorUserId: null,
+          createdAt: row.createdAt,
+        });
+      }
+      // Imported now, or already imported earlier: the source row is done either way.
       await tx.delete(consultationRequests).where(eq(consultationRequests.id, row.id));
-      return created!;
+      return created ?? null;
     });
+    if (!lead) continue;
     await recordAudit(db, {
       orgId,
       actorUserId: null,
       action: "lead.imported",
       targetType: "lead",
       targetId: lead.id,
-      details: { from: "consultation_requests", receivedAt: row.createdAt.toISOString() },
+      details: { from: CONSULTATION_IMPORT_SOURCE, sourceId: lead.importSourceId, receivedAt: lead.submittedAt.toISOString(), attribution },
     });
     imported += 1;
   }
@@ -440,6 +729,16 @@ export async function scrubLeadIps(db: Db, retentionDays: number, now: Date = ne
     .set({ ip: null })
     .where(and(isNotNull(leadsTable.ip), lt(leadsTable.createdAt, cutoff)))
     .returning({ id: leadsTable.id });
+  return rows.length;
+}
+
+/** Remove attempt rows older than the retention period; the limiter only ever looks inside its window. */
+export async function pruneSubmissionAttempts(db: Db, retentionDays: number, now: Date = new Date()): Promise<number> {
+  const cutoff = new Date(now.getTime() - retentionDays * 86_400_000);
+  const rows = await db
+    .delete(leadSubmissionAttemptsTable)
+    .where(lt(leadSubmissionAttemptsTable.createdAt, cutoff))
+    .returning({ id: leadSubmissionAttemptsTable.id });
   return rows.length;
 }
 
@@ -483,6 +782,8 @@ export interface LeadJson {
   assignedToUserId: string | null;
   closedReason: LeadRow["closedReason"];
   convertedClientId: string | null;
+  /** Set on a lead brought in from the earlier storage-only endpoint's table. */
+  importSource: string | null;
   submittedAt: string;
   lastActivityAt: string;
   createdAt: string;
@@ -505,6 +806,7 @@ export function toLeadJson(l: LeadRow): LeadJson {
     assignedToUserId: l.assignedToUserId,
     closedReason: l.closedReason,
     convertedClientId: l.convertedClientId,
+    importSource: l.importSource,
     submittedAt: l.submittedAt.toISOString(),
     lastActivityAt: l.lastActivityAt.toISOString(),
     createdAt: l.createdAt.toISOString(),

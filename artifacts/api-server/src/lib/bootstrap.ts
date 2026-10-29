@@ -7,7 +7,10 @@
 //   5. every organization's lead funnel and public-form questions (defaults
 //      only — rows the agency already has are never touched)
 //   6. any website inquiry the earlier storage-only endpoint saved before the
-//      inbox existed, moved into the first organization's inbox
+//      inbox existed, moved into the inbox of the organization it can be
+//      shown to belong to (the default organization while it is the only
+//      one, or the one named in CONSULTATION_IMPORT_ORG_SLUG) — otherwise
+//      left in place with the reason logged
 // Nothing here ever changes an existing account's password unless
 // SUPER_ADMIN_FORCE_RESET=true, and re-seeding the registry never overwrites an
 // agency's own policy decisions. The one state change made to an existing
@@ -19,7 +22,7 @@ import { organizationsTable, usersTable, type Db } from "@workspace/db";
 import { seedLeadDefaults, seedRequirements } from "@workspace/db/seed";
 import type { AppConfig } from "./config";
 import { ensurePlatformRows } from "./features";
-import { importConsultationRequests } from "./leads";
+import { countConsultationRequests, importConsultationRequests, resolveConsultationImportOrg } from "./leads";
 import { logger } from "./logger";
 import { hashPassword, passwordProblem } from "./password";
 import { recordAudit } from "./audit";
@@ -63,6 +66,8 @@ export interface BootstrapResult {
   leadDefaultsChecked: number;
   /** Stored consultation requests moved into the leads inbox on this boot. */
   consultationsImported: number;
+  /** Why stored consultation requests were left where they are, when they were. */
+  consultationImportSkipped: string | null;
 }
 
 /** How many accounts still carry the retired bootstrap password, flagged or not. */
@@ -103,13 +108,27 @@ export async function bootstrapPlatform(db: Db, config: AppConfig): Promise<Boot
   const leadDefaultsChecked = orgs.length;
 
   // Inquiries the earlier storage-only endpoint saved before the inbox existed
-  // belong to the first organization. A failure here is logged, never fatal:
-  // the rows stay where they are and the next boot tries again.
+  // carry no organization. They are filed under the default organization only
+  // while that is provably right — it is the only organization — or under the
+  // organization the operator named; otherwise they stay where they are and
+  // the log says why. A failure is logged, never fatal: the rows stay and the
+  // next boot tries again. Several boots at once are fine (see the import).
   let consultationsImported = 0;
+  let consultationImportSkipped: string | null = null;
   try {
-    consultationsImported = await importConsultationRequests(db, org!.id);
-    if (consultationsImported > 0) {
-      logger.info({ imported: consultationsImported }, "Moved stored consultation requests into the leads inbox");
+    const pending = await countConsultationRequests(db);
+    if (pending > 0) {
+      const decision = await resolveConsultationImportOrg(db, config);
+      if (decision.ok) {
+        consultationsImported = await importConsultationRequests(db, decision.target.orgId, { attribution: decision.target.basis });
+        logger.info(
+          { imported: consultationsImported, pending, org: decision.target.slug, basis: decision.target.basis },
+          "Moved stored consultation requests into the leads inbox"
+        );
+      } else {
+        consultationImportSkipped = decision.reason;
+        logger.warn({ pending, reason: decision.reason }, "Stored consultation requests left in place: their organization could not be confirmed");
+      }
     }
   } catch (err) {
     logger.error({ err }, "Could not import stored consultation requests; they remain in consultation_requests");
@@ -291,5 +310,6 @@ export async function bootstrapPlatform(db: Db, config: AppConfig): Promise<Boot
     requirementsSeeded,
     leadDefaultsChecked,
     consultationsImported,
+    consultationImportSkipped,
   };
 }

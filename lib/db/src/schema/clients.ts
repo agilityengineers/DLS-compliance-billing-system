@@ -7,9 +7,10 @@
 // existing "New client" form already asks for. The roadmap's launch tables
 // (guardian, waiver, address, physician orders …) extend it with ALTERs
 // rather than replacing it.
-import { check, date, doublePrecision, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { check, date, doublePrecision, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { organizationsTable, usersTable } from "./access";
+import { leadsTable } from "./leads";
 
 export const CLIENT_STATUSES = ["Active", "Inactive"] as const;
 export type ClientStatus = (typeof CLIENT_STATUSES)[number];
@@ -54,11 +55,20 @@ export const clientsTable = pgTable(
     /** Active | Inactive */
     status: text("status").$type<ClientStatus>().notNull().default("Active"),
     createdByUserId: uuid("created_by_user_id").references(() => usersTable.id, { onDelete: "set null" }),
+    /**
+     * The inquiry this client was created from, when there was one. Unique:
+     * two conversions of the same inquiry cannot both produce a client, even
+     * if they run at the same instant (leads.converted_client_id is the other
+     * half of the link). The lazy, typed reference breaks the import cycle
+     * with the leads schema.
+     */
+    sourceLeadId: uuid("source_lead_id").references((): AnyPgColumn => leadsTable.id, { onDelete: "set null" }),
     ...timestamps,
   },
   (t) => [
     index("idx_clients_org_last_name").on(t.orgId, t.lastName),
     uniqueIndex("uq_clients_org_medicaid").on(t.orgId, t.medicaidId).where(sql`${t.medicaidId} is not null`),
+    uniqueIndex("uq_clients_source_lead").on(t.sourceLeadId).where(sql`${t.sourceLeadId} is not null`),
     check("clients_status_check", sql`${t.status} in ('Active', 'Inactive')`),
   ]
 );

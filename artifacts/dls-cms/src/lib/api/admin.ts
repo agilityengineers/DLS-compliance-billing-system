@@ -612,6 +612,8 @@ export interface ClientRecord {
   residenceLat: number | null;
   residenceLng: number | null;
   status: "Active" | "Inactive";
+  /** The inquiry this client was created from, when there was one. */
+  sourceLeadId: string | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -25,7 +25,7 @@ import {
 import type { AppConfig } from "./config";
 import { recordAudit } from "./audit";
 import { pruneAuthTokens } from "./auth-tokens";
-import { scrubLeadIps } from "./leads";
+import { pruneSubmissionAttempts, scrubLeadIps } from "./leads";
 import { pruneLoginAttempts } from "./login-attempts";
 import { logger } from "./logger";
 import { baaExpiringEmail, credentialExpiryEmail, type Mailer } from "./mail";
@@ -244,11 +244,15 @@ const pruneTokens: JobDefinition = {
 
 const scrubLeadAddresses: JobDefinition = {
   name: "leads.scrub_ip",
-  description: "Remove the submitting IP address from website inquiries once the rate-limit window is long past.",
+  description: "Remove the submitting IP address from website inquiries, and the attempts ledger's rows, once the rate-limit window is long past.",
   everyMs: 24 * HOUR,
   async run({ db, config, now }) {
     const scrubbed = await scrubLeadIps(db, config.leadIpRetentionDays, now);
-    return { items: scrubbed, detail: `${scrubbed} inquiry row(s) older than ${config.leadIpRetentionDays} days scrubbed` };
+    const pruned = await pruneSubmissionAttempts(db, config.leadIpRetentionDays, now);
+    return {
+      items: scrubbed + pruned,
+      detail: `${scrubbed} inquiry row(s) older than ${config.leadIpRetentionDays} days scrubbed, ${pruned} attempt row(s) removed`,
+    };
   },
 };
 
