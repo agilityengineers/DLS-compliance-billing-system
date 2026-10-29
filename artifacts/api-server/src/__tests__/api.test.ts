@@ -2,10 +2,10 @@
 // exercise the whole stack: migrations → bootstrap → login → hierarchy →
 // two-tier feature switches → impersonation → audit.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { sql } from "drizzle-orm";
-import { createDb, runMigrations, type DbHandle } from "@workspace/db";
+import { eq, sql } from "drizzle-orm";
+import { createDb, runMigrations, usersTable, type DbHandle } from "@workspace/db";
 import { createApp } from "../app";
-import { bootstrapPlatform } from "../lib/bootstrap";
+import { LEGACY_BOOTSTRAP_HASH, bootstrapPlatform } from "../lib/bootstrap";
 import { loadConfig } from "../lib/config";
 import { Mailer, MemoryTransport } from "../lib/mail";
 import { totpCodeNow } from "../lib/totp";
@@ -24,8 +24,13 @@ describe.skipIf(!TEST_URL)("api server", () => {
   let server: ReturnType<ReturnType<typeof createApp>["listen"]>;
   let openServer: ReturnType<ReturnType<typeof createApp>["listen"]>;
   let openBase = "";
+  // The provider account only ever comes from a one-time setup password the
+  // deployment supplies; there is no built-in default for a test to know.
+  const SETUP_PASSWORD = "Setup-Owner-2026";
+  const OWNER_PASSWORD = "Owner-Chosen-2026";
   const config = loadConfig({
     NODE_ENV: "test",
+    SUPER_ADMIN_PASSWORD: SETUP_PASSWORD,
     LOGIN_MAX_FAILURES: "3",
     LOGIN_WINDOW_MINUTES: "15",
     APP_BASE_URL: "https://portal.example.test",
@@ -123,14 +128,24 @@ describe.skipIf(!TEST_URL)("api server", () => {
     expect(bad.cookie).toBeNull();
   });
 
-  it("signs the super admin in with the agreed bootstrap password", async () => {
-    const ok = await login("EmailMe@ClarenceWilliams.com ", "Success2026");
+  it("signs the super admin in with the one-time setup password and makes it choose its own", async () => {
+    const ok = await login("EmailMe@ClarenceWilliams.com ", SETUP_PASSWORD);
     expect(ok.status).toBe(200);
     expect(ok.body.user.role).toBe("Super_Admin");
     expect(ok.body.user.orgId).toBeNull();
+    expect(ok.body.mustChangePassword).toBe(true);
     expect(ok.cookie).toMatch(/^dls_session=/);
-    superCookie = ok.cookie!;
+    // The setup password opens nothing but the change-password screen.
+    const gated = await api("GET", "/api/platform/organizations", undefined, ok.cookie);
+    expect(gated.status).toBe(403);
+    expect(gated.body.error.code).toBe("PASSWORD_CHANGE_REQUIRED");
+    expect((await api("GET", "/api/auth/me", undefined, ok.cookie)).status).toBe(200);
+    const rotated = await api("POST", "/api/auth/change-password", { currentPassword: SETUP_PASSWORD, newPassword: OWNER_PASSWORD }, ok.cookie);
+    expect(rotated.status).toBe(200);
+    superCookie = rotated.cookie!;
+    expect((await login("emailme@clarencewilliams.com", SETUP_PASSWORD)).status).toBe(401);
     const me = await api("GET", "/api/auth/me", undefined, superCookie);
+    expect(me.body.realUser.mustChangePassword).toBe(false);
     expect(me.status).toBe(200);
     expect(me.body.realUser.email).toBe("emailme@clarencewilliams.com");
     expect(me.body.impersonating).toBe(false);
@@ -186,6 +201,10 @@ describe.skipIf(!TEST_URL)("api server", () => {
     expect(me.body.organization.id).toBe(orgId);
     expect(me.body.effectiveFeatures).toContain("billing.claims");
     expect(me.body.effectiveFeatures).not.toContain("qa.flags");
+    // Until she replaces the temporary password, seeing herself is all she can do.
+    const gated = await api("GET", "/api/org/users", undefined, lisaCookie);
+    expect(gated.status).toBe(403);
+    expect(gated.body.error.code).toBe("PASSWORD_CHANGE_REQUIRED");
     // The platform console is closed to her.
     expect((await api("GET", "/api/platform/features", undefined, lisaCookie)).status).toBe(403);
     expect((await api("PUT", "/api/platform/features/qa.flags", { enabled: true }, lisaCookie)).status).toBe(403);
@@ -644,9 +663,81 @@ describe.skipIf(!TEST_URL)("api server", () => {
     expect(res.body.provider.platformAccounts).toBe(1);
     expect(res.body.catalog.requirements).toBeGreaterThan(0);
     expect(res.body.catalog.features).toBeGreaterThan(res.body.catalog.featuresAvailable);
-    expect(JSON.stringify(res.body)).not.toContain("Success2026");
+    expect(JSON.stringify(res.body)).not.toContain(SETUP_PASSWORD);
+    expect(JSON.stringify(res.body)).not.toContain(OWNER_PASSWORD);
     expect(res.body.provider).not.toHaveProperty("superAdminPassword");
+    expect(res.body.provider.accountExists).toBe(true);
+    expect(res.body.provider.passwordPendingChange).toBe(false);
+    expect(res.body.provider.passwordFromEnvironment).toBe(true);
+    expect(res.body.provider.legacyPasswordAccounts).toBe(0);
+    expect(res.body.mail.logBodies).toBe(false);
     expect(res.body.warnings.some((w: any) => w.message.includes("Only one provider account"))).toBe(true);
+    // The setup value is still in this process's environment: say so.
+    expect(res.body.warnings.some((w: any) => w.message.includes("SUPER_ADMIN_PASSWORD is still set"))).toBe(true);
+  });
+
+  // ── hardening: no default credential, ever ────────────────────────────
+  it("never creates a provider account from a built-in default", async () => {
+    const noPassword = await bootstrapPlatform(handle.db, loadConfig({ NODE_ENV: "test", SUPER_ADMIN_EMAIL: "nobody-yet@agilityengineers.com" }));
+    expect(noPassword.superAdminCreated).toBe(false);
+    expect(noPassword.superAdminId).toBeNull();
+    expect(noPassword.superAdminSetupRequired).toBe(true);
+    expect(noPassword.superAdminSetupProblem).toContain("SUPER_ADMIN_PASSWORD");
+    const weak = await bootstrapPlatform(
+      handle.db,
+      loadConfig({ NODE_ENV: "test", SUPER_ADMIN_EMAIL: "nobody-yet@agilityengineers.com", SUPER_ADMIN_PASSWORD: "short" })
+    );
+    expect(weak.superAdminSetupRequired).toBe(true);
+    expect(weak.superAdminSetupProblem).toContain("characters");
+    const rows = await handle.db.select().from(usersTable).where(eq(usersTable.email, "nobody-yet@agilityengineers.com"));
+    expect(rows).toHaveLength(0);
+    // The account that does exist was untouched by either attempt.
+    expect((await api("GET", "/api/auth/me", undefined, superCookie)).status).toBe(200);
+  });
+
+  it("flags an account still holding the retired bootstrap password without changing it", async () => {
+    const [legacy] = await handle.db
+      .insert(usersTable)
+      .values({
+        orgId,
+        email: "legacy.holder@durablelifeskills.com",
+        fullName: "Legacy Holder",
+        role: "Scheduler",
+        status: "Active",
+        passwordHash: LEGACY_BOOTSTRAP_HASH,
+        mustChangePassword: false,
+      })
+      .returning();
+    const boot = await bootstrapPlatform(handle.db, config);
+    expect(boot.legacyPasswordAccountsFlagged).toBe(1);
+    const [after] = await handle.db.select().from(usersTable).where(eq(usersTable.id, legacy!.id));
+    expect(after!.mustChangePassword).toBe(true);
+    expect(after!.passwordHash).toBe(LEGACY_BOOTSTRAP_HASH); // the credential itself is never silently changed
+    const audit = await api("GET", "/api/platform/audit?action=platform.legacy_password_flagged", undefined, superCookie);
+    expect(audit.body.entries[0].targetId).toBe(legacy!.id);
+    const status = await api("GET", "/api/platform/system", undefined, superCookie);
+    expect(status.body.provider.legacyPasswordAccounts).toBe(1);
+    expect(status.body.warnings.some((w: any) => w.severity === "warning" && w.message.includes("retired bootstrap password"))).toBe(true);
+    // Flagging is idempotent: a second boot finds nothing new to flag.
+    expect((await bootstrapPlatform(handle.db, config)).legacyPasswordAccountsFlagged).toBe(0);
+    await handle.db.delete(usersTable).where(eq(usersTable.id, legacy!.id));
+  });
+
+  it("sends a delivery test to the signed-in provider's own address and nobody else", async () => {
+    const res = await api("POST", "/api/platform/mail/test", {}, superCookie);
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe("sent");
+    expect(res.body.to).toBe("emailme@clarencewilliams.com");
+    expect(res.body.transport).toBe("memory");
+    expect(res.body.linkBase).toBe("https://portal.example.test");
+    const sent = mailOf("system.mail_test");
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.to).toBe("emailme@clarencewilliams.com");
+    expect(sent[0]!.message.text).toContain("https://portal.example.test/admin/platform/system");
+    expect(sent[0]!.message.phi).toBe(false);
+    const audit = await api("GET", "/api/platform/audit?action=platform.mail_test", undefined, superCookie);
+    expect(audit.body.entries[0].details.status).toBe("sent");
+    expect((await api("POST", "/api/platform/mail/test", {}, lisaCookie)).status).toBe(403);
   });
 
   // ── hardening: sign-in records, second factor, invitations ────────────
@@ -935,10 +1026,16 @@ describe.skipIf(!TEST_URL)("api server", () => {
   it("reports readiness for an uptime check", async () => {
     const ready = await fetch(`${base}/api/readyz`);
     expect(ready.status).toBe(200);
-    const body = (await ready.json()) as { status: string; database: { ok: boolean }; migrations: { pending: string[] } };
+    const body = (await ready.json()) as {
+      status: string;
+      database: { ok: boolean };
+      migrations: { pending: string[] };
+      providerAccount: boolean;
+    };
     expect(body.status).toBe("ready");
     expect(body.database.ok).toBe(true);
     expect(body.migrations.pending).toEqual([]);
+    expect(body.providerAccount).toBe(true);
     // The shallow check stays cheap and needs no session.
     const shallow = (await (await fetch(`${base}/api/healthz`)).json()) as { status: string };
     expect(shallow.status).toBe("ok");

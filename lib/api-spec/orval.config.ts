@@ -30,6 +30,11 @@ export default defineConfig({
       clean: true,
       prettier: true,
       override: {
+        // The workspace pins @tanstack/react-query through the catalog, which
+        // orval cannot read, so say which major the hooks are for.
+        query: {
+          version: 5,
+        },
         fetch: {
           includeHttpResponseReturnType: false,
         },

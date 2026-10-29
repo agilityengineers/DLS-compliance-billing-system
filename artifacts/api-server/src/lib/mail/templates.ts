@@ -155,6 +155,25 @@ export function accountSuspendedEmail(input: { fullName: string; orgName: string
   return { kind: "account.suspended", sender: "noreply", subject: "Your DLS Portal account was suspended", phi: false, ...body };
 }
 
+/**
+ * Sent from System status to the signed-in provider's OWN address, so an
+ * operator can prove delivery, the verified sender and the link base without
+ * putting anyone else's address — or any inquiry — in a message.
+ */
+export function mailTestEmail(input: { fullName: string; sentAt: Date; link: string; environment: string }): MailMessage {
+  const body = render({
+    heading: "DLS Portal mail delivery test",
+    lines: [
+      `Hello ${input.fullName},`,
+      `You asked the DLS Portal to send a test message on ${input.sentAt.toUTCString()} (${input.environment}).`,
+      "If you are reading this, the provider accepted the message from the verified sender. Check that the button below opens the portal at its canonical address — that is APP_BASE_URL, which every invitation and reset link uses.",
+    ],
+    action: { label: "Open System status", url: input.link },
+    footer: NO_REPLY_FOOTER,
+  });
+  return { kind: "system.mail_test", sender: "noreply", subject: "DLS Portal mail delivery test", phi: false, ...body };
+}
+
 export function supportWindowRequestedEmail(input: {
   adminName: string;
   requesterName: string;
