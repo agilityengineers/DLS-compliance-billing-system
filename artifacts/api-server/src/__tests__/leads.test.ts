@@ -14,6 +14,7 @@ import { createDb, runMigrations, type DbHandle } from "@workspace/db";
 import { createApp } from "../app";
 import { bootstrapPlatform } from "../lib/bootstrap";
 import { loadConfig } from "../lib/config";
+import { importConsultationRequests } from "../lib/leads";
 import { Mailer, MemoryTransport } from "../lib/mail";
 
 const TEST_URL = process.env.TEST_DATABASE_URL;
@@ -656,6 +657,28 @@ describe.skipIf(!TEST_URL)("leads api", () => {
 
   // ── housekeeping ──────────────────────────────────────────────────────
   describe("housekeeping", () => {
+    it("brings in inquiries the earlier storage-only endpoint saved before the inbox existed", async () => {
+      await handle.db.execute(sql`
+        insert into consultation_requests (id, first_name, last_name, email, phone, role, service, message, consent, created_at)
+        values (gen_random_uuid(), 'Early', 'Bird', 'Early@Example.com', '', 'Individual', '', 'Sent before the inbox existed', 'yes', now() - interval '3 days')`);
+      expect(await importConsultationRequests(handle.db, orgId)).toBe(1);
+      const box = await inbox(adminCookie, "?q=early");
+      expect(box.leads).toHaveLength(1);
+      const lead = box.leads[0];
+      expect(lead.source).toBe("website");
+      expect(lead.email).toBe("early@example.com");
+      expect(lead.phone).toBeNull();
+      expect(lead.answers.message).toBe("Sent before the inbox existed");
+      expect(lead.answers.consent).toBe(true);
+      expect(Date.parse(lead.submittedAt)).toBeLessThan(Date.now() - 2 * 86_400_000);
+      expect(box.stages.find((s) => s.id === lead.stageId)?.key).toBe("new");
+      const left = await handle.db.execute(sql`select count(*)::int as n from consultation_requests`);
+      expect((left.rows[0] as { n: number }).n).toBe(0);
+      expect(await importConsultationRequests(handle.db, orgId)).toBe(0);
+      const audit = await api("GET", "/api/org/audit?limit=5", undefined, adminCookie);
+      expect(audit.body.entries.some((e: any) => e.action === "lead.imported" && e.actorUserId === null)).toBe(true);
+    });
+
     it("scrubs the submitting address once the retention period has passed", async () => {
       const box = await inbox(adminCookie);
       const old = box.leads.find((l) => l.email === "flood1@example.com");

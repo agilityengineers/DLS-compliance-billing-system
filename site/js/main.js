@@ -95,16 +95,16 @@
   /* ---------- Where We Serve: Colorado map with pins (d3 + us-atlas) ---------- */
   const mapEl = document.getElementById("area-map");
   if (mapEl && window.d3 && window.topojson) {
-    const cities = [["Pueblo","Home office",-104.6091,38.2544,"home"],["Pueblo West","Pueblo County",-104.7225,38.3497],["Colorado Springs","El Paso County",-104.8214,38.8339],["Cañon City","Fremont County",-105.2425,38.4411],["Walsenburg","Huerfano County",-104.7802,37.6242]];
-    const served = ["08101", "08041", "08043", "08055"]; // Pueblo, El Paso, Fremont, Huerfano
+    const cities = [["Pueblo","Home office",-104.6091,38.2544,"home"],["Pueblo West","Pueblo County",-104.7225,38.3497],["Colorado Springs","El Paso County",-104.8214,38.8339],["Greeley","Weld County",-104.7091,40.4233],["Loveland","Larimer County",-105.0750,40.3978],["Fort Collins","Larimer County",-105.0844,40.5853]];
+    const served = ["08101", "08041", "08123", "08069"]; // Pueblo, El Paso, Weld, Larimer
     Promise.all([
       fetch("https://cdn.jsdelivr.net/npm/us-atlas@3.0.1/counties-10m.json").then((r) => r.json()),
     ]).then(([us]) => {
       const counties = topojson.feature(us, us.objects.counties).features.filter((f) => f.id.startsWith("08"));
       const state = topojson.feature(us, us.objects.states).features.find((f) => f.id === "08");
       const W = 600, H = 450;
-      // Frame southern Colorado (the service area) rather than the whole state
-      const focus = { type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [[[-106.4, 37.3], [-103.3, 37.3], [-103.3, 39.2], [-106.4, 39.2], [-106.4, 37.3]].reverse()] } };
+      // Frame the Front Range service area (Pueblo north to Fort Collins) rather than the whole state
+      const focus = { type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [[[-107.3, 38.0], [-101.9, 38.0], [-101.9, 41.05], [-107.3, 41.05], [-107.3, 38.0]].reverse()] } };
       const proj = d3.geoMercator().fitExtent([[20, 20], [W - 20, H - 20]], focus);
       const path = d3.geoPath(proj);
       const svg = d3.select(mapEl).append("svg").attr("viewBox", "0 0 " + W + " " + H).attr("preserveAspectRatio", "xMidYMid meet");
@@ -121,7 +121,7 @@
         .style("--d", (d, i) => (1.4 + i * 0.25) + "s");
       pins.append("circle").attr("class", "ring").attr("r", 8);
       pins.append("circle").attr("class", "dot").attr("r", (d) => d[4] === "home" ? 7 : 5.5);
-      const leftLabel = (d) => d[0] === "Cañon City" || d[0] === "Pueblo West";
+      const leftLabel = (d) => d[0] === "Loveland" || d[0] === "Pueblo West";
       pins.append("text").attr("x", (d) => leftLabel(d) ? -12 : 13).attr("y", (d) => d[0] === "Pueblo" ? 6 : 5)
         .attr("text-anchor", (d) => leftLabel(d) ? "end" : "start").text((d) => d[0]);
       // Hover sync between pins and list
@@ -195,52 +195,51 @@
   /* ---------- Footer year ---------- */
   document.querySelectorAll("[data-year]").forEach((el) => (el.textContent = new Date().getFullYear()));
 
-  /* =====================================================================
-     LEAD FORM SUBMIT HANDLER  (contact.html  →  <form id="lead-form">)
+  /* ---------------------------------------------------------------------
+     LEAD FORM  (contact.html  ->  <form id="lead-form">)
      ---------------------------------------------------------------------
      The form posts to the DLS Portal API, which stores the inquiry, shows
-     it in the portal's Leads inbox and emails the administrators.
-     Set the portal host in js/config.js (window.DLS_CONFIG.apiBase); leave
-     it empty while the site and the portal share a host. When they do not,
-     the API must list this site's origin in PUBLIC_FORM_ORIGINS.
-     Payload is posted as JSON: one key per form field (firstName, lastName,
-     email, phone, role, service, message, consent …) plus page and
-     submittedAt. The API answers 202 when the inquiry was accepted, 400
-     with a message when a field is missing or malformed, and 429 when this
-     address has sent too many in a few minutes.
-     ===================================================================== */
+     it in the portal's Leads inbox and emails the administrators. Success
+     requires the API's receipt, not merely an HTTP response, and no
+     personal details are logged.
+     The portal serves this site, so the API is on the same host and
+     js/config.js leaves apiBase empty. If the site is ever served from
+     another host, set apiBase there and list this site's origin in the
+     API's PUBLIC_FORM_ORIGINS setting.
+     The questions are managed in the portal: on load the form asks the API
+     which to show and rebuilds its fields; the static markup stays as the
+     fallback whenever that request fails.
+     Payload: one key per question plus page. The API answers 202 when the
+     inquiry was accepted, 400 with a message when a field is missing or
+     malformed, and 429 when this address has sent too many in a few minutes.
+     --------------------------------------------------------------------- */
   const DLS_CONFIG = window.DLS_CONFIG || {};
   const API_BASE = String(DLS_CONFIG.apiBase || "").replace(/\/+$/, "");
   const LEAD_ENDPOINT = API_BASE + "/api/public/leads";
+  const FORM_SCHEMA_ENDPOINT = API_BASE + "/api/public/forms/contact";
+  const CONTACT_FALLBACK = "You can also call (970) 893-2145 or email info@durablelifeskills.com.";
 
   async function sendLead(payload) {
-    const res = await fetch(LEAD_ENDPOINT, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    let message = "";
-    if (!res.ok) {
-      try {
-        const data = await res.json();
-        message = (data && data.error && data.error.message) || "";
-      } catch (e) {
-        message = "";
-      }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20000);
+    try {
+      const res = await fetch(LEAD_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "omit",
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+      let body = null;
+      try { body = await res.json(); } catch (e) { body = null; }
+      const ok = res.status === 202 && !!body && body.ok === true;
+      const message = !ok && body && body.error && body.error.message ? String(body.error.message) : "";
+      return { ok: ok, status: res.status, message: message };
+    } finally {
+      clearTimeout(timer);
     }
-    return { ok: res.ok, status: res.status, message: message };
   }
 
-  const FALLBACK_ERROR = "Something went wrong sending your request. Please call (719) 568-5041 or email marketing@durablelifeskills.com.";
-  const RATE_LIMIT_ERROR = "You have sent several requests in a short time. Please wait a few minutes and try again, or call (719) 568-5041.";
-
-  /* ---------------------------------------------------------------------
-     The portal's administrators manage the questions. On load the form asks
-     the API which questions to show and rebuilds its fields from the answer;
-     the static markup in contact.html stays as the fallback whenever that
-     request fails, so the page never shows an empty form.
-     --------------------------------------------------------------------- */
-  const FORM_SCHEMA_ENDPOINT = API_BASE + "/api/public/forms/contact";
   const HALF_WIDTH = { short_text: true, email: true, phone: true };
   const AUTOCOMPLETE = { firstName: "given-name", lastName: "family-name", email: "email", phone: "tel" };
 
@@ -248,6 +247,7 @@
     const id = "q_" + String(q.key).replace(/[^A-Za-z0-9_-]/g, "");
     const name = esc(q.key);
     const req = q.required ? " required" : "";
+    const max = q.maxLength ? ' maxlength="' + Number(q.maxLength) + '"' : "";
     const optional = q.required ? "" : ' <span class="hint">(optional)</span>';
     const help = q.helpText ? '<span class="hint">' + esc(q.helpText) + "</span>" : "";
     const err = '<span class="error" aria-live="polite"></span>';
@@ -267,19 +267,19 @@
     }
     if (q.type === "long_text") {
       return '<div class="field field--full"><label for="' + id + '">' + esc(q.label) + optional + "</label>" + help +
-        '<textarea id="' + id + '" name="' + name + '" rows="5"' + req + "></textarea>" + err + "</div>";
+        '<textarea id="' + id + '" name="' + name + '" rows="5"' + max + req + "></textarea>" + err + "</div>";
     }
     const type = q.type === "email" ? "email" : q.type === "phone" ? "tel" : "text";
     const inputmode = q.type === "email" ? ' inputmode="email"' : q.type === "phone" ? ' inputmode="tel"' : "";
     const autocomplete = AUTOCOMPLETE[q.key] ? ' autocomplete="' + AUTOCOMPLETE[q.key] + '"' : "";
     return '<div class="field' + (HALF_WIDTH[q.type] ? "" : " field--full") + '"><label for="' + id + '">' + esc(q.label) + optional + "</label>" + help +
-      '<input id="' + id + '" name="' + name + '" type="' + type + '"' + inputmode + autocomplete + req + ">" + err + "</div>";
+      '<input id="' + id + '" name="' + name + '" type="' + type + '"' + inputmode + autocomplete + max + req + ">" + err + "</div>";
   }
 
   async function renderQuestions(form) {
     let questions = null;
     try {
-      const res = await fetch(FORM_SCHEMA_ENDPOINT, { headers: { Accept: "application/json" } });
+      const res = await fetch(FORM_SCHEMA_ENDPOINT, { headers: { Accept: "application/json" }, credentials: "omit" });
       if (!res.ok) return;
       const data = await res.json();
       questions = data && Array.isArray(data.questions) ? data.questions : null;
@@ -302,6 +302,7 @@
     renderQuestions(form);
     const status = form.querySelector(".form-status");
     const submitBtn = form.querySelector('button[type="submit"]');
+    let pending = false;
 
     const setError = (input, msg) => {
       const field = input.closest(".field");
@@ -327,31 +328,39 @@
 
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
+      if (pending) return;
       status.className = "form-status";
-      if (form.querySelector('[name="company_website"]').value) return; // honeypot
       const bad = validate();
       if (bad) { bad.focus(); return; }
 
+      // The honeypot travels with the rest; the API discards a filled one quietly.
       const data = Object.fromEntries(new FormData(form).entries());
-      delete data.company_website;
-      const payload = { ...data, page: location.href, submittedAt: new Date().toISOString() };
+      const payload = { ...data, page: location.pathname };
 
-      submitBtn.disabled = true;
+      pending = true;
+      const controls = [...form.querySelectorAll("input, select, textarea, button")];
+      controls.forEach((control) => { control.disabled = true; });
       submitBtn.textContent = "Sending…";
       try {
         const r = await sendLead(payload);
         if (!r.ok) {
-          const userMessage = r.status === 429 ? RATE_LIMIT_ERROR : r.status === 400 && r.message ? r.message : "";
+          const userMessage = r.status === 429
+            ? "Too many attempts from this connection. Please wait a few minutes and try again."
+            : r.status === 400
+              ? (r.message || "Please check your entries and try again.")
+              : "";
           throw Object.assign(new Error("bad response"), { userMessage: userMessage });
         }
         form.reset();
-        status.textContent = "Thank you - we received your request and will follow up within one business day.";
+        status.textContent = "Thank you - your consultation request has been received. We'll follow up within one business day.";
         status.classList.add("is-success");
       } catch (err) {
-        status.textContent = (err && err.userMessage) || FALLBACK_ERROR;
+        const reason = (err && err.userMessage) || "We could not confirm receipt of your request. You can try again.";
+        status.textContent = reason + " Your entries have been kept. " + CONTACT_FALLBACK;
         status.classList.add("is-error");
       } finally {
-        submitBtn.disabled = false;
+        pending = false;
+        controls.forEach((control) => { control.disabled = false; });
         submitBtn.textContent = "Request a Consultation";
         status.focus();
       }

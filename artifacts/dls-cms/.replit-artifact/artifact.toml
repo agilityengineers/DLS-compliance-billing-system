@@ -23,8 +23,12 @@ publicDir = "artifacts/dls-cms/dist/public"
 serve = "static"
 
 [[services.production.rewrites]]
-from = "/*"
+from = "/"
 to = "/index.html"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/portal.html"
 
 [services.env]
 PORT = "24496"

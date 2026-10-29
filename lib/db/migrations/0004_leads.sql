@@ -1,3 +1,26 @@
+-- The two consultation tables below already exist on every database that ran
+-- 0003_consultations (a hand-written migration with no schema snapshot), so
+-- drizzle-kit, diffing against the 0002 snapshot, re-emitted them here. They are
+-- created only if missing; the rest of this file is as generated.
+CREATE TABLE IF NOT EXISTS "consultation_limits" (
+	"key" text PRIMARY KEY NOT NULL,
+	"attempts" integer NOT NULL,
+	"expires_at" timestamp with time zone NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "consultation_requests" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"first_name" text NOT NULL,
+	"last_name" text NOT NULL,
+	"email" text NOT NULL,
+	"phone" text NOT NULL,
+	"role" text NOT NULL,
+	"service" text NOT NULL,
+	"message" text NOT NULL,
+	"consent" text NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE "clients" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"org_id" uuid NOT NULL,

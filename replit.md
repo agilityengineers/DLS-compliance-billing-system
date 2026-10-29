@@ -61,7 +61,8 @@ Care management, compliance and billing portal for Durable Life Skills, Inc.: a 
 - Change `lib/db/src/schema` → run `pnpm --filter @workspace/db run generate` and commit the new file under `lib/db/migrations`; the API applies it on boot.
 - The bootstrap password only applies when the Super Admin account does not exist yet; use `SUPER_ADMIN_PASSWORD` + `SUPER_ADMIN_FORCE_RESET=true` to rotate it from the environment.
 - Migrations only run on boot outside production (Replit Publish copies the development schema), so run the API in the workspace once after pulling a new migration before publishing; `GET /api/readyz` reports what is pending.
-- The marketing site is a different origin from the portal. Put its origin in `PUBLIC_FORM_ORIGINS`, not `CORS_ORIGINS`: the former opens only `/api/public` and never sends a cookie, the latter opens every route with credentials.
+- The marketing site is served by the portal artifact at `/` (`artifacts/dls-cms/marketing-site.ts`; the portal lives under `/login`, `/admin` and `/field`), so its form posts same-origin and `site/js/config.js` keeps `apiBase` empty. Only if the site is ever hosted on its own domain: set `apiBase` there and put that origin in `PUBLIC_FORM_ORIGINS`, never in `CORS_ORIGINS` (the former opens only `/api/public` and never sends a cookie; the latter opens every route with credentials).
+- `docs/consultation-requests.md` records the storage-only endpoint that PR 26 added and this feature superseded; its stored rows are imported into the inbox at boot and its two tables remain until a later generated migration drops them.
 - `NEXT_PUBLIC_AUTH_MODE=demo` (Vite `VITE_AUTH_MODE=demo`) restores the password-free demo role picker for design reviews without the API.
 
 ## Pointers

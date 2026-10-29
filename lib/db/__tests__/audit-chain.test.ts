@@ -6,6 +6,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { sql } from "drizzle-orm";
 import { createDb, migrationStatus, runMigrations, type DbHandle } from "../src";
+import journal from "../migrations/meta/_journal.json";
 
 const TEST_URL = process.env.TEST_DATABASE_URL;
 
@@ -75,7 +76,8 @@ describe.skipIf(!TEST_URL)("audit log chain", () => {
     const status = await migrationStatus(handle.db);
     expect(status.pending).toEqual([]);
     expect(status.applied).toBe(status.total);
-    expect(status.latestApplied?.tag).toBe("0003_leads");
+    expect(status.total).toBe(journal.entries.length);
+    expect(status.latestApplied?.tag).toBe(journal.entries.at(-1)?.tag);
   });
 
   it("links each new entry to the one before it", async () => {

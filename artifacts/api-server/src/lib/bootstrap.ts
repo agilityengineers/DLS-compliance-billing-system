@@ -5,6 +5,8 @@
 //   4. the shipped credentialing requirements registry
 //   5. every organization's lead funnel and public-form questions (defaults
 //      only — rows the agency already has are never touched)
+//   6. any website inquiry the earlier storage-only endpoint saved before the
+//      inbox existed, moved into the first organization's inbox
 // Nothing here ever overwrites an existing account unless SUPER_ADMIN_FORCE_RESET=true,
 // and re-seeding the registry never overwrites an agency's own policy decisions.
 import { eq } from "drizzle-orm";
@@ -12,6 +14,7 @@ import { organizationsTable, usersTable, type Db } from "@workspace/db";
 import { seedLeadDefaults, seedRequirements } from "@workspace/db/seed";
 import type { AppConfig } from "./config";
 import { ensurePlatformRows } from "./features";
+import { importConsultationRequests } from "./leads";
 import { logger } from "./logger";
 import { hashPassword } from "./password";
 import { recordAudit } from "./audit";
@@ -36,6 +39,8 @@ export interface BootstrapResult {
   requirementsSeeded: number;
   /** Organizations whose lead funnel and form were checked for missing defaults. */
   leadDefaultsChecked: number;
+  /** Stored consultation requests moved into the leads inbox on this boot. */
+  consultationsImported: number;
 }
 
 export async function bootstrapPlatform(db: Db, config: AppConfig): Promise<BootstrapResult> {
@@ -68,6 +73,19 @@ export async function bootstrapPlatform(db: Db, config: AppConfig): Promise<Boot
     await seedLeadDefaults((text, params) => db.$client.query(text, params as unknown[]), o.id);
   }
   const leadDefaultsChecked = orgs.length;
+
+  // Inquiries the earlier storage-only endpoint saved before the inbox existed
+  // belong to the first organization. A failure here is logged, never fatal:
+  // the rows stay where they are and the next boot tries again.
+  let consultationsImported = 0;
+  try {
+    consultationsImported = await importConsultationRequests(db, org!.id);
+    if (consultationsImported > 0) {
+      logger.info({ imported: consultationsImported }, "Moved stored consultation requests into the leads inbox");
+    }
+  } catch (err) {
+    logger.error({ err }, "Could not import stored consultation requests; they remain in consultation_requests");
+  }
 
   let superAdminCreated = false;
   let admin = await findUserByEmail(db, config.superAdminEmail);
@@ -168,5 +186,6 @@ export async function bootstrapPlatform(db: Db, config: AppConfig): Promise<Boot
     breakGlassCreated,
     requirementsSeeded,
     leadDefaultsChecked,
+    consultationsImported,
   };
 }

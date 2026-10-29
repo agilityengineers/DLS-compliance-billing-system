@@ -5,6 +5,7 @@
 // step with its row.
 import { and, asc, count, desc, eq, gte, isNotNull, lt } from "drizzle-orm";
 import {
+  consultationRequests,
   leadActivitiesTable,
   leadFormQuestionsTable,
   leadStagesTable,
@@ -24,6 +25,7 @@ import {
   type Organization,
 } from "@workspace/db";
 import { isFeatureEnabledFor } from "@workspace/features";
+import { recordAudit } from "./audit";
 import type { AppConfig } from "./config";
 import { HttpError, notFound } from "./errors";
 import { loadFeatureStates } from "./features";
@@ -112,10 +114,20 @@ export interface PublicQuestion {
   type: LeadQuestionType;
   options: string[];
   required: boolean;
+  /** Longest answer the API accepts; null for a checkbox. */
+  maxLength: number | null;
 }
 
 export function toPublicQuestion(q: LeadFormQuestionRow): PublicQuestion {
-  return { key: q.key, label: q.label, helpText: q.helpText, type: q.type, options: q.options, required: q.required };
+  return {
+    key: q.key,
+    label: q.label,
+    helpText: q.helpText,
+    type: q.type,
+    options: q.options,
+    required: q.required,
+    maxLength: q.type === "yes_no" ? null : ANSWER_LIMITS[q.type],
+  };
 }
 
 export function snapshotOf(questions: readonly LeadFormQuestionRow[]): LeadQuestionSnapshot[] {
@@ -126,7 +138,7 @@ export function snapshotOf(questions: readonly LeadFormQuestionRow[]): LeadQuest
 
 export const ANSWER_LIMITS: Record<Exclude<LeadQuestionType, "yes_no">, number> = {
   short_text: 200,
-  long_text: 4000,
+  long_text: 5000,
   email: 254,
   phone: 40,
   select: 200,
@@ -350,6 +362,74 @@ export async function listActivities(db: DbOrTx, leadId: string): Promise<LeadAc
     .from(leadActivitiesTable)
     .where(eq(leadActivitiesTable.leadId, leadId))
     .orderBy(desc(leadActivitiesTable.createdAt), desc(leadActivitiesTable.id));
+}
+
+/**
+ * Bring in anything the earlier storage-only endpoint (`/api/consultation-requests`,
+ * PR 26) saved before the inbox existed. Each row becomes a website inquiry dated
+ * when it arrived, in the organization's first open stage, and is deleted once it
+ * is in. Safe to run on every boot: an empty table is a no-op.
+ */
+export async function importConsultationRequests(db: Db, orgId: string): Promise<number> {
+  const rows = await db.select().from(consultationRequests).orderBy(asc(consultationRequests.createdAt));
+  if (rows.length === 0) return 0;
+  const [stage, questions] = await Promise.all([firstOpenStage(db, orgId), listQuestions(db, orgId)]);
+  const questionSnapshot = snapshotOf(questions);
+  let imported = 0;
+  for (const row of rows) {
+    const email = row.email.trim().toLowerCase() || null;
+    const phone = row.phone.trim() || null;
+    const consented = row.consent === "yes";
+    const lead = await db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(leadsTable)
+        .values({
+          orgId,
+          stageId: stage.id,
+          firstName: row.firstName,
+          lastName: row.lastName,
+          email,
+          phone,
+          answers: {
+            firstName: row.firstName,
+            lastName: row.lastName,
+            email,
+            phone,
+            role: row.role || null,
+            service: row.service || null,
+            message: row.message || null,
+            consent: consented,
+          },
+          questionSnapshot,
+          source: "website",
+          sourcePage: "/contact.html",
+          consentAt: consented ? row.createdAt : null,
+          ip: null,
+          submittedAt: row.createdAt,
+          lastActivityAt: row.createdAt,
+        })
+        .returning();
+      await tx.insert(leadActivitiesTable).values({
+        leadId: created!.id,
+        type: "submitted",
+        details: { source: "website", importedFrom: "consultation_requests" },
+        actorUserId: null,
+        createdAt: row.createdAt,
+      });
+      await tx.delete(consultationRequests).where(eq(consultationRequests.id, row.id));
+      return created!;
+    });
+    await recordAudit(db, {
+      orgId,
+      actorUserId: null,
+      action: "lead.imported",
+      targetType: "lead",
+      targetId: lead.id,
+      details: { from: "consultation_requests", receivedAt: row.createdAt.toISOString() },
+    });
+    imported += 1;
+  }
+  return imported;
 }
 
 /** Null the submitting address once it is older than the retention period. */

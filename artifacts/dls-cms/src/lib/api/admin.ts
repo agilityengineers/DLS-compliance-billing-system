@@ -447,6 +447,8 @@ export interface LeadQuestion {
   type: LeadQuestionType;
   options: string[];
   required: boolean;
+  /** Longest answer the API accepts; null for a checkbox. */
+  maxLength?: number | null;
   isSystem: boolean;
   sortOrder: number;
   active: boolean;

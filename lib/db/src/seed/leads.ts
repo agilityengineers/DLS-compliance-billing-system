@@ -82,7 +82,16 @@ export const DEFAULT_LEAD_QUESTIONS: readonly DefaultLeadQuestion[] = [
     isSystem: false,
     sortOrder: 60,
   },
-  { key: "message", label: "How can we help?", helpText: null, type: "long_text", options: [], required: false, isSystem: false, sortOrder: 70 },
+  {
+    key: "message",
+    label: "How can we help?",
+    helpText: "Please do not include medical records or other sensitive personal information.",
+    type: "long_text",
+    options: [],
+    required: false,
+    isSystem: false,
+    sortOrder: 70,
+  },
   {
     key: "consent",
     label: "I agree to be contacted by Durable Life Skills, Inc. about my request. We never sell your information.",

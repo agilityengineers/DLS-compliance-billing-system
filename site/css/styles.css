@@ -621,6 +621,8 @@ ul.plain { list-style: none; margin: 0; padding: 0; }
    1440px: container caps at 1200px
    --------------------------------------------------------------------- */
 @media (max-width: 479px) {
+  .has-hero-logo:not(.logo-right) .header:not(.is-scrolled) .brand { width: 0; min-width: 0; flex: 1; }
+  .header__actions { flex-shrink: 0; }
   .brand__wordmark { max-width: 46vw; }
   .topbar__tag { display: none; }
   .about__stat { max-width: none; }

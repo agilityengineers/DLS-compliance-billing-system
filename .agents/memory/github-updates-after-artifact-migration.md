@@ -9,6 +9,12 @@ After the original root application has been migrated into a Replit artifact, me
 
 **How to apply:** After every upstream merge, inspect where changed runtime files landed. Port relevant app, component, and library changes into the live artifact while preserving its Vite routing, shims, workspace configuration, and Replit-specific fixes. Verify the artifact itself, not only the merge graph.
 
+The uploaded DLS marketing website is intended to be the public front page, not a replacement for the staff sign-in experience.
+
+**Why:** The user explicitly identified the uploaded website as the new front page. Merging static source files alone did not connect them to the running service.
+
+**How to apply:** Preserve the approved website design and keep staff portal routes accessible when changing website hosting or routing. Do not treat an upload-only merge as a completed website integration.
+
 Replit’s GitHub connectors and the local Git credential helper are separate. Attaching a connector may provide authorized API access without repairing a rejected `git push` credential, and Version Control may leave or restart a `pull --rebase`.
 
 **Why:** Treating connector authorization as proof that command-line Git is authenticated can cause repeated rebases or incomplete synchronization.

@@ -12,8 +12,8 @@ site/
   services.html     All 7 services with anchor links
   contact.html      Contact info + lead-capture form (#lead-form)
   css/styles.css    Single stylesheet; theme tokens at the top, sections numbered
-  js/config.js      Per-deployment settings (the portal host the form posts to)
-  js/main.js        Nav toggle, sticky header, form handler (sendLead)
+  js/config.js      Per-deployment settings (the portal host the form posts to; empty = same host)
+  js/main.js        Nav toggle, sticky header, form handler (sendLead) and the form built from the portal's questions
   assets/           logo-full.png, logo-mark.png, favicon-*.png
   vercel.json       Clean URLs + asset caching
 ```
@@ -29,25 +29,23 @@ npx serve .        # or: python3 -m http.server 8080
 - **Replit:** create an "HTML, CSS, JS" Repl, upload the `site/` contents to the root.
 
 ## Connect the lead form
-The form on `contact.html` posts to the DLS Portal API, which stores each
-inquiry, shows it in the portal's **Leads** inbox and emails the organization's
-administrators. Two settings connect them:
+The form on `contact.html` posts to the DLS Portal API (`POST /api/public/leads`), which
+stores each inquiry, shows it in the portal's **Leads** inbox and emails the
+organization's administrators. The portal serves this site at `/`, so the API is on
+the same host and nothing needs configuring: `js/config.js` keeps `apiBase` empty.
 
-1. **On the site:** open `js/config.js` and set `apiBase` to the portal host,
-   e.g. `"https://portal.durablelifeskills.com"` (no trailing slash). Leave it
-   `""` only while the site and the portal are served from the same host.
-2. **On the portal's API:** list this site's origin(s) in `PUBLIC_FORM_ORIGINS`,
-   e.g. `https://durablelifeskills.com,https://www.durablelifeskills.com`. The
-   browser refuses the request until the origin is listed. (Do not use
-   `CORS_ORIGINS` for this; that setting opens every route with credentials.)
+Only if the site is ever served from its own domain: set `apiBase` in `js/config.js`
+to the portal host (no trailing slash) and list this site's origin(s) in the API's
+`PUBLIC_FORM_ORIGINS` setting. Do not use `CORS_ORIGINS` for this; that setting opens
+every route with credentials.
 
-The payload is JSON with one key per form field —
-`{ firstName, lastName, email, phone, role, service, message, consent, page, submittedAt }` —
-and the API answers `202` when the inquiry was accepted, `400` with a message
-when a field is missing or malformed, and `429` when one address has sent too
-many in a few minutes. The questions themselves are managed by the portal's
-administrators; the static fields in `contact.html` match the portal's
-defaults.
+The questions themselves are managed by the portal's administrators (Leads → Form &
+funnel settings). On load the form asks `GET /api/public/forms/contact` which questions
+to show and rebuilds its fields; the static fields in `contact.html` match the portal's
+defaults and stay as the fallback whenever that request fails. The payload is JSON with
+one key per question plus `page`; the API answers `202` when the inquiry was accepted,
+`400` with a message when a field is missing or malformed, and `429` when one address
+has sent too many in a few minutes.
 
 ## Brand tokens
 Edit `:root` at the top of `css/styles.css`. Colors were sampled from the logo:
@@ -56,20 +54,23 @@ Edit `:root` at the top of `css/styles.css`. Colors were sampled from the logo:
 - Gold `#e9b121` (logo rgb 232,176,24) - accent; use `--gold-700 #8a6208` when gold must be text on white
 
 ## Photography
-Photos are Unsplash stock loaded from images.unsplash.com, tagged `STOCK PLACEHOLDER` in the HTML. Replace with DLS photography (download into `assets/` and update the `src`). The current site's gallery images were AI-generated "mission control" scenes and were not reused.
+The active pages use local images in `assets/photos/`, including AI-generated imagery. The owner approved the existing website content and images for continued use; retain them as supplied. Approval does not change the images' AI-generated provenance or establish that they are documentary photographs of staff or participants.
 
-## Draft copy
-Search for `DRAFT COPY - CONFIRM` and `IMAGE PLACEHOLDER` comments.
+## Content approval
+On October 27, 2026, after review of the draft copy and image annotations across `index.html`, `about.html`, `services.html`, and `contact.html`, the owner confirmed: “All of the information that is created on the website is approved, and it is content that I've created, and it's paid for.”
+
+This approval covers the existing copy, staff profiles, testimonials, service descriptions, business details, and imagery. No replacement copy or photos were supplied or requested. The existing wording, images, and approved layout have therefore been preserved, and obsolete draft/replacement annotations removed. This records owner approval, not independent verification of business claims or image licensing. Earlier hero variants in `_archive/` are not part of the active site.
 
 
 ## Handoff to Replit (DLS-compliance-billing-system)
 
-The repo (agilityengineers/DLS-compliance-billing-system) is a pnpm monorepo; the Vite portal app at `artifacts/dls-cms` already serves `/`. Do not drop these files at the repo root. Recommended: add this folder as `artifacts/marketing-site/` (a new static artifact deployed to the public domain, e.g. durablelifeskills.com), keeping the portal on `portal.durablelifeskills.com`. If both must share one host, serve `site/` as static files from the Express app in `artifacts/api-server` at `/` and move the portal under `/portal`.
+The repo (agilityengineers/DLS-compliance-billing-system) is a pnpm monorepo. The existing `artifacts/dls-cms` service now serves this website at `/`, with the staff portal remaining at `/login`, `/admin/*`, and `/field/*`.
+
+`artifacts/dls-cms/marketing-site.ts` serves these source files during development and copies the approved pages, CSS, JavaScript, and assets into the production build. The compiled portal entry is preserved as `portal.html`; the artifact's fallback rewrite serves it for portal routes. Keep editing the files here rather than duplicating them into the artifact's public directory. Archives and deployment instructions are not copied into the published site.
 
 `index.html` is the approved front page; `_archive/` holds the two earlier hero variants and is not needed in production.
 
 - News cards load live from https://durablelifeskills.com/dls-media/feed/rss in `js/main.js` (`NEWS_FEED`). If the repl proxies requests, allow that origin; the feed sends CORS headers so a direct browser fetch works.
-- Lead form posts to the portal API at `/api/public/leads` (see "Connect the lead form" above): set `apiBase` in `js/config.js` and `PUBLIC_FORM_ORIGINS` on the API.
-- Photos in `assets/photos/` are AI-generated placeholders marked with HTML comments; swap for DLS photography when available.
-- Copy marked `<!-- DRAFT COPY - CONFIRM -->` still needs client sign-off.
+- The lead form posts to the portal API at `/api/public/leads` and lands in the portal's Leads inbox (see "Connect the lead form" above). On any failure the form shows a message with phone/email alternatives, keeps the entered data, and never claims delivery or logs personal details.
+- Copy and imagery on the four active pages are owner-approved; see the approval record above. Do not replace them solely because earlier annotations described them as drafts.
 - `vercel.json` can be deleted if deploying only from Replit.
