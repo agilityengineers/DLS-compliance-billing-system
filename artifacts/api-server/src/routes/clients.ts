@@ -2,15 +2,20 @@
 //
 // Creating a client from a lead is the conversion: the client row, the lead's
 // move to the funnel's "won" stage and the timeline entry land in one
-// transaction, so a lead can never be half-converted.
+// transaction, so a lead can never be half-converted. The lead row is locked
+// for that transaction and the move is conditional on the lead still being
+// unconverted, so two conversions of one inquiry started at the same instant
+// produce one client and one 409 — never two clients — and a stage change
+// racing the conversion either lands before it or is refused after it. A
+// unique index on clients.source_lead_id says the same thing at the database.
 import { Router, type IRouter } from "express";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import { z } from "zod/v4";
-import { clientsTable, leadActivitiesTable, leadsTable, type ClientRow, type Db } from "@workspace/db";
+import { clientsTable, leadActivitiesTable, leadsTable, type ClientRow, type Db, type LeadRow, type LeadStageRow } from "@workspace/db";
 import { recordAudit } from "../lib/audit";
 import type { AppConfig } from "../lib/config";
 import { badRequest, conflict, notFound } from "../lib/errors";
-import { findLead, findStage, stageOfKind } from "../lib/leads";
+import { findStage, lockLead, stageOfKind } from "../lib/leads";
 import type { Mailer } from "../lib/mail";
 import { requireAuth, requireAuthContext, requireFeature, requireOrgId } from "../middlewares/auth";
 
@@ -63,6 +68,8 @@ export interface ClientJson {
   residenceLat: number | null;
   residenceLng: number | null;
   status: ClientRow["status"];
+  /** The inquiry this client was created from, when there was one. */
+  sourceLeadId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -90,6 +97,7 @@ export function toClientJson(c: ClientRow): ClientJson {
     residenceLat: c.residenceLat,
     residenceLng: c.residenceLng,
     status: c.status,
+    sourceLeadId: c.sourceLeadId,
     createdAt: c.createdAt.toISOString(),
     updatedAt: c.updatedAt.toISOString(),
   };
@@ -97,12 +105,19 @@ export function toClientJson(c: ClientRow): ClientJson {
 
 const blankToNull = (v: string | undefined): string | null => (v === undefined || v === "" ? null : v);
 
-/** Postgres 23505, whether the driver threw it directly or the ORM wrapped it as `cause`. */
-function isUniqueViolation(e: unknown, depth = 0): boolean {
-  if (typeof e !== "object" || e === null || depth > 3) return false;
-  if ((e as { code?: string }).code === "23505") return true;
-  return isUniqueViolation((e as { cause?: unknown }).cause, depth + 1);
+/**
+ * The index or constraint a Postgres 23505 names, whether the driver threw it
+ * directly or the ORM wrapped it as `cause`; null when the error is something
+ * else. An empty string means a unique violation that named nothing.
+ */
+function uniqueViolationOf(e: unknown, depth = 0): string | null {
+  if (typeof e !== "object" || e === null || depth > 3) return null;
+  const { code, constraint } = e as { code?: string; constraint?: string };
+  if (code === "23505") return constraint ?? "";
+  return uniqueViolationOf((e as { cause?: unknown }).cause, depth + 1);
 }
+
+const alreadyConverted = () => conflict("LEAD_ALREADY_CONVERTED", "That inquiry has already become a client.");
 
 export function clientsRouter(db: Db, _config: AppConfig, _deps: { mailer: Mailer }): IRouter {
   const router: IRouter = Router();
@@ -134,18 +149,32 @@ export function clientsRouter(db: Db, _config: AppConfig, _deps: { mailer: Maile
     const orgId = requireOrgId(res);
     const body = ClientBody.parse(req.body);
 
-    // Converting a lead needs the lead, in this organization, not yet
-    // converted, and a "won" stage to move it to.
-    const lead = body.sourceLeadId ? await findLead(db, orgId, body.sourceLeadId) : undefined;
-    if (body.sourceLeadId && !lead) throw notFound("Inquiry not found.");
-    if (lead?.convertedClientId) throw conflict("LEAD_ALREADY_CONVERTED", "That inquiry has already become a client.");
-    const wonStage = lead ? await stageOfKind(db, orgId, "won") : undefined;
-    if (lead && !wonStage) throw badRequest("The funnel has no 'converted' stage to move the inquiry to.");
-    const fromStage = lead ? await findStage(db, orgId, lead.stageId) : undefined;
-
-    let client: ClientRow;
+    interface Conversion {
+      client: ClientRow;
+      lead: LeadRow | null;
+      fromStage: LeadStageRow | undefined;
+      wonStage: LeadStageRow | undefined;
+    }
+    let outcome: Conversion;
     try {
-      client = await db.transaction(async (tx) => {
+      outcome = await db.transaction(async (tx): Promise<Conversion> => {
+        // Converting a lead needs the lead, in this organization, not yet
+        // converted, and a "won" stage to move it to. The lead is read under
+        // a row lock, so what is checked here is what is still true when the
+        // writes below land; a second conversion waits on the lock and then
+        // sees this one's result.
+        let lead: LeadRow | null = null;
+        let fromStage: LeadStageRow | undefined;
+        let wonStage: LeadStageRow | undefined;
+        if (body.sourceLeadId) {
+          lead = (await lockLead(tx, orgId, body.sourceLeadId)) ?? null;
+          if (!lead) throw notFound("Inquiry not found.");
+          fromStage = await findStage(tx, orgId, lead.stageId);
+          if (lead.convertedClientId || fromStage?.kind === "won") throw alreadyConverted();
+          wonStage = await stageOfKind(tx, orgId, "won");
+          if (!wonStage) throw badRequest("The funnel has no 'converted' stage to move the inquiry to.");
+        }
+
         const [created] = await tx
           .insert(clientsTable)
           .values({
@@ -170,14 +199,20 @@ export function clientsRouter(db: Db, _config: AppConfig, _deps: { mailer: Maile
             residenceLat: body.residenceLat ?? null,
             residenceLng: body.residenceLng ?? null,
             createdByUserId: auth.realUser.id,
+            sourceLeadId: lead?.id ?? null,
           })
           .returning();
         if (lead && wonStage) {
           const now = new Date();
-          await tx
+          // "Still unconverted" is part of the write itself. With the lock
+          // above this cannot fail; without it, it would still refuse to
+          // overwrite another conversion — and roll the client back with it.
+          const [moved] = await tx
             .update(leadsTable)
             .set({ stageId: wonStage.id, convertedClientId: created!.id, closedReason: null, lastActivityAt: now, updatedAt: now })
-            .where(eq(leadsTable.id, lead.id));
+            .where(and(eq(leadsTable.id, lead.id), isNull(leadsTable.convertedClientId)))
+            .returning({ id: leadsTable.id });
+          if (!moved) throw alreadyConverted();
           await tx.insert(leadActivitiesTable).values({
             leadId: lead.id,
             type: "converted",
@@ -185,12 +220,15 @@ export function clientsRouter(db: Db, _config: AppConfig, _deps: { mailer: Maile
             actorUserId: auth.realUser.id,
           });
         }
-        return created!;
+        return { client: created!, lead, fromStage, wonStage };
       });
     } catch (e) {
-      if (isUniqueViolation(e)) throw conflict("MEDICAID_ID_TAKEN", "A client with that Medicaid ID already exists.");
+      const violated = uniqueViolationOf(e);
+      if (violated === "uq_clients_source_lead" || violated === "uq_leads_converted_client") throw alreadyConverted();
+      if (violated !== null) throw conflict("MEDICAID_ID_TAKEN", "A client with that Medicaid ID already exists.");
       throw e;
     }
+    const { client, lead, fromStage, wonStage } = outcome;
 
     const actor = {
       orgId,

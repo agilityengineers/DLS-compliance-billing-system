@@ -36,6 +36,7 @@ import {
   listActivities,
   listQuestions,
   listStages,
+  lockLead,
   snapshotOf,
   toActivityJson,
   toLeadJson,
@@ -304,79 +305,96 @@ export function leadsRouter(db: Db, _config: AppConfig, deps: { mailer: Mailer }
     res.json({ ...(await loadDetail(orgId, lead, users)), assignees: assigneesOf(users) });
   });
 
-  /** Move it along the funnel, hand it to someone, or both. */
+  /**
+   * Move it along the funnel, hand it to someone, or both.
+   *
+   * Everything about the lead is decided inside one transaction, after taking
+   * the row lock a conversion also takes. So a conversion that is mid-flight
+   * when this request arrives finishes first and is then seen here (409), and
+   * one that arrives while this change is being written waits for it. Neither
+   * can write a stale picture of the lead over the other's.
+   */
   router.patch("/leads/:id", async (req, res) => {
     const auth = requireAuthContext(res);
     const orgId = requireOrgId(res);
     const body = PatchBody.parse(req.body);
-    const lead = await leadOr404(orgId, String(req.params.id));
-    const currentStage = await findStage(db, orgId, lead.stageId);
-    if (currentStage?.kind === "won" || lead.convertedClientId) {
-      throw conflict("LEAD_CONVERTED", "This inquiry has already become a client and can no longer be changed.");
-    }
+    const id = String(req.params.id);
+    if (!isUuid(id)) throw notFound("Inquiry not found.");
 
-    const now = new Date();
-    const set: Partial<typeof leadsTable.$inferInsert> = {};
-    const activities: Omit<Parameters<typeof addActivity>[1], "leadId" | "actorUserId">[] = [];
-    const audits: Omit<AuditEntry, "orgId" | "actorUserId" | "impersonatingUserId" | "ip">[] = [];
-    let newAssignee: { id: string; email: string; fullName: string } | null = null;
-    let targetStage: LeadStageRow | undefined;
-
-    if (body.stageId !== undefined && body.stageId !== lead.stageId) {
-      targetStage = await findStage(db, orgId, body.stageId);
-      if (!targetStage || !targetStage.active) throw badRequest("That stage does not exist.");
-      if (targetStage.kind === "won") {
-        throw conflict("USE_CONVERSION", "To mark an inquiry as converted, create the client from it.");
-      }
-      if (targetStage.kind === "lost") {
-        const reason = body.closedReason ?? lead.closedReason;
-        if (!reason) throw badRequest("Give a reason for closing this inquiry.");
-        set.closedReason = reason;
-      } else {
-        set.closedReason = null;
-      }
-      set.stageId = targetStage.id;
-      activities.push({
-        type: "stage_changed",
-        details: { from: lead.stageId, to: targetStage.id, fromKey: currentStage?.key ?? null, toKey: targetStage.key, closedReason: set.closedReason ?? null },
-      });
-      audits.push({
-        action: "lead.stage_changed",
-        targetType: "lead",
-        targetId: lead.id,
-        details: { from: currentStage?.key ?? null, to: targetStage.key, closedReason: set.closedReason ?? null },
-      });
-    } else if (body.closedReason !== undefined && currentStage?.kind === "lost" && body.closedReason !== lead.closedReason) {
-      if (!body.closedReason) throw badRequest("A closed inquiry keeps a reason.");
-      set.closedReason = body.closedReason;
-      audits.push({ action: "lead.stage_changed", targetType: "lead", targetId: lead.id, details: { from: currentStage.key, to: currentStage.key, closedReason: body.closedReason } });
-    }
-
-    if (body.assignedToUserId !== undefined && body.assignedToUserId !== lead.assignedToUserId) {
+    // Who it is being handed to does not depend on the lead; check it first.
+    let assignee: { id: string; email: string; fullName: string } | null | undefined;
+    if (body.assignedToUserId !== undefined) {
       if (body.assignedToUserId) {
         const user = await findActiveOrgUser(db, orgId, body.assignedToUserId);
         if (!user || !ASSIGNABLE_ROLES.has(user.role)) throw badRequest("Choose an active Admin or Scheduler in your organization.");
-        set.assignedToUserId = user.id;
-        newAssignee = { id: user.id, email: user.email, fullName: user.fullName };
+        assignee = { id: user.id, email: user.email, fullName: user.fullName };
       } else {
-        set.assignedToUserId = null;
+        assignee = null;
       }
-      activities.push({ type: "assigned", details: { from: lead.assignedToUserId, to: set.assignedToUserId ?? null } });
-      audits.push({ action: "lead.assigned", targetType: "lead", targetId: lead.id, details: { from: lead.assignedToUserId, to: set.assignedToUserId ?? null } });
     }
-
     const users = await listOrgUsers(db, orgId);
-    if (Object.keys(set).length === 0) {
-      res.json({ ...(await loadDetail(orgId, lead, users)), assignees: assigneesOf(users) });
-      return;
-    }
+    const now = new Date();
 
-    const { updated, assignedActivityId } = await db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
+      const lead = await lockLead(tx, orgId, id);
+      if (!lead) throw notFound("Inquiry not found.");
+      const currentStage = await findStage(tx, orgId, lead.stageId);
+      if (currentStage?.kind === "won" || lead.convertedClientId) {
+        throw conflict("LEAD_CONVERTED", "This inquiry has already become a client and can no longer be changed.");
+      }
+
+      const set: Partial<typeof leadsTable.$inferInsert> = {};
+      const activities: Omit<Parameters<typeof addActivity>[1], "leadId" | "actorUserId">[] = [];
+      const audits: Omit<AuditEntry, "orgId" | "actorUserId" | "impersonatingUserId" | "ip">[] = [];
+      let newAssignee: { id: string; email: string; fullName: string } | null = null;
+
+      if (body.stageId !== undefined && body.stageId !== lead.stageId) {
+        const targetStage = await findStage(tx, orgId, body.stageId);
+        if (!targetStage || !targetStage.active) throw badRequest("That stage does not exist.");
+        if (targetStage.kind === "won") {
+          throw conflict("USE_CONVERSION", "To mark an inquiry as converted, create the client from it.");
+        }
+        if (targetStage.kind === "lost") {
+          const reason = body.closedReason ?? lead.closedReason;
+          if (!reason) throw badRequest("Give a reason for closing this inquiry.");
+          set.closedReason = reason;
+        } else {
+          set.closedReason = null;
+        }
+        set.stageId = targetStage.id;
+        activities.push({
+          type: "stage_changed",
+          details: { from: lead.stageId, to: targetStage.id, fromKey: currentStage?.key ?? null, toKey: targetStage.key, closedReason: set.closedReason ?? null },
+        });
+        audits.push({
+          action: "lead.stage_changed",
+          targetType: "lead",
+          targetId: lead.id,
+          details: { from: currentStage?.key ?? null, to: targetStage.key, closedReason: set.closedReason ?? null },
+        });
+      } else if (body.closedReason !== undefined && currentStage?.kind === "lost" && body.closedReason !== lead.closedReason) {
+        if (!body.closedReason) throw badRequest("A closed inquiry keeps a reason.");
+        set.closedReason = body.closedReason;
+        audits.push({ action: "lead.stage_changed", targetType: "lead", targetId: lead.id, details: { from: currentStage.key, to: currentStage.key, closedReason: body.closedReason } });
+      }
+
+      if (assignee !== undefined && (assignee?.id ?? null) !== lead.assignedToUserId) {
+        set.assignedToUserId = assignee?.id ?? null;
+        newAssignee = assignee;
+        activities.push({ type: "assigned", details: { from: lead.assignedToUserId, to: set.assignedToUserId } });
+        audits.push({ action: "lead.assigned", targetType: "lead", targetId: lead.id, details: { from: lead.assignedToUserId, to: set.assignedToUserId } });
+      }
+
+      if (Object.keys(set).length === 0) return { lead, updated: null, audits, newAssignee: null, assignedActivityId: null };
+
+      // The predicate repeats what the lock already guarantees: a converted
+      // inquiry is never moved, assigned or reopened from here.
       const [row] = await tx
         .update(leadsTable)
         .set({ ...set, lastActivityAt: now, updatedAt: now })
-        .where(eq(leadsTable.id, lead.id))
+        .where(and(eq(leadsTable.id, lead.id), isNull(leadsTable.convertedClientId)))
         .returning();
+      if (!row) throw conflict("LEAD_CONVERTED", "This inquiry has already become a client and can no longer be changed.");
       let assignedActivityId: string | null = null;
       for (const a of activities) {
         const [inserted] = await tx
@@ -385,12 +403,18 @@ export function leadsRouter(db: Db, _config: AppConfig, deps: { mailer: Mailer }
           .returning({ id: leadActivitiesTable.id });
         if (a.type === "assigned") assignedActivityId = inserted!.id;
       }
-      return { updated: row!, assignedActivityId };
+      return { lead, updated: row, audits, newAssignee, assignedActivityId };
     });
-    for (const a of audits) await recordAudit(db, { ...auditBase(auth, orgId, req.ip), ...a });
+
+    if (!result.updated) {
+      res.json({ ...(await loadDetail(orgId, result.lead, users)), assignees: assigneesOf(users) });
+      return;
+    }
+    for (const a of result.audits) await recordAudit(db, { ...auditBase(auth, orgId, req.ip), ...a });
 
     // Tell the new assignee, unless they did it themselves. Keyed on the
     // timeline entry, so one hand-over is one email however often it is retried.
+    const { newAssignee, assignedActivityId } = result;
     if (newAssignee && newAssignee.id !== auth.effectiveUser.id && assignedActivityId) {
       void deps.mailer
         .send(
@@ -398,14 +422,14 @@ export function leadsRouter(db: Db, _config: AppConfig, deps: { mailer: Mailer }
             fullName: newAssignee.fullName,
             assignedBy: auth.effectiveUser.fullName,
             orgName: auth.org?.name ?? "your organization",
-            link: deps.mailer.link(`/admin/leads/${lead.id}`),
+            link: deps.mailer.link(`/admin/leads/${id}`),
           }),
           { to: newAssignee.email, userId: newAssignee.id, orgId, dedupeKey: `lead_assigned:${assignedActivityId}` }
         )
         .catch(() => undefined);
     }
 
-    res.json({ ...(await loadDetail(orgId, updated, users)), assignees: assigneesOf(users) });
+    res.json({ ...(await loadDetail(orgId, result.updated, users)), assignees: assigneesOf(users) });
   });
 
   // ── configuration: the website form and the funnel ───────────────────
