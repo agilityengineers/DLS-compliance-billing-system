@@ -3,9 +3,11 @@
 
     python3 scripts/site-icons.py            # from the repository root
 
-Favicon = the DLS monkey on its own (site/assets/logo-monkey.png, the mark that
-appears in the sticky header while scrolling). Share image = the full logo on
-white at 1200x630 (site/assets/og-image.jpg). Needs Pillow (`pip install pillow`).
+Favicon = the DLS monkey on its own. Tab-sized icons (favicon.ico and the 16/32px
+PNGs) use the monkey's head (site/assets/logo-monkey-head.png) so it stays bold at
+tab size; the large icons (192/512px and the Apple touch icon) use the full-body
+monkey from the sticky header (site/assets/logo-monkey.png). Share image = the full
+logo on white at 1200x630 (site/assets/og-image.jpg). Needs Pillow (`pip install pillow`).
 """
 from pathlib import Path
 
@@ -33,15 +35,19 @@ def shrink(img: Image.Image, size: int) -> Image.Image:
 
 def main() -> None:
     ICONS.mkdir(parents=True, exist_ok=True)
-    monkey = Image.open(SITE / "assets" / "logo-monkey.png").convert("RGBA")
-    monkey = monkey.crop(monkey.getchannel("A").getbbox())
-    transparent = square(monkey, 0.02)
-    opaque = square(monkey, 0.10, (255, 255, 255, 255))  # iOS paints transparency black
+    def art(name: str) -> Image.Image:
+        img = Image.open(SITE / "assets" / name).convert("RGBA")
+        return img.crop(img.getchannel("A").getbbox())
 
-    for size in (16, 32, 192, 512):
-        shrink(transparent, size).save(ICONS / f"favicon-{size}.png", optimize=True)
+    head, body = square(art("logo-monkey-head.png"), 0.02), square(art("logo-monkey.png"), 0.02)
+    opaque = square(art("logo-monkey.png"), 0.10, (255, 255, 255, 255))  # iOS paints transparency black
+
+    for size in (16, 32):
+        shrink(head, size).save(ICONS / f"favicon-{size}.png", optimize=True)
+    for size in (192, 512):
+        shrink(body, size).save(ICONS / f"favicon-{size}.png", optimize=True)
     shrink(opaque, 180).convert("RGB").save(ICONS / "apple-touch-icon.png", optimize=True)
-    frames = [shrink(transparent, s) for s in (48, 32, 16)]
+    frames = [shrink(head, s) for s in (48, 32, 16)]
     frames[0].save(ICONS / "favicon.ico", format="ICO", sizes=[(48, 48), (32, 32), (16, 16)], append_images=frames[1:])
 
     logo = Image.open(SITE / "assets" / "logo-full.png").convert("RGBA")
