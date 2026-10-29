@@ -31,9 +31,10 @@
 
   /* ---------- Mark current page in nav ---------- */
   const here = location.pathname.split("/").pop() || "index.html";
-  document.querySelectorAll('.nav a, .mobile-nav a, .footer a[href$=".html"]').forEach((a) => {
+  document.querySelectorAll('.nav a, .mobile-nav a, .footer a[href$=".html"], .footer a[href="/"]').forEach((a) => {
     const target = a.getAttribute("href").split("#")[0];
-    if (target === here) a.setAttribute("aria-current", "page");
+    const page = target === "/" || target === "" ? "index.html" : target; // home links point at "/"
+    if (page === here) a.setAttribute("aria-current", "page");
   });
 
   /* ---------- Shared: escape text for innerHTML ---------- */
@@ -59,7 +60,7 @@
         if (/dummyImage/.test(img)) img = "";
         const desc = trim(q("description"), 150);
         return '<article class="news-card">' +
-          (img ? '<figure class="photo"><img src="' + esc(img) + '" alt="" loading="lazy" width="1000" height="563"></figure>' : '<figure class="photo photo--brand" aria-hidden="true"><img src="assets/logo-monkey.png" alt=""></figure>') +
+          (img ? '<figure class="photo"><img src="' + esc(img) + '" alt="" loading="lazy" width="1000" height="563"></figure>' : '<figure class="photo photo--brand" aria-hidden="true"><img src="assets/logo-monkey.webp" alt=""></figure>') +
           '<div class="news-card__body"><span class="news-card__meta">DLS Media · <time>' + esc(fmt(date)) + '</time></span>' +
           '<h3><a href="' + esc(link) + '" rel="noopener" target="_blank">' + esc(title) + '</a></h3>' +
           '<p>' + esc(desc) + '</p>' +
