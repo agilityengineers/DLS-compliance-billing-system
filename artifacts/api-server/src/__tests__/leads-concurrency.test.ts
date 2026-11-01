@@ -9,7 +9,11 @@
 // left behind, and the public form's treatment of a second submission from the
 // same email. Each test here makes the race happen — the same request many
 // times at once, a transaction holding the row while another request arrives,
-// several "boot processes" importing one table — and checks what is left.
+// several "boot processes" importing one table — and checks what is left. It
+// also pins down what a retry is (the same key with the same answers, or the
+// same answers without a key) against what a changed form is (new answers,
+// under a key or from an email the inbox has seen), and that an imported lead
+// and its audit entry commit together.
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { sql } from "drizzle-orm";
@@ -241,6 +245,77 @@ describe.skipIf(!TEST_URL)("leads under concurrency", () => {
       expect(await leadsByEmail("family@example.com")).toHaveLength(2);
     });
 
+    it("stores changed answers sent under the key that stored the original, and still folds retries of either", async () => {
+      const key = randomUUID();
+      const original = submission({ email: "same-key@example.com", submissionId: key });
+      expect((await submit(original, "198.51.100.30")).status).toBe(202);
+
+      // The website mints a new key when an answer changes; a cached page, an
+      // older script or a bot might not. The API does not take the key's word
+      // for it: the answers changed, so this is a second inquiry.
+      const changed = { ...original, message: "Please disregard the earlier note: we need day habilitation, not job coaching." };
+      expect((await submit(changed, "198.51.100.31")).status).toBe(202);
+      let leads = await leadsByEmail("same-key@example.com");
+      expect(leads).toHaveLength(2);
+      expect(leads.map((l) => l.submission_id)).toEqual([key, key]);
+      expect(leads[0]!.answers.message).toBe(original.message);
+      expect(leads[1]!.answers.message).toBe(changed.message);
+      const newer = await activitiesOf(leads[1]!.id);
+      expect(newer).toHaveLength(1);
+      expect(newer[0]!.details).toMatchObject({ earlierLeadId: leads[0]!.id, relatedBy: "submission_id" });
+      const older = await activitiesOf(leads[0]!.id);
+      expect(older.some((a) => a.details?.resubmittedAs === leads[1]!.id && a.details?.relatedBy === "submission_id")).toBe(true);
+      const [received] = await auditsFor("lead.received", leads[1]!.id);
+      expect(received!.details).toMatchObject({ earlierLeadId: leads[0]!.id, relatedBy: "submission_id" });
+      expect(JSON.stringify(received!.details)).not.toMatch(/habilitation|same-key@/i);
+
+      // A retry of either form lands on the inquiry it repeats: the key and the answers together say which.
+      expect((await submit(changed, "198.51.100.32")).status).toBe(202);
+      expect((await submit(original, "198.51.100.33")).status).toBe(202);
+      leads = await leadsByEmail("same-key@example.com");
+      expect(leads).toHaveLength(2);
+      expect((await activitiesOf(leads[0]!.id)).filter((a) => a.details?.duplicate === true)).toHaveLength(1);
+      expect((await activitiesOf(leads[1]!.id)).filter((a) => a.details?.duplicate === true)).toHaveLength(1);
+      expect(await attemptOutcomes(sql`submission_id = ${key}`)).toEqual({ created: 2, retry: 2 });
+
+      // Whitespace is not a change: the corrected message with Windows line endings and a trailing space is a retry.
+      const respaced = { ...changed, message: changed.message.replace(": ", ":\r\n  ") + "  " };
+      expect((await submit(respaced, "198.51.100.34")).status).toBe(202);
+      expect(await leadsByEmail("same-key@example.com")).toHaveLength(2);
+      expect(await attemptOutcomes(sql`submission_id = ${key}`)).toEqual({ created: 2, retry: 3 });
+    });
+
+    it("stores a corrected form once when its copies arrive at the same instant under the original's key", async () => {
+      const key = randomUUID();
+      const original = submission({ email: "same-key-burst@example.com", submissionId: key });
+      expect((await submit(original, "198.51.100.35")).status).toBe(202);
+
+      const corrected = { ...original, phone: "(719) 555-0199", message: "Corrected phone number." };
+      const results = await Promise.all([0, 1, 2, 3, 4, 5].map((n) => submit(corrected, `198.51.100.7${n}`)));
+      expect(results.map((r) => r.status)).toEqual([202, 202, 202, 202, 202, 202]);
+
+      const leads = await leadsByEmail("same-key-burst@example.com");
+      expect(leads).toHaveLength(2);
+      expect(leads[1]!.answers.phone).toBe("(719) 555-0199");
+      expect(leads[1]!.submission_id).toBe(key);
+      expect((await activitiesOf(leads[1]!.id)).filter((a) => a.details?.duplicate === true)).toHaveLength(5);
+      expect(await attemptOutcomes(sql`submission_id = ${key}`)).toEqual({ created: 2, retry: 5 });
+    });
+
+    it("stores identical answers that arrive without a key from several addresses at once as one inquiry", async () => {
+      // No key at all: only the answers and the email can say these are one
+      // form, and they are only consulted after the per-email lock is taken.
+      const body = submission({ email: "no-key-burst@example.com" });
+      const results = await Promise.all([0, 1, 2, 3, 4, 5].map((n) => submit(body, `198.51.100.8${n}`)));
+      expect(results.map((r) => r.status)).toEqual([202, 202, 202, 202, 202, 202]);
+
+      const leads = await leadsByEmail("no-key-burst@example.com");
+      expect(leads).toHaveLength(1);
+      expect(leads[0]!.submission_id).toBeNull();
+      expect((await activitiesOf(leads[0]!.id)).filter((a) => a.details?.duplicate === true)).toHaveLength(5);
+      expect(await attemptOutcomes(sql`lead_id = ${leads[0]!.id}`)).toEqual({ created: 1, retry: 5 });
+    });
+
     it("counts every attempt toward the per-address limit: a rejected form, a honeypot hit and a retry included", async () => {
       const ip = "198.51.100.40";
       expect((await submit(submission({ email: "" }), ip)).status).toBe(400);
@@ -282,6 +357,8 @@ describe.skipIf(!TEST_URL)("leads under concurrency", () => {
       expect(refused.every((r) => r.body.error.code === "LEAD_ALREADY_CONVERTED")).toBe(true);
       const clientId = created[0]!.body.client.id as string;
       expect(created[0]!.body.client.sourceLeadId).toBe(lead.id);
+      // The refused copies are told which client the inquiry became, so a retried request can find it.
+      expect(refused.every((r) => r.body.error.details?.clientId === clientId)).toBe(true);
 
       expect(await countRows(iso.db, "clients", `source_lead_id = '${lead.id}'`)).toBe(1);
       expect(await countRows(iso.db, "clients", `first_name = 'Con' and last_name = 'Verted'`)).toBe(1);
@@ -402,6 +479,30 @@ describe.skipIf(!TEST_URL)("leads under concurrency", () => {
       }
       // Nothing left for the next boot.
       expect(await importConsultationRequests(iso.db, orgId)).toBe(0);
+    });
+
+    it("commits an imported lead, its timeline entry and its audit entry together, or not at all", async () => {
+      await insertLegacy("legacy-atomic@example.com", "Must not appear without its audit entry");
+      // Hold the audit chain's lock from a connection of its own: an import
+      // can do everything except write its audit entry.
+      const holder = await iso.pool.connect();
+      try {
+        await holder.query("begin");
+        await holder.query("select pg_advisory_xact_lock(hashtext('audit_log_chain')::bigint)");
+        const run = importConsultationRequests(iso.openAnother().db, orgId, { attribution: "explicit" });
+        expect(await settledWithin(run, 500)).toBe("waiting");
+        // Nothing of the import is visible while its audit entry cannot be written.
+        expect(await leadsByEmail("legacy-atomic@example.com")).toHaveLength(0);
+        expect(await countRows(iso.db, "consultation_requests", "email = 'legacy-atomic@example.com'")).toBe(1);
+        await holder.query("rollback");
+        expect(await run).toBe(1);
+      } finally {
+        holder.release();
+      }
+      const [lead] = await leadsByEmail("legacy-atomic@example.com");
+      expect(lead!.import_source).toBe("consultation_requests");
+      expect(await auditsFor("lead.imported", lead!.id)).toHaveLength(1);
+      expect(await countRows(iso.db, "consultation_requests", "email = 'legacy-atomic@example.com'")).toBe(0);
     });
 
     it("will not guess the organization once there are two, and imports where the operator points", async () => {

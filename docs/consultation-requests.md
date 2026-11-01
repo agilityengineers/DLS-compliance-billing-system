@@ -23,6 +23,9 @@ What happened to the earlier storage-only endpoint:
     a row lock in its own transaction, and the lead carries the source row's id
     (`import_source` = `consultation_requests`, `import_source_id`, unique), so a second
     process either waits and finds the row gone or inserts nothing and removes the row.
+    The lead, its timeline entry, the removal of the source row and the `lead.imported`
+    audit entry commit together, so no import can leave a lead behind without the entry
+    that says where it came from.
 - The `consultation_requests` and `consultation_limits` tables stay in the schema, empty,
   until a later drizzle-generated migration drops them.
 - The per-address limit counts **attempts** in `lead_submission_attempts` (`LEAD_MAX_PER_IP`
@@ -30,11 +33,16 @@ What happened to the earlier storage-only endpoint:
   all count, and the count is taken under a per-address advisory lock so simultaneous
   requests cannot slip past it together.
 - A retry is recognised by the website's per-form key (`submissionId`, kept across retries
-  of the same answers and unique per organization on `leads`), or, without one, by identical
-  answers from the same email inside the window. A retry adds a timeline entry to the
-  inquiry it repeats. A submission with **different** answers from the same email is stored
-  as its own inquiry, cross-referenced on both timelines, so a corrected message or a second
-  family member is never lost; staff close one as a duplicate if that is what it is.
+  of the same answers) **together with** a hash of the answers — `leads` is unique per
+  organization on (key, answers) — or, without a key, by identical answers from the same
+  email inside the window. Whitespace differences do not count as a change. A retry adds a
+  timeline entry to the inquiry it repeats. A submission with **different** answers, whether
+  under a key the inbox has already seen or from the same email, is stored as its own
+  inquiry, cross-referenced on both timelines (`relatedBy`: `submission_id` or `email`), so
+  a corrected message or a second family member is never lost; staff close one as a
+  duplicate if that is what it is. Submissions from one email are taken one at a time (an
+  advisory lock per email, after the per-address one), so identical copies arriving together
+  from different addresses store one inquiry even without a key.
 
 Controls that carried over: required consent, bounded fields, a server-checked honeypot, a
 database-backed per-address limit that works across API instances, and no personal details

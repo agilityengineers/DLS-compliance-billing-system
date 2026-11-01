@@ -218,7 +218,9 @@
      and sent again with every retry of them, so that a lost receipt and a
      second click store one inquiry, not two. Change an answer and a new key
      goes with it, because changed answers are a new inquiry and the API
-     must not fold them into the old one.
+     must not fold them into the old one. (The API checks the answers as
+     well as the key, so a key sent again with changed answers is still
+     stored as a new inquiry.)
      --------------------------------------------------------------------- */
   const DLS_CONFIG = window.DLS_CONFIG || {};
   const API_BASE = String(DLS_CONFIG.apiBase || "").replace(/\/+$/, "");

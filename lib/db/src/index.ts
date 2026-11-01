@@ -11,6 +11,12 @@ const { Pool } = pg;
  */
 export type Db = NodePgDatabase<typeof schema> & { $client: pg.Pool };
 
+/** A transaction opened on a Db handle — what `db.transaction` hands its callback. */
+export type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+
+/** Either a handle or a transaction on one: for writes that may run inside a caller's transaction. */
+export type DbOrTx = Db | Tx;
+
 export interface DbHandle {
   db: Db;
   pool: pg.Pool;
