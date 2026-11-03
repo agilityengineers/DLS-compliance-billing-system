@@ -130,6 +130,27 @@ export const orgFeaturesTable = pgTable(
   (t) => [primaryKey({ columns: [t.orgId, t.key] })]
 );
 
+/**
+ * Tier 1 for ONE organization. The provider's global switch
+ * (platform_features) is the default for every organization; a row here
+ * overrides it for one of them, so the Super Admin can make a capability
+ * available to one account and not another, or hold it back for one account
+ * while it stays on for the rest. No row means "follow the global switch".
+ */
+export const platformOrgFeaturesTable = pgTable(
+  "platform_org_features",
+  {
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizationsTable.id, { onDelete: "cascade" }),
+    key: text("key").notNull(),
+    enabled: boolean("enabled").notNull(),
+    updatedBy: uuid("updated_by"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.orgId, t.key] })]
+);
+
 export const auditLogTable = pgTable(
   "audit_log",
   {
@@ -173,6 +194,7 @@ export type User = typeof usersTable.$inferSelect;
 export type Session = typeof sessionsTable.$inferSelect;
 export type PlatformFeatureRow = typeof platformFeaturesTable.$inferSelect;
 export type OrgFeatureRow = typeof orgFeaturesTable.$inferSelect;
+export type PlatformOrgFeatureRow = typeof platformOrgFeaturesTable.$inferSelect;
 export type AuditLogRow = typeof auditLogTable.$inferSelect;
 
 export const userStatusSchema = z.enum(["Active", "Suspended"]);

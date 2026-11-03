@@ -22,7 +22,7 @@ import { FEATURE_CATALOG, canManageRole, isFeatureKey, isOrgRole, type FeatureKe
 import { recordAudit } from "../lib/audit";
 import type { AppConfig } from "../lib/config";
 import { HttpError, badRequest, conflict, forbidden, notFound } from "../lib/errors";
-import { loadFeatureStates, loadPlatformRows, setPlatformFeature } from "../lib/features";
+import { loadFeatureStates, loadPlatformRows, setOrgPlatformFeature, setPlatformFeature } from "../lib/features";
 import { sendInvite } from "../lib/invites";
 import { JOBS, findJob, jobStatuses, runJob } from "../lib/jobs";
 import { recentFailuresByAccount } from "../lib/login-attempts";
@@ -49,6 +49,8 @@ import {
 } from "../middlewares/auth";
 
 const FeatureBody = z.object({ enabled: z.boolean() });
+/** true / false override tier 1 for one organization; null follows the global switch again. */
+const OrgFeatureBody = z.object({ enabled: z.boolean().nullable() });
 
 const OrgBody = z.object({
   name: z.string().trim().min(2).max(120),
@@ -266,6 +268,34 @@ export function platformRouter(db: Db, config: AppConfig, deps: { mailer: Mailer
       ip: req.ip ?? null,
     });
     res.json({ key, enabled });
+  });
+
+  /**
+   * Tier 1 for ONE organization. The switchboard above is the default for
+   * every organization; this sets (or clears) an override for one of them, so
+   * a capability can be made available to one account only, or held back
+   * from one account while the rest keep it. Audited against the organization.
+   */
+  router.put("/platform/organizations/:id/features/:key", canSwitch, async (req, res) => {
+    const auth = requireAuthContext(res);
+    const key = String(req.params.key);
+    if (!isFeatureKey(key)) throw notFound("Unknown feature.");
+    const [org] = await db.select().from(organizationsTable).where(eq(organizationsTable.id, String(req.params.id))).limit(1);
+    if (!org) throw notFound("Organization not found.");
+    const { enabled } = OrgFeatureBody.parse(req.body);
+    await setOrgPlatformFeature(db, org.id, key as FeatureKey, enabled, auth.realUser.id);
+    const state = (await loadFeatureStates(db, org.id)).find((s) => s.key === key)!;
+    await recordAudit(db, {
+      orgId: org.id,
+      actorUserId: auth.realUser.id,
+      impersonatingUserId: auth.impersonating ? auth.effectiveUser.id : null,
+      action: "platform.org_feature_toggled",
+      targetType: "feature",
+      targetId: key,
+      details: { enabled, organization: org.slug, effective: state.platformEnabled },
+      ip: req.ip ?? null,
+    });
+    res.json({ key, orgId: org.id, enabled, state });
   });
 
   /** Both tiers for every organization — who has switched on what. */

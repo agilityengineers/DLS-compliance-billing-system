@@ -25,6 +25,7 @@ import AdminBilling from "@/app/admin/billing/page";
 import AdminBillingCodes from "@/app/admin/billing/codes/page";
 import AdminClients from "@/app/admin/clients/page";
 import AdminClientNew from "@/app/admin/clients/new/page";
+import AdminClientDetail from "@/app/admin/clients/[id]/page";
 import AdminDocuments from "@/app/admin/documents/page";
 import AdminEmar from "@/app/admin/emar/page";
 import AdminEvv from "@/app/admin/evv/page";
@@ -118,6 +119,9 @@ function Router() {
       <Route path="/admin/billing/codes">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminBillingCodes as AsyncComponent)} />}</Route>
       <Route path="/admin/clients">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminClients as AsyncComponent)} />}</Route>
       <Route path="/admin/clients/new">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminClientNew as AsyncComponent)} />}</Route>
+      <Route path="/admin/clients/:id">
+        {(params) => <AsyncRoute loader={withLayout(AdminLayout, AdminClientDetail as AsyncComponent)} params={params as Record<string, string>} />}
+      </Route>
       <Route path="/admin/documents">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminDocuments as AsyncComponent)} />}</Route>
       <Route path="/admin/emar">{() => <AsyncRoute loader={withLayoutElement(AdminLayout, <AdminEmar />)} />}</Route>
       <Route path="/admin/evv">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminEvv as AsyncComponent)} />}</Route>

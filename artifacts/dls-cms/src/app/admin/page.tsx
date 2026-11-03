@@ -30,7 +30,8 @@ export default async function AdminDashboard() {
     ctx.features.has("leads.inbox") && isApiAuth() ? leadsApi.list({ limit: 0 }).catch(() => null) : Promise.resolve(null)
   ]);
 
-  const expiredPlans = clients.filter((c) => c.service_plan_end && c.service_plan_end < today).length;
+  const active = clients.filter((c) => (c.status ?? "Active") === "Active" || c.status === "Interim");
+  const expiredPlans = active.filter((c) => c.service_plan_end && c.service_plan_end < today).length;
   const staffToday = new Set(todaysVisits.map((v) => v.staff_id)).size;
   const ready = readiness.filter((r) => r.ok);
   const readyUnits = ready.reduce((s, r) => s + (r.note.calculated_billing_units ?? 0), 0);
@@ -42,7 +43,7 @@ export default async function AdminDashboard() {
   const stats = [
     {
       label: "Active clients",
-      value: clients.length,
+      value: active.length,
       sub: expiredPlans === 0 ? "All plans current" : `${expiredPlans} plan${expiredPlans > 1 ? "s" : ""} expired`,
       href: "/admin/clients",
       show: ctx.features.has("clients.core")

@@ -1,5 +1,5 @@
 {
-  "id": "ff4b0ddb-96ac-47f7-9c26-b085fbd094db",
+  "id": "9281f8ee-b95f-43c7-80e2-d86db0d06258",
   "prevId": "fb54014e-433a-445f-a661-6b5dd45c30a8",
   "version": "7",
   "dialect": "postgresql",
@@ -377,6 +377,72 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.platform_org_features": {
+      "name": "platform_org_features",
+      "schema": "",
+      "columns": {
+        "org_id": {
+          "name": "org_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "enabled": {
+          "name": "enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "platform_org_features_org_id_organizations_id_fk": {
+          "name": "platform_org_features_org_id_organizations_id_fk",
+          "tableFrom": "platform_org_features",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "org_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "platform_org_features_org_id_key_pk": {
+          "name": "platform_org_features_org_id_key_pk",
+          "columns": [
+            "org_id",
+            "key"
+          ]
+        }
+      },
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
@@ -2849,614 +2915,6 @@
         "leads_closed_reason_check": {
           "name": "leads_closed_reason_check",
           "value": "\"leads\".\"closed_reason\" is null or \"leads\".\"closed_reason\" in ('not_a_fit', 'no_response', 'duplicate', 'other')"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.billing_codes": {
-      "name": "billing_codes",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "org_id": {
-          "name": "org_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "payer_id": {
-          "name": "payer_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "code": {
-          "name": "code",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "modifier1": {
-          "name": "modifier1",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "modifier2": {
-          "name": "modifier2",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "modifier3": {
-          "name": "modifier3",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "modifier4": {
-          "name": "modifier4",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "description": {
-          "name": "description",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "service": {
-          "name": "service",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "billing_unit": {
-          "name": "billing_unit",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'15_min'"
-        },
-        "rate_per_unit": {
-          "name": "rate_per_unit",
-          "type": "double precision",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "effective_date": {
-          "name": "effective_date",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "end_date": {
-          "name": "end_date",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "evv_code": {
-          "name": "evv_code",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "allow_zero_units": {
-          "name": "allow_zero_units",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "archived": {
-          "name": "archived",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "notes": {
-          "name": "notes",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "idx_billing_codes_org_code": {
-          "name": "idx_billing_codes_org_code",
-          "columns": [
-            {
-              "expression": "org_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "code",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "idx_billing_codes_org_service": {
-          "name": "idx_billing_codes_org_service",
-          "columns": [
-            {
-              "expression": "org_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "service",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "billing_codes_org_id_organizations_id_fk": {
-          "name": "billing_codes_org_id_organizations_id_fk",
-          "tableFrom": "billing_codes",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "org_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "billing_codes_payer_id_payers_id_fk": {
-          "name": "billing_codes_payer_id_payers_id_fk",
-          "tableFrom": "billing_codes",
-          "tableTo": "payers",
-          "columnsFrom": [
-            "payer_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "billing_codes_service_check": {
-          "name": "billing_codes_service_check",
-          "value": "\"billing_codes\".\"service\" in ('SCC', 'Job_Coaching', 'Day_Habilitation', 'Early_Intervention', 'NMT', 'Other')"
-        },
-        "billing_codes_unit_check": {
-          "name": "billing_codes_unit_check",
-          "value": "\"billing_codes\".\"billing_unit\" in ('15_min', 'hour', 'day', 'trip', 'each')"
-        },
-        "billing_codes_rate_check": {
-          "name": "billing_codes_rate_check",
-          "value": "\"billing_codes\".\"rate_per_unit\" >= 0"
-        },
-        "billing_codes_dates_check": {
-          "name": "billing_codes_dates_check",
-          "value": "\"billing_codes\".\"end_date\" is null or \"billing_codes\".\"end_date\" >= \"billing_codes\".\"effective_date\""
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.claim_submissions": {
-      "name": "claim_submissions",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "org_id": {
-          "name": "org_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "control_number": {
-          "name": "control_number",
-          "type": "bigserial",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "payer_id": {
-          "name": "payer_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "payer_key": {
-          "name": "payer_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "format": {
-          "name": "format",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'837P'"
-        },
-        "test_mode": {
-          "name": "test_mode",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "period_start": {
-          "name": "period_start",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "period_end": {
-          "name": "period_end",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "note_ids": {
-          "name": "note_ids",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'[]'::jsonb"
-        },
-        "note_count": {
-          "name": "note_count",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "total_units": {
-          "name": "total_units",
-          "type": "double precision",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "total_charge": {
-          "name": "total_charge",
-          "type": "double precision",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'open'"
-        },
-        "status_note": {
-          "name": "status_note",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "file_name": {
-          "name": "file_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "file_content": {
-          "name": "file_content",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "submitted_at": {
-          "name": "submitted_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "responded_at": {
-          "name": "responded_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_by_user_id": {
-          "name": "created_by_user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "uq_claim_submissions_control": {
-          "name": "uq_claim_submissions_control",
-          "columns": [
-            {
-              "expression": "control_number",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "idx_claim_submissions_org_created": {
-          "name": "idx_claim_submissions_org_created",
-          "columns": [
-            {
-              "expression": "org_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "claim_submissions_org_id_organizations_id_fk": {
-          "name": "claim_submissions_org_id_organizations_id_fk",
-          "tableFrom": "claim_submissions",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "org_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "claim_submissions_payer_id_payers_id_fk": {
-          "name": "claim_submissions_payer_id_payers_id_fk",
-          "tableFrom": "claim_submissions",
-          "tableTo": "payers",
-          "columnsFrom": [
-            "payer_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "claim_submissions_created_by_user_id_users_id_fk": {
-          "name": "claim_submissions_created_by_user_id_users_id_fk",
-          "tableFrom": "claim_submissions",
-          "tableTo": "users",
-          "columnsFrom": [
-            "created_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "claim_submissions_status_check": {
-          "name": "claim_submissions_status_check",
-          "value": "\"claim_submissions\".\"status\" in ('open', 'submitted', 'accepted', 'rejected', 'paid', 'denied', 'voided')"
-        },
-        "claim_submissions_file_check": {
-          "name": "claim_submissions_file_check",
-          "value": "(\"claim_submissions\".\"status\" = 'open') = (\"claim_submissions\".\"file_content\" is null)"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.payers": {
-      "name": "payers",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "org_id": {
-          "name": "org_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "kind": {
-          "name": "kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'medicaid'"
-        },
-        "payer_id": {
-          "name": "payer_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "claim_filing_code": {
-          "name": "claim_filing_code",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'MC'"
-        },
-        "address1": {
-          "name": "address1",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "city": {
-          "name": "city",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "state": {
-          "name": "state",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "zip": {
-          "name": "zip",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "phone": {
-          "name": "phone",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "notes": {
-          "name": "notes",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "active": {
-          "name": "active",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "payers_org_id_organizations_id_fk": {
-          "name": "payers_org_id_organizations_id_fk",
-          "tableFrom": "payers",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "org_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "uq_payers_org_name": {
-          "name": "uq_payers_org_name",
-          "nullsNotDistinct": false,
-          "columns": [
-            "org_id",
-            "name"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {
-        "payers_kind_check": {
-          "name": "payers_kind_check",
-          "value": "\"payers\".\"kind\" in ('medicaid', 'dvr', 'private', 'other')"
-        },
-        "payers_filing_check": {
-          "name": "payers_filing_check",
-          "value": "\"payers\".\"claim_filing_code\" in ('MC', 'CI', 'OF', '11')"
         }
       },
       "isRLSEnabled": false
