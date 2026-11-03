@@ -66,7 +66,14 @@ Every switchable capability is one entry in `FEATURE_CATALOG`
 | Tier | Who flips it | Where | Stored in |
 |---|---|---|---|
 | 1 — *available* | Super Admin | Platform console → Feature switchboard | `platform_features` |
+| 1, for one organization | Super Admin | Platform console → Feature adoption (per cell) | `platform_org_features` |
 | 2 — *on for the organization* + *roles* | Admin | Settings → Feature access | `org_features` |
+
+The switchboard is the default for every organization. A per-organization row
+overrides it for that organization alone, so a capability can be made available
+to one account only, or held back from one account while every other account
+keeps it; removing the row puts the organization back on the switchboard. The
+adoption page marks such a cell "Set here".
 
 A person may use a feature only when **tier 1 AND tier 2 are on AND (they are an
 Admin OR their role is granted)**. See `isFeatureEnabledFor()` in
@@ -106,7 +113,7 @@ The provider's screens, all under `/admin/platform` and all gated on the
 | Organizations & people | Organizations | Create, rename, suspend; the hand-over checklist; the organization's administrators |
 | Organizations & people | Accounts | Every account across organizations: role, one-time password reset, sign out everywhere, suspend, view as |
 | Capabilities | Feature switchboard | Tier 1 switches |
-| Capabilities | Feature adoption | Tier 1 ∧ tier 2 ∧ role grants for every organization, read-only |
+| Capabilities | Feature adoption | Tier 1 ∧ tier 2 ∧ role grants for every organization; the Super Admin sets tier 1 for a single organization from each cell |
 | Security & compliance | Support access | The support policy, start a view-as session, sessions in progress, full history |
 | Security & compliance | Security | Second factor, provider accounts, support windows across organizations (and whether one is required), failed sign-ins |
 | Security & compliance | Active sessions | Live sessions with device and address; end one, or all of a person's |

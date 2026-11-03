@@ -74,12 +74,16 @@ describe("resolveFeatureStates", () => {
       platformEnabled: true,
       orgEnabled: true,
       roles: { Scheduler: true },
+      platformDefault: true,
+      platformOverride: null,
     });
     expect(byKey.get("evv.clock")).toEqual({
       key: "evv.clock",
       platformEnabled: false,
       orgEnabled: false,
       roles: { Scheduler: false, Field_Staff: false },
+      platformDefault: false,
+      platformOverride: null,
     });
   });
 
@@ -95,6 +99,8 @@ describe("resolveFeatureStates", () => {
       platformEnabled: true,
       orgEnabled: true,
       roles: { Scheduler: false, Field_Staff: true },
+      platformDefault: true,
+      platformOverride: null,
     });
     expect(byKey.get("billing.claims")!.roles).toEqual({});
     expect(effectiveFeatureKeys(states, "Field_Staff")).toContain("evv.clock");
@@ -156,5 +162,43 @@ describe("views and helpers", () => {
     expect(canManageRole("Admin", "Field_Staff")).toBe(true);
     expect(canManageRole("Admin", "Super_Admin")).toBe(false);
     expect(canManageRole("Scheduler", "Field_Staff")).toBe(false);
+  });
+});
+
+describe("per-organization tier-1 overrides", () => {
+  const platform = [{ key: "qa.flags", enabled: false }, { key: "clients.core", enabled: true }];
+
+  it("follows the global switch when the organization has no override", () => {
+    const states = resolveFeatureStates(platform, []);
+    const qa = states.find((s) => s.key === "qa.flags")!;
+    expect(qa.platformEnabled).toBe(false);
+    expect(qa.platformDefault).toBe(false);
+    expect(qa.platformOverride).toBeNull();
+  });
+
+  it("lets the provider make a capability available to one organization only", () => {
+    const states = resolveFeatureStates(platform, [], [{ key: "qa.flags", enabled: true }]);
+    const qa = states.find((s) => s.key === "qa.flags")!;
+    expect(qa.platformEnabled).toBe(true);
+    expect(qa.platformDefault).toBe(false);
+    expect(qa.platformOverride).toBe(true);
+    // Tier 2 still has to be on: the override opens the door, it does not walk through it.
+    expect(isFeatureEnabledFor({ ...qa, orgEnabled: false }, "Admin")).toBe(false);
+    expect(isFeatureEnabledFor({ ...qa, orgEnabled: true }, "Admin")).toBe(true);
+  });
+
+  it("lets the provider withhold a capability from one organization while the rest keep it", () => {
+    const states = resolveFeatureStates(platform, [{ key: "clients.core", enabled: true, roles: {} }], [{ key: "clients.core", enabled: false }]);
+    const core = states.find((s) => s.key === "clients.core")!;
+    expect(core.platformDefault).toBe(true);
+    expect(core.platformOverride).toBe(false);
+    expect(core.platformEnabled).toBe(false);
+    expect(isFeatureEnabledFor(core, "Admin")).toBe(false);
+    expect(toFeatureView(core).adminLockReason).toBe("not_available");
+  });
+
+  it("ignores an override for a key that is not in the catalog", () => {
+    const states = resolveFeatureStates(platform, [], [{ key: "not.a.feature", enabled: true }]);
+    expect(states.every((s) => s.platformOverride === null)).toBe(true);
   });
 });
