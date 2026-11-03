@@ -6,6 +6,50 @@ Checked October 29, 2026, approximately 20:43 UTC.
 does not block interim website publication. Full-production readiness is not
 certified.**
 
+## Owner-requested closure
+
+On November 3, 2026, the owner requested closing the inquiry-verification task
+for now and removing it from the active list. It is closed as deferred, not
+as a successful inquiry journey or production-readiness certification. No
+replacement task is being created. The evidence and unverified checks below
+are retained for when the owner resumes full-production preparation.
+
+## November 3 inquiry-verification prerequisite check
+
+Checked November 3, 2026 at 22:35 UTC using anonymous GET requests only.
+Deployment metadata reports a public autoscale deployment with a successful
+build and primary URL
+`https://dls-compliance-billing-system-demo.agilityengineers.com`.
+That metadata does not establish the deployed source revision.
+
+| Endpoint | Observed result |
+| --- | --- |
+| `/api/readyz` | HTTP 503, `migrations_pending`, database connection successful, 0/5 migrations recorded |
+| `/api/public/forms/contact` | HTTP 200; required first name, last name, email and consent questions; optional phone, role, service and message |
+| `/api/leads` | HTTP 401, `UNAUTHENTICATED` |
+| `/api/leads/stages` | HTTP 401, `UNAUTHENTICATED` |
+| `/api/leads/form` | HTTP 401, `UNAUTHENTICATED` |
+
+The readiness response still lists migrations `0000_access_model` through
+`0004_leads` as pending. This is a current failed prerequisite, not a new
+production catalog inspection or proof of the cause. Production schema, audit
+protections and deployed revision have not been newly verified in this pass.
+
+**The inquiry journey remains incomplete.** No POST, synthetic submission,
+privileged login, production database query, deployment or application change
+was performed. No committed bootstrap credentials were used. Public schema
+availability and anonymous denial passed these limited checks; server-side
+submission validation, durable storage, authorized inbox visibility,
+authenticated unauthorized-role denial and submission-specific audit evidence
+remain untested. No authorized staff browser session was established.
+
+Resume after the existing deployment/schema/audit prerequisite work is
+verified, then obtain an authorized staff test session through the supported
+browser handoff if needed. Run one synthetic-only journey and inspect only its
+record and sanitized audit evidence. Do not treat an HTTP 202 as proof of
+durability or staff visibility. This failed pre-full-production gate does not
+change the owner's interim-publication deferral.
+
 ## Owner-directed deferral
 
 The owner explicitly requested proceeding with interim website publication and
