@@ -2,7 +2,7 @@
 "use client";
 
 import type { FeatureKey, FeatureState, FeatureStatus, OrgRole as CatalogOrgRole, Role, RoleGrants } from "@workspace/features";
-import { apiFetch } from "@/lib/api/client";
+import { ApiClientError, apiFetch } from "@/lib/api/client";
 
 export interface AccountRow {
   id: string;
@@ -590,15 +590,77 @@ export const leadsApi = {
 };
 
 // ── clients (the real records) ─────────────────────────────────────────────
+// Mirrors artifacts/api-server/src/routes/clients.ts. The unions are repeated
+// here rather than imported from @workspace/db so the browser bundle never
+// pulls in the ORM.
+export type ClientStatus = "Active" | "Inactive" | "Interim" | "Discharged" | "Deceased";
+export const CLIENT_STATUSES: readonly ClientStatus[] = ["Active", "Inactive", "Interim", "Discharged", "Deceased"];
+export type ClientGender = "Male" | "Female" | "Other" | "Unknown";
+export const CLIENT_GENDERS: readonly ClientGender[] = ["Male", "Female", "Other", "Unknown"];
+export const GUARDIANSHIP_STATUSES = ["Not applicable", "Guardian", "Court appointed"] as const;
+export const MARITAL_STATUSES = ["Single", "Married", "Divorced", "Separated", "Widowed", "Other"] as const;
+export type ClientContactKind = "responsible_party" | "guardian" | "emergency" | "physician" | "case_manager" | "other";
+export const CLIENT_CONTACT_KIND_LABELS: Record<ClientContactKind, string> = {
+  responsible_party: "Responsible party",
+  guardian: "Guardian",
+  emergency: "Emergency contact",
+  physician: "Physician",
+  case_manager: "Case manager",
+  other: "Other",
+};
+export type PolicyType = "primary" | "secondary" | "tertiary";
+export type PolicyStatus = "active" | "inactive";
+export type AuthorizationService = "SCC" | "Job_Coaching" | "Day_Habilitation" | "Early_Intervention" | "NMT" | "Other";
+export const AUTHORIZATION_SERVICE_LABELS: Record<AuthorizationService, string> = {
+  SCC: "SCC",
+  Job_Coaching: "Job Coaching",
+  Day_Habilitation: "Day Habilitation",
+  Early_Intervention: "Early Intervention",
+  NMT: "Transportation (NMT)",
+  Other: "Other",
+};
+export type AuthorizationUnitBasis = "unit" | "hour" | "trip" | "dollar";
+export const AUTHORIZATION_UNIT_BASIS_LABELS: Record<AuthorizationUnitBasis, string> = {
+  unit: "15-minute units",
+  hour: "Hours",
+  trip: "Trips",
+  dollar: "Dollars",
+};
+export type AuthorizationStatus = "active" | "pending" | "void";
+
+export interface ClientDiagnosis {
+  code: string;
+  description: string;
+  isPrimary?: boolean;
+}
+
 export interface ClientRecord {
   id: string;
   firstName: string;
+  middleName: string | null;
   lastName: string;
   email: string | null;
   phone: string | null;
+  phoneCell: string | null;
+  phoneWork: string | null;
   medicaidId: string | null;
   dateOfBirth: string | null;
-  activeDiagnoses: { code: string; description: string }[];
+  gender: ClientGender | null;
+  genderIdentity: string | null;
+  maritalStatus: string | null;
+  ethnicity: string | null;
+  race: string | null;
+  guardianshipStatus: string | null;
+  accountCode: string | null;
+  admissionDate: string | null;
+  dischargeDate: string | null;
+  address1: string | null;
+  address2: string | null;
+  city: string | null;
+  state: string | null;
+  county: string | null;
+  zip: string | null;
+  activeDiagnoses: ClientDiagnosis[];
   insuranceProvider: string | null;
   servicePlanStart: string | null;
   servicePlanEnd: string | null;
@@ -611,21 +673,44 @@ export interface ClientRecord {
   ccbName: string | null;
   residenceLat: number | null;
   residenceLng: number | null;
-  status: "Active" | "Inactive";
+  allergies: string | null;
+  medicalConcerns: string | null;
+  supervisionRequirements: string | null;
+  generalInformation: string | null;
+  hasBehaviorSupportPlan: boolean;
+  behaviorSupportPlanNotes: string | null;
+  status: ClientStatus;
   /** The inquiry this client was created from, when there was one. */
   sourceLeadId: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
-export interface ClientCreateInput {
-  firstName: string;
-  lastName: string;
+/** Everything intake or an edit may send; "" clears a text field on an edit. */
+export interface ClientFieldsInput {
+  middleName?: string;
   email?: string;
   phone?: string;
+  phoneCell?: string;
+  phoneWork?: string;
   medicaidId?: string;
   dateOfBirth?: string;
-  activeDiagnoses?: { code: string; description: string }[];
+  gender?: ClientGender | "";
+  genderIdentity?: string;
+  maritalStatus?: string;
+  ethnicity?: string;
+  race?: string;
+  guardianshipStatus?: string;
+  accountCode?: string;
+  admissionDate?: string;
+  dischargeDate?: string;
+  address1?: string;
+  address2?: string;
+  city?: string;
+  state?: string;
+  county?: string;
+  zip?: string;
+  activeDiagnoses?: ClientDiagnosis[];
   insuranceProvider?: string;
   servicePlanStart?: string;
   servicePlanEnd?: string;
@@ -638,13 +723,223 @@ export interface ClientCreateInput {
   ccbName?: string;
   residenceLat?: number | null;
   residenceLng?: number | null;
+  allergies?: string;
+  medicalConcerns?: string;
+  supervisionRequirements?: string;
+  generalInformation?: string;
+  hasBehaviorSupportPlan?: boolean;
+  behaviorSupportPlanNotes?: string;
+}
+
+export interface ClientCreateInput extends ClientFieldsInput {
+  firstName: string;
+  lastName: string;
   /** The inquiry this client comes from; the API converts it in the same write. */
   sourceLeadId?: string;
 }
 
+export interface ClientPatchInput extends ClientFieldsInput {
+  firstName?: string;
+  lastName?: string;
+  /** Admin only. */
+  status?: ClientStatus;
+}
+
+export interface ClientContact {
+  id: string;
+  clientId: string;
+  kind: ClientContactKind;
+  name: string;
+  relationship: string | null;
+  phone: string | null;
+  email: string | null;
+  address1: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+  npi: string | null;
+  isPrimary: boolean;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ClientContactInput {
+  kind: ClientContactKind;
+  name: string;
+  relationship?: string;
+  phone?: string;
+  email?: string;
+  address1?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  npi?: string;
+  isPrimary?: boolean;
+  notes?: string;
+}
+
+export interface ClientPolicy {
+  id: string;
+  clientId: string;
+  policyType: PolicyType;
+  payerName: string;
+  memberId: string | null;
+  groupNumber: string | null;
+  status: PolicyStatus;
+  startDate: string | null;
+  endDate: string | null;
+  policyHolderName: string | null;
+  policyHolderRelationship: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ClientPolicyInput {
+  policyType?: PolicyType;
+  payerName: string;
+  memberId?: string;
+  groupNumber?: string;
+  status?: PolicyStatus;
+  startDate?: string;
+  endDate?: string;
+  policyHolderName?: string;
+  policyHolderRelationship?: string;
+  notes?: string;
+}
+
+export interface ClientAuthorization {
+  id: string;
+  clientId: string;
+  authNumber: string | null;
+  payerName: string | null;
+  service: AuthorizationService;
+  billingCode: string | null;
+  startDate: string;
+  endDate: string;
+  approvedUnits: number;
+  unitBasis: AuthorizationUnitBasis;
+  weeklyCapUnits: number | null;
+  ratePerUnit: number | null;
+  status: AuthorizationStatus;
+  permitOverBudget: boolean;
+  excludeFromSubmission: boolean;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ClientAuthorizationInput {
+  authNumber?: string;
+  payerName?: string;
+  service: AuthorizationService;
+  billingCode?: string;
+  startDate: string;
+  endDate: string;
+  approvedUnits: number;
+  unitBasis?: AuthorizationUnitBasis;
+  weeklyCapUnits?: number | null;
+  ratePerUnit?: number | null;
+  status?: AuthorizationStatus;
+  permitOverBudget?: boolean;
+  excludeFromSubmission?: boolean;
+  notes?: string;
+}
+
+export interface ClientFile {
+  id: string;
+  clientId: string;
+  category: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+  startDate: string | null;
+  endDate: string | null;
+  notes: string | null;
+  uploadedByUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ClientFilesResponse {
+  files: ClientFile[];
+  categories: string[];
+  maxBytes: number;
+  contentTypes: string[];
+}
+
+export interface ClientFileMeta {
+  fileName: string;
+  category: string;
+  startDate?: string;
+  endDate?: string;
+  notes?: string;
+}
+
 export const clientsApi = {
-  list: () => apiFetch<{ clients: ClientRecord[] }>("/clients"),
+  list: (filters: { status?: ClientStatus } = {}) => apiFetch<{ clients: ClientRecord[] }>(`/clients${query(filters)}`),
   get: (id: string) => apiFetch<{ client: ClientRecord }>(`/clients/${id}`),
   create: (input: ClientCreateInput) =>
     apiFetch<{ client: ClientRecord; convertedLeadId: string | null }>("/clients", { method: "POST", json: input }),
+  update: (id: string, patch: ClientPatchInput) => apiFetch<{ client: ClientRecord }>(`/clients/${id}`, { method: "PATCH", json: patch }),
+
+  contacts: {
+    list: (clientId: string) => apiFetch<{ contacts: ClientContact[] }>(`/clients/${clientId}/contacts`),
+    create: (clientId: string, input: ClientContactInput) =>
+      apiFetch<{ contact: ClientContact }>(`/clients/${clientId}/contacts`, { method: "POST", json: input }),
+    update: (clientId: string, id: string, patch: Partial<ClientContactInput>) =>
+      apiFetch<{ contact: ClientContact }>(`/clients/${clientId}/contacts/${id}`, { method: "PATCH", json: patch }),
+    remove: (clientId: string, id: string) => apiFetch<{ ok: true }>(`/clients/${clientId}/contacts/${id}`, { method: "DELETE" }),
+  },
+
+  policies: {
+    list: (clientId: string) => apiFetch<{ policies: ClientPolicy[] }>(`/clients/${clientId}/policies`),
+    create: (clientId: string, input: ClientPolicyInput) =>
+      apiFetch<{ policy: ClientPolicy }>(`/clients/${clientId}/policies`, { method: "POST", json: input }),
+    update: (clientId: string, id: string, patch: Partial<ClientPolicyInput>) =>
+      apiFetch<{ policy: ClientPolicy }>(`/clients/${clientId}/policies/${id}`, { method: "PATCH", json: patch }),
+    remove: (clientId: string, id: string) => apiFetch<{ ok: true }>(`/clients/${clientId}/policies/${id}`, { method: "DELETE" }),
+  },
+
+  authorizations: {
+    list: (clientId: string) => apiFetch<{ authorizations: ClientAuthorization[] }>(`/clients/${clientId}/authorizations`),
+    create: (clientId: string, input: ClientAuthorizationInput) =>
+      apiFetch<{ authorization: ClientAuthorization }>(`/clients/${clientId}/authorizations`, { method: "POST", json: input }),
+    update: (clientId: string, id: string, patch: Partial<ClientAuthorizationInput>) =>
+      apiFetch<{ authorization: ClientAuthorization }>(`/clients/${clientId}/authorizations/${id}`, { method: "PATCH", json: patch }),
+    remove: (clientId: string, id: string) => apiFetch<{ ok: true }>(`/clients/${clientId}/authorizations/${id}`, { method: "DELETE" }),
+  },
+
+  files: {
+    list: (clientId: string) => apiFetch<ClientFilesResponse>(`/clients/${clientId}/files`),
+    /** The bytes go as the body and the record as the query string; see the API route. */
+    upload: async (clientId: string, file: File, meta: ClientFileMeta): Promise<{ file: ClientFile }> => {
+      const params = new URLSearchParams();
+      for (const [key, value] of Object.entries(meta)) if (value !== undefined && value !== "") params.set(key, String(value));
+      const res = await fetch(`/api/clients/${clientId}/files?${params}`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": file.type || "application/octet-stream", accept: "application/json" },
+        body: file,
+      });
+      const text = await res.text();
+      let body: unknown = null;
+      try {
+        body = text ? JSON.parse(text) : null;
+      } catch {
+        body = text;
+      }
+      if (!res.ok) {
+        const err = (body as { error?: { code?: string; message?: string } } | null)?.error;
+        throw new ApiClientError(res.status, err?.code ?? "SERVER_ERROR", err?.message ?? (res.status === 413 ? "That file is too large." : `Upload failed (${res.status}).`));
+      }
+      return body as { file: ClientFile };
+    },
+    update: (clientId: string, id: string, patch: Partial<ClientFileMeta>) =>
+      apiFetch<{ file: ClientFile }>(`/clients/${clientId}/files/${id}`, { method: "PATCH", json: patch }),
+    remove: (clientId: string, id: string) => apiFetch<{ ok: true }>(`/clients/${clientId}/files/${id}`, { method: "DELETE" }),
+    /** A download, so it goes through the browser rather than fetch. */
+    contentUrl: (clientId: string, id: string) => `/api/clients/${clientId}/files/${id}/content`,
+  },
 };
