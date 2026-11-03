@@ -124,6 +124,7 @@ export const BAA_WARNING_DAYS = 60;
 /** Audit actions that count as "configuration changes" on the overview. */
 export const CONFIG_CHANGE_ACTIONS = [
   "platform.feature_toggled",
+  "platform.org_feature_toggled",
   "org.created",
   "org.updated",
   "org.decommissioned",
