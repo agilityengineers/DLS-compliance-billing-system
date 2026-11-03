@@ -190,10 +190,19 @@ export const clientsTable = pgTable(
      * with the leads schema.
      */
     sourceLeadId: uuid("source_lead_id").references((): AnyPgColumn => leadsTable.id, { onDelete: "set null" }),
+    /**
+     * Set when this row is a PRACTICE record: a copy of one of the app's
+     * synthetic demo clients, made so it can be opened and tested like a real
+     * one. It holds that demo client's id, so the demo data hanging off it
+     * (visits, notes) still finds it. Null for every real person. Unique
+     * inside the organization, so a practice client is copied at most once.
+     */
+    sampleKey: text("sample_key"),
     ...timestamps,
   },
   (t) => [
     index("idx_clients_org_last_name").on(t.orgId, t.lastName),
+    uniqueIndex("uq_clients_org_sample_key").on(t.orgId, t.sampleKey).where(sql`${t.sampleKey} is not null`),
     uniqueIndex("uq_clients_org_medicaid").on(t.orgId, t.medicaidId).where(sql`${t.medicaidId} is not null`),
     uniqueIndex("uq_clients_source_lead").on(t.sourceLeadId).where(sql`${t.sourceLeadId} is not null`),
     check("clients_status_check", sql`${t.status} in ('Active', 'Inactive', 'Interim', 'Discharged', 'Deceased')`),

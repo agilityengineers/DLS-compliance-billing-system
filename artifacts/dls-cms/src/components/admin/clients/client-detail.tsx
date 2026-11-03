@@ -107,8 +107,18 @@ export function ClientDetail({
             {client.caseManagerName ? ` · case manager ${client.caseManagerName}` : ""}
           </p>
         </div>
-        <Badge variant={STATUS_VARIANT[client.status] ?? "muted"}>{client.status}</Badge>
+        <div className="flex items-center gap-2">
+          {client.sampleKey && <Badge variant="warning">Practice</Badge>}
+          <Badge variant={STATUS_VARIANT[client.status] ?? "muted"}>{client.status}</Badge>
+        </div>
       </div>
+
+      {client.sampleKey && (
+        <p role="note" className="rounded-btn bg-pill-warning px-3 py-2 text-sm text-pill-warning-fg">
+          <strong>Practice record.</strong> This is made-up sample data, not a real person. It was copied from the
+          demo dataset so you can test every part of the client record; your edits are saved, but they never describe a real client.
+        </p>
+      )}
 
       <Tabs defaultValue={tabs[0] ?? "record"}>
         <TabsList className="h-auto flex-wrap justify-start">

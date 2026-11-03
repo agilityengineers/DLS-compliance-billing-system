@@ -222,6 +222,30 @@ describe.skipIf(!TEST_URL)("client records", () => {
     expect(edit.status).toBe(409);
   });
 
+  it("copies a practice client once, flags it, and keeps real clients unflagged", async () => {
+    const sample = { firstName: "Dev", lastName: "Ramírez", sampleKey: "demo-client-ramirez" };
+    const first = await api("POST", "/api/clients", sample, schedulerCookie);
+    expect(first.status).toBe(201);
+    expect(first.body.client.sampleKey).toBe("demo-client-ramirez");
+
+    // Asking again (a second tab, a double click) returns the same copy.
+    const again = await api("POST", "/api/clients", { ...sample, firstName: "Changed" }, adminCookie);
+    expect(again.status).toBe(200);
+    expect(again.body.client.id).toBe(first.body.client.id);
+    expect(again.body.client.firstName).toBe("Dev");
+
+    // A practice record cannot also be a converted inquiry.
+    const mixed = await api("POST", "/api/clients", { ...sample, sampleKey: "x", sourceLeadId: "00000000-0000-4000-8000-000000000000" }, adminCookie);
+    expect(mixed.status).toBe(400);
+
+    const real = await api("GET", `/api/clients/${clientId}`, undefined, adminCookie);
+    expect(real.body.client.sampleKey).toBeNull();
+
+    const audit = await api("GET", "/api/org/audit?limit=50", undefined, adminCookie);
+    const created = (audit.body.entries as any[]).find((e) => e.action === "client.created" && e.targetId === first.body.client.id);
+    expect(created.details.practiceRecord).toBe(true);
+  });
+
   describe("contacts", () => {
     let contactId: string;
 

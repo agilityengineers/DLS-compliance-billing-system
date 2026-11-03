@@ -87,6 +87,12 @@ export interface Client {
   status?: ClientStatus;
   /** true = a durable record in the API database; false/undefined = synthetic demo client. */
   is_record?: boolean;
+  /**
+   * Practice data, not a real person. On a database record: the id of the
+   * demo client it was copied from. On a synthetic demo client: its own id.
+   * Null/undefined for every real client.
+   */
+  sample_key?: string | null;
 }
 
 export type ClientStatus = "Active" | "Inactive" | "Interim" | "Discharged" | "Deceased";

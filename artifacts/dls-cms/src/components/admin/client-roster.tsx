@@ -33,9 +33,10 @@ function csvCell(v: unknown): string {
 
 /** The roster as a spreadsheet, built in the browser from what is already on screen. */
 function toCsv(rows: Client[]): string {
-  const header = ["Last name", "First name", "Middle name", "Status", "Medicaid ID", "Date of birth", "Age", "Phone", "Email", "City", "County", "Case manager", "CCB", "Service plan start", "Service plan end", "Diagnoses"];
+  const header = ["Record type", "Last name", "First name", "Middle name", "Status", "Medicaid ID", "Date of birth", "Age", "Phone", "Email", "City", "County", "Case manager", "CCB", "Service plan start", "Service plan end", "Diagnoses"];
   const lines = rows.map((c) =>
     [
+      c.sample_key ? "Practice" : "Real",
       c.last_name,
       c.first_name,
       c.middle_name ?? "",
@@ -142,10 +143,17 @@ export function ClientRoster({ clients, today }: { clients: Client[]; today: str
             return (
               <tr key={client.id} className="hover:bg-muted/30">
                 <td className="font-medium">
-                  {client.is_record ? (
-                    <Link href={`/admin/clients/${client.id}`} className="text-plum hover:underline">{name}</Link>
-                  ) : (
-                    <span title="A practice record; it has no page of its own.">{name}</span>
+                  {/* Every row opens. A practice client (synthetic demo data) is
+                      copied into the database the first time it is opened. */}
+                  <Link href={`/admin/clients/${client.id}`} className="text-plum hover:underline">{name}</Link>
+                  {client.sample_key && (
+                    <Badge
+                      variant="warning"
+                      className="ml-2 align-middle"
+                      title="Practice record: made-up sample data, not a real person. Safe to edit for testing."
+                    >
+                      Practice
+                    </Badge>
                   )}
                 </td>
                 <td><Badge variant={STATUS_VARIANT[client.status ?? "Active"] ?? "muted"}>{client.status ?? "Active"}</Badge></td>
