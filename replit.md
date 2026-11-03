@@ -70,4 +70,5 @@ Care management, compliance and billing portal for Durable Life Skills, Inc.: a 
 
 ## Pointers
 
+- **Project status lives in `docs/tracking/`.** `feature-tracker.csv` scores every row of Melissa's iTherapy feature inventory against the portal (Built / Partial / Missing, the switch that controls it, the PR that delivered it) and carries her Keep / Drop / Priority decisions; `build_tracker.py` renders it into `iTherapy_Feature_Tracker.xlsx`, the workbook shared with her. When a PR changes what the portal has, update the CSV and re-render; the README there says how. The first scoring and its reasoning: `docs/review/2026-11-03-itherapy-inventory-gap-analysis.md`
 - See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details

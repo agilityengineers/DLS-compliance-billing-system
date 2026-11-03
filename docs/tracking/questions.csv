@@ -1,0 +1,13 @@
+Question,Why it matters,Rows affected,Melissa's answer
+Client statuses,"iTherapy offers seven (Active, Deceased, Discharge, Imported, Inactive, Interim, Referral). The portal now has five (Active, Interim, Inactive, Discharged, Deceased) and keeps 'Referral' in the Leads funnel. Is anything missing?","42, 59, 60",
+Sites and programs,"iTherapy lists 9 sites and a Programs list. Are these physical locations DLS still needs, or payer programs? The portal has no site concept because visits happen at the client's home or in the community.","41, 58, 87, 111–112",
+Family Infant Toddler,"Does DLS deliver FIT / early intervention? If not, every FIT row can be dropped.","79, 96, 180, 192 and the FIT module",
+Self-directed services,iTherapy showed zero SDS records. Drop these?,"94, 179",
+Contractors,"Does DLS pay 1099 contractors through invoices, or are all staff on payroll? Payroll transmittal covers employees already.",181–185,
+Payments and remittances,Who reconciles 835 remittance advice today? iTherapy had zero uploaded files. The choice is between building accounts receivable in the portal and handing claims to QuickBooks.,186–191,
+Which intake fields matter,"Assist ID, AHCCCS ID and EIN look like Arizona-era vestiges; SSN raises an encryption question; tribe and religion only matter if a report needs them. Which of these are filled in today?","50–53, 63, 65, 74–78",
+Treatment plans and goals,"iTherapy had only expired plans. Where do ISP goals live today, and should notes draw their goals from the client's plan?",124–130,
+Prior authorizations,"Are authorizations issued in hours or units, weekly or per period, and with a PA number? A sample PA letter would settle this and let claim readiness read the new authorization records.",134–141,
+Note approval,"Does a supervisor approve notes before they are posted (Unapproved / Approved / Rejected)? The portal has no approval step today, only QA flags; adding one changes when billing can run.","123, 144, 147",
+Billing codes,"Can you export iTherapy's ~60 billing codes (Export to Excel) so the new Billing codes screen is seeded from real codes, modifiers and rates?",170–176,
+Client files,"The Files tab has twelve categories. Which are missing, and what renewal intervals apply?",106–108,

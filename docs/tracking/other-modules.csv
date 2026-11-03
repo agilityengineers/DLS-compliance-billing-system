@@ -1,0 +1,14 @@
+Module (rows),What the portal has today
+Dashboard (27 tiles),"Five stat cards: active clients, open leads, visits today, open QA flags, claim-ready notes; today's visits. iTherapy's note-approval, missing-note, mail and training tiles have no counterpart yet."
+Global / Top Bar (13),"Login, role-based landing, Settings & users, feature switchboard. No internal mail, notifications bell, help buttons or 'export to Excel' on every list (the client roster and billing have exports now)."
+Notes (25),"Offline-first progress notes with live unit math and dual signatures on the field app; QA flags; no management note viewer, no approval / reject / transfer workflow, no missing-period reports (roadmap 2.4)."
+FIT (8),Nothing. Confirm whether DLS runs Family Infant Toddler at all.
+EVV (7),GPS clock-in / out with geofence and an EVV review screen (preview); Sandata aggregator submission is in development.
+Agency Management (11),"Incident reporting from the field (review workflow is roadmap 2.3); hash-chained audit trail; no task lists, agency files or acknowledgement records."
+Reporting (12),"Units delivered vs authorized (weekly) and monthly SLS / DVR report documents (preview). No census, training or dynamic-form reports."
+Budget Report (18),"Per-authorization usage meters on the client record and the weekly utilization view. PA budgets, denials, payments and reconciliation reports depend on the payment records that are still missing."
+Staff (14),"Staff & credentials with the configurable requirements registry, invitations, Relias course matrix. No contractor type, pay rate, demographics or hiring fields."
+Time Keeping (2),"Weekly timesheets (route record) and payroll transmittal, both preview."
+Mail (3),No internal mail.
+Security & Roles (10),"Three agency roles (Admin, Scheduler, Field Staff) plus provider roles, with per-role feature grants, versus iTherapy's 13 roles and 775 permissions. The Super Admin can now set any capability per organization."
+Advanced Settings (63),"Reference lists exist only where a feature needed one (lead funnel stages, form questions, credential requirements, file categories, billing codes and payers). No general reference-list editor."
