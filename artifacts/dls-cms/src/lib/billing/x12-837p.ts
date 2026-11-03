@@ -53,14 +53,20 @@ function pad(v: string, len: number) { return v.padEnd(len).slice(0, len); }
 function ccyymmdd(d = new Date()) { return utcIsoToAgencyDate(d.toISOString()).replace(/-/g, ""); }
 function hhmm(d = new Date()) { return utcIsoToAgencyTime(d.toISOString()).replace(":", ""); }
 
-export function exportClaim837P(claims: ClaimInput[], submitter: Submitter, controlNumber = 1): string {
+export interface ExportOptions {
+  /** ISA15: P for a production interchange, T for a test one the payer will not adjudicate. */
+  usage?: "P" | "T";
+}
+
+export function exportClaim837P(claims: ClaimInput[], submitter: Submitter, controlNumber = 1, options: ExportOptions = {}): string {
+  const usage = options.usage ?? "P";
   const icn = String(controlNumber).padStart(9, "0");
   const segs: string[] = [];
 
   // ── Interchange & functional group ──
   segs.push(["ISA", "00", pad("", 10), "00", pad("", 10),
     "ZZ", pad(submitter.id, 15), "ZZ", pad(submitter.receiverId, 15),
-    ccyymmdd().slice(2), hhmm(), "^", "00501", icn, "0", "P", ":"].join(EL));
+    ccyymmdd().slice(2), hhmm(), "^", "00501", icn, "0", usage, ":"].join(EL));
   segs.push(["GS", "HC", submitter.id, submitter.receiverId, ccyymmdd(), hhmm(), icn, "X", "005010X222A1"].join(EL));
 
   const stIndex = segs.length;

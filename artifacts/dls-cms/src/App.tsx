@@ -22,6 +22,7 @@ import SetPasswordPage from "@/app/auth/set-password/page";
 import AdminDashboard from "@/app/admin/page";
 import AdminAudit from "@/app/admin/audit/page";
 import AdminBilling from "@/app/admin/billing/page";
+import AdminBillingCodes from "@/app/admin/billing/codes/page";
 import AdminClients from "@/app/admin/clients/page";
 import AdminClientNew from "@/app/admin/clients/new/page";
 import AdminClientDetail from "@/app/admin/clients/[id]/page";
@@ -115,6 +116,7 @@ function Router() {
       <Route path="/admin">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminDashboard as AsyncComponent)} />}</Route>
       <Route path="/admin/audit">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminAudit as AsyncComponent)} />}</Route>
       <Route path="/admin/billing">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminBilling as AsyncComponent)} />}</Route>
+      <Route path="/admin/billing/codes">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminBillingCodes as AsyncComponent)} />}</Route>
       <Route path="/admin/clients">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminClients as AsyncComponent)} />}</Route>
       <Route path="/admin/clients/new">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminClientNew as AsyncComponent)} />}</Route>
       <Route path="/admin/clients/:id">

@@ -19,6 +19,7 @@ const CATEGORIES: { value: "" | AuditCategory; label: string }[] = [
   { value: "user", label: "Account changes & password resets" },
   { value: "session", label: "Sessions ended by the provider" },
   { value: "support", label: "Support windows granted, revoked and requested" },
+  { value: "billing", label: "Billing: payers, codes and claim batches" },
 ];
 
 const SELECT = "h-9 rounded-btn border border-border bg-card px-2 text-sm";

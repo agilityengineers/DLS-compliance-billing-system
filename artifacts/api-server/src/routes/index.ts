@@ -3,6 +3,7 @@ import type { Db } from "@workspace/db";
 import type { AppConfig } from "../lib/config";
 import type { Mailer } from "../lib/mail";
 import { authRouter } from "./auth";
+import { billingRouter } from "./billing";
 import { clientsRouter } from "./clients";
 import { credentialingRouter } from "./credentialing";
 import { healthRouter } from "./health";
@@ -25,6 +26,7 @@ export function apiRouter(db: Db, config: AppConfig, deps: RouterDeps): IRouter 
   router.use(orgRouter(db, config, deps));
   router.use(leadsRouter(db, config, deps));
   router.use(clientsRouter(db, config, deps));
+  router.use(billingRouter(db, config, deps));
   router.use(credentialingRouter(db));
   router.use(jobsRouter(db, config, deps));
   return router;
