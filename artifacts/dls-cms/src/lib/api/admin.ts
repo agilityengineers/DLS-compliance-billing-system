@@ -239,7 +239,7 @@ export interface PlatformSessionRow {
   current: boolean;
 }
 
-export type AuditCategory = "auth" | "platform" | "org" | "user" | "session" | "support" | "lead" | "lead_form" | "lead_funnel" | "client";
+export type AuditCategory = "auth" | "platform" | "org" | "user" | "session" | "support" | "lead" | "lead_form" | "lead_funnel" | "client" | "billing";
 
 export interface AuditFilters {
   limit?: number;
@@ -647,4 +647,146 @@ export const clientsApi = {
   get: (id: string) => apiFetch<{ client: ClientRecord }>(`/clients/${id}`),
   create: (input: ClientCreateInput) =>
     apiFetch<{ client: ClientRecord; convertedLeadId: string | null }>("/clients", { method: "POST", json: input }),
+};
+
+// ── billing: payers, the fee schedule, the claim ledger ────────────────────
+// Mirrors artifacts/api-server/src/routes/billing.ts.
+export type PayerKind = "medicaid" | "dvr" | "private" | "other";
+export const PAYER_KIND_LABELS: Record<PayerKind, string> = { medicaid: "Medicaid", dvr: "DVR", private: "Private pay", other: "Other" };
+export type ClaimFilingCode = "MC" | "CI" | "OF" | "11";
+export const CLAIM_FILING_LABELS: Record<ClaimFilingCode, string> = { MC: "MC — Medicaid", CI: "CI — Commercial insurance", OF: "OF — Other federal program", "11": "11 — Other non-federal program" };
+export type BillingService = "SCC" | "Job_Coaching" | "Day_Habilitation" | "Early_Intervention" | "NMT" | "Other";
+export const BILLING_SERVICE_LABELS: Record<BillingService, string> = {
+  SCC: "SCC",
+  Job_Coaching: "Job Coaching",
+  Day_Habilitation: "Day Habilitation",
+  Early_Intervention: "Early Intervention",
+  NMT: "Transportation (NMT)",
+  Other: "Other",
+};
+export type BillingUnit = "15_min" | "hour" | "day" | "trip" | "each";
+export const BILLING_UNIT_LABELS: Record<BillingUnit, string> = { "15_min": "15 minutes", hour: "Hour", day: "Day", trip: "Trip", each: "Each" };
+export type SubmissionStatus = "open" | "submitted" | "accepted" | "rejected" | "paid" | "denied" | "voided";
+
+export interface Payer {
+  id: string;
+  name: string;
+  kind: PayerKind;
+  payerId: string | null;
+  claimFilingCode: ClaimFilingCode;
+  address1: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+  phone: string | null;
+  notes: string | null;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PayerInput {
+  name: string;
+  kind?: PayerKind;
+  payerId?: string;
+  claimFilingCode?: ClaimFilingCode;
+  address1?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  phone?: string;
+  notes?: string;
+  active?: boolean;
+}
+
+export interface BillingCode {
+  id: string;
+  payerId: string | null;
+  code: string;
+  modifier1: string | null;
+  modifier2: string | null;
+  modifier3: string | null;
+  modifier4: string | null;
+  description: string;
+  service: BillingService;
+  billingUnit: BillingUnit;
+  ratePerUnit: number;
+  effectiveDate: string;
+  endDate: string | null;
+  evvCode: string | null;
+  allowZeroUnits: boolean;
+  archived: boolean;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BillingCodeInput {
+  payerId?: string | null;
+  code: string;
+  modifier1?: string;
+  modifier2?: string;
+  modifier3?: string;
+  modifier4?: string;
+  description: string;
+  service: BillingService;
+  billingUnit?: BillingUnit;
+  ratePerUnit: number;
+  effectiveDate: string;
+  endDate?: string;
+  evvCode?: string;
+  allowZeroUnits?: boolean;
+  archived?: boolean;
+  notes?: string;
+}
+
+export interface ClaimSubmission {
+  id: string;
+  controlNumber: number;
+  payerId: string | null;
+  payerKey: string;
+  format: string;
+  testMode: boolean;
+  periodStart: string | null;
+  periodEnd: string | null;
+  noteIds: string[];
+  noteCount: number;
+  totalUnits: number;
+  totalCharge: number;
+  status: SubmissionStatus;
+  statusNote: string | null;
+  fileName: string | null;
+  submittedAt: string | null;
+  respondedAt: string | null;
+  createdByUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const billingApi = {
+  payers: {
+    list: () => apiFetch<{ payers: Payer[] }>("/billing/payers"),
+    create: (input: PayerInput) => apiFetch<{ payer: Payer }>("/billing/payers", { method: "POST", json: input }),
+    update: (id: string, patch: Partial<PayerInput>) => apiFetch<{ payer: Payer }>(`/billing/payers/${id}`, { method: "PATCH", json: patch }),
+    remove: (id: string) => apiFetch<{ ok: true }>(`/billing/payers/${id}`, { method: "DELETE" }),
+  },
+  codes: {
+    list: (opts: { archived?: boolean } = {}) => apiFetch<{ codes: BillingCode[] }>(`/billing/codes${opts.archived ? "?archived=true" : ""}`),
+    create: (input: BillingCodeInput) => apiFetch<{ code: BillingCode }>("/billing/codes", { method: "POST", json: input }),
+    update: (id: string, patch: Partial<BillingCodeInput>) => apiFetch<{ code: BillingCode }>(`/billing/codes/${id}`, { method: "PATCH", json: patch }),
+    duplicate: (id: string) => apiFetch<{ code: BillingCode }>(`/billing/codes/${id}/duplicate`, { method: "POST" }),
+    remove: (id: string) => apiFetch<{ ok: true }>(`/billing/codes/${id}`, { method: "DELETE" }),
+  },
+  submissions: {
+    list: (limit = 100) => apiFetch<{ submissions: ClaimSubmission[] }>(`/billing/submissions?limit=${limit}`),
+    open: (input: { noteIds: string[]; totalUnits: number; totalCharge: number; payerKey: string; payerId?: string | null; testMode?: boolean; periodStart?: string; periodEnd?: string }) =>
+      apiFetch<{ submission: ClaimSubmission }>("/billing/submissions", { method: "POST", json: input }),
+    finalize: (id: string, input: { fileContent: string; fileName: string }) =>
+      apiFetch<{ submission: ClaimSubmission }>(`/billing/submissions/${id}/finalize`, { method: "POST", json: input }),
+    discard: (id: string) => apiFetch<{ ok: true }>(`/billing/submissions/${id}`, { method: "DELETE" }),
+    setStatus: (id: string, status: Exclude<SubmissionStatus, "open">, statusNote?: string) =>
+      apiFetch<{ submission: ClaimSubmission }>(`/billing/submissions/${id}`, { method: "PATCH", json: { status, statusNote } }),
+    /** A download, so it goes through the browser rather than fetch. */
+    fileUrl: (id: string) => `/api/billing/submissions/${id}/file`,
+  },
 };

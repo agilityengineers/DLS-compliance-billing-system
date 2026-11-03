@@ -11,7 +11,7 @@ import { usePathname } from "next/navigation";
 import {
   Activity, AlertTriangle, Banknote, BarChart3, Building2, CalendarDays, ChevronsLeft, ChevronsRight,
   FolderOpen, GraduationCap, Grid3x3, Inbox, LayoutDashboard, LifeBuoy, ListChecks, Lock, MapPin,
-  MonitorSmartphone, Pill, Receipt, ScrollText, Settings, ShieldCheck, SlidersHorizontal, UserCog,
+  MonitorSmartphone, Pill, Receipt, ScrollText, Settings, ShieldCheck, SlidersHorizontal, Tags, UserCog,
   Users, type LucideIcon
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -20,7 +20,7 @@ import { activeHref, type NavSection } from "./nav-config";
 const ICONS: Record<string, LucideIcon> = {
   AlertTriangle, LayoutDashboard, Users, CalendarDays, UserCog, ShieldCheck, MapPin, Pill,
   ScrollText, Receipt, Banknote, BarChart3, FolderOpen, GraduationCap, Settings,
-  SlidersHorizontal, Building2, ListChecks, Grid3x3, LifeBuoy, MonitorSmartphone, Activity, Inbox
+  SlidersHorizontal, Building2, ListChecks, Grid3x3, LifeBuoy, MonitorSmartphone, Activity, Inbox, Tags
 };
 
 export function AdminSidebar({

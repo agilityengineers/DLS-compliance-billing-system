@@ -237,6 +237,14 @@ export interface ClaimExport {
   total_units: number;
   total_charge: number;
   file_content: string | null;
+  // ── Present on ledger rows from the API (claim_submissions) ─────────────
+  /** open | submitted | accepted | rejected | paid | denied | voided */
+  status?: string;
+  status_note?: string | null;
+  test_mode?: boolean;
+  file_name?: string | null;
+  /** true = a durable row in the API database; false/undefined = the practice ledger. */
+  is_record?: boolean;
 }
 
 export interface PayrollPeriod {

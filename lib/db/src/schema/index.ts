@@ -5,3 +5,4 @@ export * from "./staff-credentials";
 export * from "./consultations";
 export * from "./clients";
 export * from "./leads";
+export * from "./billing";

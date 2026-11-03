@@ -5,7 +5,7 @@
 // QuickBooks adapter is an interface stub awaiting the client's decision.
 import "server-only";
 
-import { exportClaim837P, submitterFromEnv, type ClaimInput } from "./x12-837p";
+import { exportClaim837P, submitterFromEnv, type ClaimInput, type ExportOptions } from "./x12-837p";
 import type { NoteReadiness } from "./readiness";
 import type { Client } from "@/lib/supabase/types";
 import { agencyTodayIso } from "@workspace/time";
@@ -24,7 +24,7 @@ export interface PayerAdapter {
   readonly key: string;
   readonly label: string;
   /** Build a claim batch from claim-ready notes. Must refuse notes without a fee-schedule rate. */
-  buildBatch(ready: NoteReadiness[], clients: Map<string, Client>, controlNumber: number): ClaimBatchResult;
+  buildBatch(ready: NoteReadiness[], clients: Map<string, Client>, controlNumber: number, options?: ExportOptions): ClaimBatchResult;
 }
 
 /** Colorado Medicaid — X12 837P via the state's designated aggregation path. */
@@ -32,7 +32,7 @@ class ColoradoMedicaid837PAdapter implements PayerAdapter {
   readonly key = "COLORADO_MEDICAID";
   readonly label = "Colorado Medicaid (837P)";
 
-  buildBatch(ready: NoteReadiness[], clients: Map<string, Client>, controlNumber: number): ClaimBatchResult {
+  buildBatch(ready: NoteReadiness[], clients: Map<string, Client>, controlNumber: number, options: ExportOptions = {}): ClaimBatchResult {
     // Fee-schedule gate: never emit a claim line without a real rate.
     const missingRate = ready.filter((r) => !r.rate || r.charge == null);
     if (missingRate.length > 0) {
@@ -81,11 +81,11 @@ class ColoradoMedicaid837PAdapter implements PayerAdapter {
 
     const totalUnits = ready.reduce((s, r) => s + (r.note.calculated_billing_units ?? 0), 0);
     const totalCharge = Math.round(ready.reduce((s, r) => s + (r.charge ?? 0), 0) * 100) / 100;
-    const fileContent = exportClaim837P(claims, submitterFromEnv(), controlNumber);
+    const fileContent = exportClaim837P(claims, submitterFromEnv(), controlNumber, options);
     return {
       ok: true,
       fileContent,
-      fileName: `dls-837p-${agencyTodayIso()}-cn${controlNumber}.txt`,
+      fileName: `dls-837p-${agencyTodayIso()}-cn${controlNumber}${options.usage === "T" ? "-test" : ""}.txt`,
       totalUnits,
       totalCharge
     };
