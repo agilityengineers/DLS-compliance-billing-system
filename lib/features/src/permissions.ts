@@ -16,9 +16,18 @@ export type RoleGrants = Partial<Record<EmployeeRole, boolean>>;
 /** Persisted state for one feature at both tiers. */
 export interface FeatureState {
   key: FeatureKey;
+  /** Tier 1 as it applies to THIS organization: the override when there is one, else the global switch. */
   platformEnabled: boolean;
   orgEnabled: boolean;
   roles: RoleGrants;
+  /** The provider's global switch, before any per-organization override. */
+  platformDefault?: boolean;
+  /**
+   * The provider's override for this organization — true or false when the
+   * Super Admin set tier 1 for this account specifically, null when it
+   * follows the global switch.
+   */
+  platformOverride?: boolean | null;
 }
 
 /** What the settings screens render: the state plus what each actor may change. */
@@ -63,18 +72,32 @@ export function sanitizeRoles(def: FeatureDef, roles: RoleGrants | null | undefi
  * Merge the catalog with whatever the database holds. Missing rows fall back
  * to the catalog defaults, so a freshly created organization behaves exactly
  * like the launch configuration.
+ *
+ * `orgPlatformRows` are the provider's per-organization overrides of tier 1:
+ * where one exists it replaces the global switch for that organization, so
+ * the Super Admin can make a capability available to one account only, or
+ * withhold it from one account while every other account keeps it.
  */
-export function resolveFeatureStates(platformRows: readonly PlatformRow[], orgRows: readonly OrgRow[]): FeatureState[] {
+export function resolveFeatureStates(
+  platformRows: readonly PlatformRow[],
+  orgRows: readonly OrgRow[],
+  orgPlatformRows: readonly PlatformRow[] = []
+): FeatureState[] {
   const platform = new Map(platformRows.map((r) => [r.key, r.enabled]));
+  const overrides = new Map(orgPlatformRows.map((r) => [r.key, r.enabled]));
   const org = new Map(orgRows.map((r) => [r.key, r]));
   return FEATURE_CATALOG.map((def) => {
     const row = org.get(def.key);
     const defaults = defaultOrgState(def);
+    const platformDefault = platform.get(def.key) ?? def.launchDefault;
+    const platformOverride = overrides.has(def.key) ? overrides.get(def.key)! : null;
     return {
       key: def.key,
-      platformEnabled: platform.get(def.key) ?? def.launchDefault,
+      platformEnabled: platformOverride ?? platformDefault,
       orgEnabled: row ? row.enabled : defaults.enabled,
       roles: row ? sanitizeRoles(def, row.roles) : defaults.roles,
+      platformDefault,
+      platformOverride,
     };
   });
 }
