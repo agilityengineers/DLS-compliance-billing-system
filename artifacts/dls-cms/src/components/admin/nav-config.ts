@@ -79,6 +79,7 @@ export const ADMIN_NAV: NavSection[] = [
     label: "Business",
     items: [
       { href: "/admin/billing", label: "Billing", icon: "Receipt", feature: "billing.claims", lockedForNonAdmin: true },
+      { href: "/admin/billing/codes", label: "Billing codes", icon: "Tags", feature: "billing.codes", adminOnly: true },
       { href: "/admin/payroll", label: "Payroll", icon: "Banknote", feature: "payroll.transmittal", adminOnly: true },
       { href: "/admin/reports", label: "Reports", icon: "BarChart3", feature: "reports.utilization" },
       { href: "/admin/documents", label: "Documents & notices", icon: "FolderOpen", feature: "documents.files" }

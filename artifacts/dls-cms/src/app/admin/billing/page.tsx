@@ -1,13 +1,18 @@
-// app/admin/billing/page.tsx — claim readiness with named blockers + bulk
-// 837P export. ADMIN-ONLY workspace; the Scheduler sees a locked
-// explanation card (README: "Billing visible but locked").
+// app/admin/billing/page.tsx — note posting: claim readiness with named
+// blockers, filters, a preview of the file, the bulk 837P export, and the
+// ledger of batches with what the payer said. ADMIN-ONLY workspace; the
+// Scheduler sees a locked explanation card (README: "Billing visible but
+// locked").
+import Link from "next/link";
 import { Lock } from "lucide-react";
 import { checkAccess } from "@/lib/rbac/access";
+import { isApiAuth } from "@/lib/auth/mode";
+import { billingApi } from "@/lib/api/admin";
 import { evaluateUnbilledNotes } from "@/lib/billing/readiness";
 import { listClaimExports } from "@/lib/data/repo-business";
-import { BillingTable, type BillingRow } from "@/components/admin/billing-table";
+import { BillingTable, type BillingRow, type PayerOption } from "@/components/admin/billing-table";
+import { ClaimLedger } from "@/components/admin/claim-ledger";
 import { DesktopWorkspace } from "@/components/admin/desktop-workspace";
-import { formatAgencyDateTime } from "@workspace/time";
 
 export default async function BillingPage() {
   const { ctx, denied } = await checkAccess({ roles: ["Admin", "Scheduler"] });
@@ -34,10 +39,17 @@ export default async function BillingPage() {
   const gate = await checkAccess({ feature: "billing.claims", roles: ["Admin"] });
   if (gate.denied) return gate.denied;
 
-  const [readiness, exports] = await Promise.all([evaluateUnbilledNotes(), listClaimExports()]);
+  const codesOn = ctx.features.has("billing.codes");
+  const ledgerIsReal = isApiAuth();
+  const [readiness, exports, payers] = await Promise.all([
+    evaluateUnbilledNotes(),
+    listClaimExports(),
+    codesOn && ledgerIsReal ? billingApi.payers.list().then((r) => r.payers.filter((p) => p.active)).catch(() => []) : Promise.resolve([]),
+  ]);
 
   const rows: BillingRow[] = readiness.map((r) => ({
     id: r.note.id,
+    clientId: r.note.client_id,
     client: r.note.client_name.split(" ").reverse().join(", "),
     medicaidId: r.note.medicaid_id,
     date: r.note.date,
@@ -47,36 +59,23 @@ export default async function BillingPage() {
     ok: r.ok,
     blockers: r.blockers
   }));
+  const payerOptions: PayerOption[] = payers.map((p) => ({ id: p.id, name: p.name }));
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="page-title">Billing</h1>
-        <p className="text-sm text-muted-foreground">Claim readiness · unbilled progress notes</p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="page-title">Billing</h1>
+          <p className="text-sm text-muted-foreground">Claim readiness · unbilled progress notes</p>
+        </div>
+        {codesOn && (
+          <Link href="/admin/billing/codes" className="text-sm text-plum hover:underline">Billing codes &amp; payers →</Link>
+        )}
       </div>
 
       <DesktopWorkspace title="Billing">
-        <BillingTable rows={rows} />
-
-        {exports.length > 0 && (
-          <section className="mt-8 space-y-2">
-            <h2 className="font-serif text-lg font-semibold text-plum">Export history</h2>
-            <ul className="divide-y divide-border rounded-card border border-border bg-card text-sm">
-              {exports.map((e) => (
-                <li key={e.id} className="flex items-center justify-between gap-4 px-4 py-2.5">
-                  <span className="tabular-nums text-muted-foreground">
-                    {formatAgencyDateTime(e.exported_at)}
-                  </span>
-                  <span className="font-medium">CN {e.control_number}</span>
-                  <span>{e.note_ids.length} note{e.note_ids.length === 1 ? "" : "s"}</span>
-                  <span className="tabular-nums">{e.total_units} units</span>
-                  <span className="tabular-nums font-medium">${e.total_charge.toFixed(2)}</span>
-                  <span className="text-muted-foreground">{e.payer.replace(/_/g, " ")}</span>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
+        <BillingTable rows={rows} payers={payerOptions} ledgerIsReal={ledgerIsReal} />
+        <ClaimLedger exports={exports} canRecord={ledgerIsReal} />
       </DesktopWorkspace>
     </div>
   );

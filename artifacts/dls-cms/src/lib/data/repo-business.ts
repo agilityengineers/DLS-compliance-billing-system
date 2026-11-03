@@ -3,6 +3,10 @@
 import "server-only";
 
 import { isDemoMode } from "@/lib/demo/mode";
+import { isApiAuth } from "@/lib/auth/mode";
+import { billingApi } from "@/lib/api/admin";
+import { errorMessage } from "@/lib/api/client";
+import { invalidateBilling, listFeeScheduleRecords, submissionToClaimExport } from "@/lib/data/billing-api";
 import { getDemoStore, type AuditContext } from "@/lib/data/demo/store";
 import { createDataClient, createServiceClient } from "@/lib/supabase/server";
 import type {
@@ -13,6 +17,11 @@ import type {
 // ═══ fee schedule ═════════════════════════════════════════════════════════
 
 export async function getFeeSchedule(payer = "COLORADO_MEDICAID"): Promise<FeeScheduleRow[]> {
+  // The organization's own fee schedule (Billing codes screen) wins the
+  // moment it has a single code; until then the practice rates keep the
+  // demo billable, so switching the screen on never silently blanks a price.
+  const records = (await listFeeScheduleRecords()).filter((f) => f.payer === payer);
+  if (records.length > 0) return records;
   if (isDemoMode()) {
     return getDemoStore().data.feeSchedule.filter((f) => f.payer === payer);
   }
@@ -24,6 +33,16 @@ export async function getFeeSchedule(payer = "COLORADO_MEDICAID"): Promise<FeeSc
 // ═══ claim exports ════════════════════════════════════════════════════════
 
 export async function listClaimExports(): Promise<ClaimExport[]> {
+  // With real sign-in the ledger is the API's claim_submissions table, which
+  // also remembers what the payer said back.
+  if (isApiAuth()) {
+    try {
+      const res = await billingApi.submissions.list();
+      return res.submissions.map(submissionToClaimExport);
+    } catch {
+      return [];
+    }
+  }
   if (isDemoMode()) {
     return [...((getDemoStore().data as unknown as { claimExports?: ClaimExport[] }).claimExports ?? [])]
       .sort((a, b) => b.exported_at.localeCompare(a.exported_at));
@@ -44,11 +63,37 @@ export async function listClaimExports(): Promise<ClaimExport[]> {
 type DemoLedger = { claimExports?: ClaimExport[]; __ctrl?: number };
 
 /** Phase 1 — open the ledger row and reserve a control number. */
+export interface ClaimExportOptions {
+  /** ISA15 = T: a test interchange the payer will not adjudicate. */
+  testMode?: boolean;
+  /** The payer record (Billing codes screen) the batch is for, when one is chosen. */
+  payerId?: string | null;
+  periodStart?: string;
+  periodEnd?: string;
+}
+
 export async function openClaimExport(
-  input: { noteIds: string[]; totalUnits: number; totalCharge: number; payer?: string },
+  input: { noteIds: string[]; totalUnits: number; totalCharge: number; payer?: string } & ClaimExportOptions,
   ctx: AuditContext
 ): Promise<{ ok: boolean; id?: string; controlNumber?: number; error?: string }> {
   const exportedAt = new Date().toISOString();
+  if (isApiAuth()) {
+    try {
+      const res = await billingApi.submissions.open({
+        noteIds: input.noteIds,
+        totalUnits: input.totalUnits,
+        totalCharge: input.totalCharge,
+        payerKey: input.payer ?? "COLORADO_MEDICAID",
+        payerId: input.payerId ?? null,
+        testMode: input.testMode ?? false,
+        periodStart: input.periodStart,
+        periodEnd: input.periodEnd,
+      });
+      return { ok: true, id: res.submission.id, controlNumber: res.submission.controlNumber };
+    } catch (e) {
+      return { ok: false, error: errorMessage(e) };
+    }
+  }
   if (isDemoMode()) {
     const store = getDemoStore();
     const bag = store.data as unknown as DemoLedger;
@@ -83,10 +128,39 @@ export async function finalizeClaimExport(
   exportId: string,
   fileContent: string,
   noteIds: string[],
-  ctx: AuditContext
+  ctx: AuditContext,
+  fileName?: string
 ): Promise<{ ok: boolean; error?: string }> {
   const exportedAt = new Date().toISOString();
   if (!fileContent) return { ok: false, error: "Refusing to finalize an export with an empty file." };
+  if (isApiAuth()) {
+    // The file lands in the ledger first; only then are the notes marked
+    // billed, wherever they live (the practice dataset today).
+    try {
+      await billingApi.submissions.finalize(exportId, { fileContent, fileName: fileName ?? `dls-837p-cn${exportId.slice(0, 8)}.txt` });
+    } catch (e) {
+      return { ok: false, error: `Could not store the claim file: ${errorMessage(e)}` };
+    }
+    invalidateBilling();
+    if (isDemoMode()) {
+      const store = getDemoStore();
+      for (const id of noteIds) {
+        const n = store.data.progressNotes.find((x) => x.id === id);
+        if (n) {
+          n.billed_at = exportedAt;
+          n.claim_export_id = exportId;
+        }
+      }
+      store.audit("claim_exports", "INSERT", exportId, null, { notes: noteIds.length }, ctx);
+      return { ok: true };
+    }
+    const { error: markErr } = await createDataClient()
+      .from("progress_notes")
+      .update({ billed_at: exportedAt, claim_export_id: exportId })
+      .in("id", noteIds);
+    if (markErr) return { ok: false, error: `Claim file stored but notes could not be marked billed: ${markErr.message}` };
+    return { ok: true };
+  }
   if (isDemoMode()) {
     const store = getDemoStore();
     const exp = (store.data as unknown as DemoLedger).claimExports?.find((e) => e.id === exportId);
@@ -121,6 +195,10 @@ export async function finalizeClaimExport(
  * the delete otherwise).
  */
 export async function discardClaimExport(exportId: string): Promise<void> {
+  if (isApiAuth()) {
+    await billingApi.submissions.discard(exportId).catch(() => undefined);
+    return;
+  }
   if (isDemoMode()) {
     const bag = getDemoStore().data as unknown as DemoLedger;
     bag.claimExports = (bag.claimExports ?? []).filter((e) => e.id !== exportId);

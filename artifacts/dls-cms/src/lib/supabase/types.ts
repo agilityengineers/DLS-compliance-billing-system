@@ -44,7 +44,7 @@ export interface Client {
   medicaid_id: string;
   date_of_birth: string;
   calculated_age?: number; // from v_clients view / computed in demo
-  active_diagnoses: { code: string; description: string }[];
+  active_diagnoses: { code: string; description: string; isPrimary?: boolean }[];
   insurance_provider: string | null;
   service_plan_start: string | null;
   service_plan_end: string | null;
@@ -59,11 +59,38 @@ export interface Client {
   // ── Present on real client records (the API's `clients` table) ─────────
   email?: string | null;
   phone?: string | null;
-  /** Active | Inactive */
-  status?: "Active" | "Inactive";
+  phone_cell?: string | null;
+  phone_work?: string | null;
+  middle_name?: string | null;
+  gender?: ClientGender | null;
+  gender_identity?: string | null;
+  marital_status?: string | null;
+  ethnicity?: string | null;
+  race?: string | null;
+  guardianship_status?: string | null;
+  account_code?: string | null;
+  admission_date?: string | null;
+  discharge_date?: string | null;
+  address1?: string | null;
+  address2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  county?: string | null;
+  zip?: string | null;
+  allergies?: string | null;
+  medical_concerns?: string | null;
+  supervision_requirements?: string | null;
+  general_information?: string | null;
+  has_behavior_support_plan?: boolean;
+  behavior_support_plan_notes?: string | null;
+  /** Active | Inactive | Interim | Discharged | Deceased */
+  status?: ClientStatus;
   /** true = a durable record in the API database; false/undefined = synthetic demo client. */
   is_record?: boolean;
 }
+
+export type ClientStatus = "Active" | "Inactive" | "Interim" | "Discharged" | "Deceased";
+export type ClientGender = "Male" | "Female" | "Other" | "Unknown";
 
 export interface PhysicianOrder {
   id: string;
@@ -237,6 +264,14 @@ export interface ClaimExport {
   total_units: number;
   total_charge: number;
   file_content: string | null;
+  // ── Present on ledger rows from the API (claim_submissions) ─────────────
+  /** open | submitted | accepted | rejected | paid | denied | voided */
+  status?: string;
+  status_note?: string | null;
+  test_mode?: boolean;
+  file_name?: string | null;
+  /** true = a durable row in the API database; false/undefined = the practice ledger. */
+  is_record?: boolean;
 }
 
 export interface PayrollPeriod {

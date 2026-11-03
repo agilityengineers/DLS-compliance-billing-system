@@ -23,8 +23,9 @@ export interface IntakePrefill {
 export function NewClientForm({ prefill }: { prefill?: IntakePrefill } = {}) {
   const router = useRouter();
   const [form, setForm] = useState({
-    first_name: prefill?.first_name ?? "", last_name: prefill?.last_name ?? "",
-    email: prefill?.email ?? "", phone: prefill?.phone ?? "",
+    first_name: prefill?.first_name ?? "", middle_name: "", last_name: prefill?.last_name ?? "",
+    email: prefill?.email ?? "", phone: prefill?.phone ?? "", phone_cell: "",
+    gender: "", admission_date: "", address1: "", city: "", state: "", zip: "",
     medicaid_id: "", date_of_birth: "",
     insurance_provider: "", service_plan_start: "", service_plan_end: "",
     authorized_scc_hours_per_week: 0, authorized_nmt_trips_per_week: 0,
@@ -45,7 +46,7 @@ export function NewClientForm({ prefill }: { prefill?: IntakePrefill } = {}) {
     return a >= 0 ? a : null;
   }, [form.date_of_birth]);
 
-  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
+  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
 
   async function onSubmit(e: React.FormEvent) {
@@ -54,7 +55,7 @@ export function NewClientForm({ prefill }: { prefill?: IntakePrefill } = {}) {
     const res = await createClientRecord({ ...form, active_diagnoses: diagnoses, source_lead_id: prefill?.lead_id });
     setSaving(false);
     if (!res.ok) { setError(res.error ?? "Failed to save."); return; }
-    router.push(prefill ? `/admin/leads/${prefill.lead_id}` : "/admin/clients");
+    router.push(prefill ? `/admin/leads/${prefill.lead_id}` : res.id ? `/admin/clients/${res.id}` : "/admin/clients");
   }
 
   return (
@@ -69,13 +70,32 @@ export function NewClientForm({ prefill }: { prefill?: IntakePrefill } = {}) {
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1.5"><Label>First name</Label><Input required value={form.first_name} onChange={set("first_name")} /></div>
           <div className="space-y-1.5"><Label>Last name</Label><Input required value={form.last_name} onChange={set("last_name")} /></div>
+          <div className="space-y-1.5"><Label>Middle name</Label><Input value={form.middle_name} onChange={set("middle_name")} /></div>
+          <div className="space-y-1.5">
+            <Label>Gender</Label>
+            <select className="h-10 w-full rounded-btn border border-border bg-card px-2 text-sm" value={form.gender} onChange={set("gender")}>
+              <option value="">Not recorded</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+              <option value="Other">Other</option>
+              <option value="Unknown">Unknown</option>
+            </select>
+          </div>
           <div className="space-y-1.5"><Label>Email</Label><Input type="email" value={form.email} onChange={set("email")} /></div>
-          <div className="space-y-1.5"><Label>Phone</Label><Input type="tel" value={form.phone} onChange={set("phone")} /></div>
+          <div className="space-y-1.5"><Label>Phone (home)</Label><Input type="tel" value={form.phone} onChange={set("phone")} /></div>
+          <div className="space-y-1.5"><Label>Phone (cell)</Label><Input type="tel" value={form.phone_cell} onChange={set("phone_cell")} /></div>
+          <div className="space-y-1.5"><Label>Admission date</Label><Input type="date" value={form.admission_date} onChange={set("admission_date")} /></div>
           <div className="space-y-1.5"><Label>Medicaid ID</Label><Input required value={form.medicaid_id} onChange={set("medicaid_id")} /></div>
           <div className="space-y-1.5">
             <Label>Date of birth</Label>
             <Input type="date" required value={form.date_of_birth} onChange={set("date_of_birth")} />
             {age !== null && <p className="text-xs text-muted-foreground">Calculated age: <strong>{age}</strong></p>}
+          </div>
+          <div className="space-y-1.5 col-span-2"><Label>Address</Label><Input value={form.address1} onChange={set("address1")} /></div>
+          <div className="space-y-1.5"><Label>City</Label><Input value={form.city} onChange={set("city")} /></div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5"><Label>State</Label><Input maxLength={2} placeholder="CO" value={form.state} onChange={set("state")} /></div>
+            <div className="space-y-1.5"><Label>ZIP</Label><Input maxLength={10} value={form.zip} onChange={set("zip")} /></div>
           </div>
           <div className="space-y-1.5"><Label>Insurance provider</Label><Input value={form.insurance_provider} onChange={set("insurance_provider")} /></div>
           <div />
