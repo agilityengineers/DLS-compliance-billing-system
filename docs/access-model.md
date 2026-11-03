@@ -161,6 +161,34 @@ the security work and what an operator must configure.
 
 ### The provider accounts
 
+Accounts still carrying the retired repository bootstrap hash cannot sign in
+or use existing sessions, including the change-password screen. Startup revokes
+their sessions even if an earlier version already flagged them. Merely requiring
+a password change is not sufficient protection against a publicly known password.
+
+Recovery requires a verified channel:
+
+* Use an unexpired, single-use password-reset link delivered to the account's
+  verified mailbox when real mail delivery is configured. Invalid or reused
+  links are rejected. Knowing the retired password is not proof of ownership.
+* If provider mail recovery is unavailable, the authorized deployment operator
+  can use the existing `SUPER_ADMIN_EMAIL`, a fresh strong `SUPER_ADMIN_PASSWORD`,
+  and `SUPER_ADMIN_FORCE_RESET=true` through the workspace secrets flow. Restart
+  the API, then remove the force-reset flag and one-time password from the secret
+  configuration. The new one-time password requires replacement at sign-in.
+  Never send credentials through chat or put them in source control.
+
+The reset path is covered by API integration tests. No live operator recovery
+or production credential rotation is performed automatically by this change.
+
+Client health/support fields (`allergies`, `medicalConcerns`,
+`supervisionRequirements`, `generalInformation`, `hasBehaviorSupportPlan`, and
+`behaviorSupportPlanNotes`) require effective `clients.health` access in addition
+to `clients.core`. Without it, list/detail/create/update responses omit those
+fields, and create/update requests containing them return 403, including attempts
+to clear them. Ordinary non-health edits continue to work and preserve stored
+health information. Feature checks follow the effective identity during view-as.
+
 A second, rarely used **break-glass** Super Admin is created on boot when
 `SUPER_ADMIN_BREAKGLASS_EMAIL` and `SUPER_ADMIN_BREAKGLASS_PASSWORD` are both
 set. It exists so that a lost or compromised primary password is a sign-in

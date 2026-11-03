@@ -3,6 +3,7 @@ import { and, desc, eq, gt, isNull } from "drizzle-orm";
 import type { Response } from "express";
 import { sessionsTable, usersTable, type Db, type Session, type User } from "@workspace/db";
 import type { AppConfig } from "./config";
+import { isRetiredCredential } from "./retired-credential";
 
 export function generateToken(): string {
   return randomBytes(32).toString("base64url");
@@ -58,6 +59,10 @@ export async function loadSession(db: Db, token: string, config: AppConfig): Pro
   }
   const [realUser] = await db.select().from(usersTable).where(eq(usersTable.id, session.userId)).limit(1);
   if (!realUser || realUser.status !== "Active") return null;
+  if (isRetiredCredential(realUser.passwordHash)) {
+    await revokeAllSessions(db, realUser.id);
+    return null;
+  }
 
   let effectiveUser = realUser;
   if (session.impersonatingUserId) {

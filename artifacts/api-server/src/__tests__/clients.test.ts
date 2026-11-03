@@ -296,6 +296,50 @@ describe.skipIf(!TEST_URL)("client records", () => {
     });
   });
 
+  describe("health access", () => {
+    const health = {
+      allergies: "Restricted allergy", medicalConcerns: "Restricted concern",
+      supervisionRequirements: "Restricted supervision", generalInformation: "Restricted note",
+      hasBehaviorSupportPlan: true, behaviorSupportPlanNotes: "Restricted plan",
+    };
+
+    async function checkDenied(cookie: string) {
+      const list = await api("GET", "/api/clients", undefined, cookie);
+      const detail = await api("GET", `/api/clients/${clientId}`, undefined, cookie);
+      expect(list.status).toBe(200);
+      expect(detail.status).toBe(200);
+      for (const field of Object.keys(health)) {
+        expect(detail.body.client).not.toHaveProperty(field);
+        for (const row of list.body.clients) expect(row).not.toHaveProperty(field);
+        expect((await api("PATCH", `/api/clients/${clientId}`, { [field]: health[field as keyof typeof health] }, cookie)).status).toBe(403);
+      }
+      expect((await api("POST", "/api/clients", { firstName: "Denied", lastName: "Health", ...health }, cookie)).status).toBe(403);
+      const patch = await api("PATCH", `/api/clients/${clientId}`, { city: "Loveland" }, cookie);
+      const noop = await api("PATCH", `/api/clients/${clientId}`, {}, cookie);
+      const created = await api("POST", "/api/clients", { firstName: "Core", lastName: "Only" }, cookie);
+      expect(patch.status).toBe(200);
+      expect(noop.status).toBe(200);
+      expect(created.status).toBe(201);
+      for (const field of Object.keys(health)) {
+        expect(patch.body.client).not.toHaveProperty(field);
+        expect(noop.body.client).not.toHaveProperty(field);
+        expect(created.body.client).not.toHaveProperty(field);
+      }
+    }
+
+    it("protects reads and writes when disabled globally or for a role", async () => {
+      expect((await api("PATCH", `/api/clients/${clientId}`, health, adminCookie)).status).toBe(200);
+      expect((await api("PUT", "/api/platform/features/clients.health", { enabled: false }, superCookie)).status).toBe(200);
+      try { await checkDenied(adminCookie); }
+      finally { await api("PUT", "/api/platform/features/clients.health", { enabled: true }, superCookie); }
+      expect((await api("PUT", "/api/org/features/clients.health", { roles: { Scheduler: false } }, adminCookie)).status).toBe(200);
+      try { await checkDenied(schedulerCookie); }
+      finally { await api("PUT", "/api/org/features/clients.health", { roles: { Scheduler: true } }, adminCookie); }
+      const detail = await api("GET", `/api/clients/${clientId}`, undefined, schedulerCookie);
+      expect(detail.body.client).toMatchObject(health);
+    });
+  });
+
   describe("insurance policies", () => {
     it("keeps primary and secondary coverage with the numbers a claim needs", async () => {
       const primary = await api(

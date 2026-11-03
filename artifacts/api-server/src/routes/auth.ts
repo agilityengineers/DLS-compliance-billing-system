@@ -11,6 +11,7 @@ import { sendPasswordReset } from "../lib/invites";
 import { checkLoginLimiter, recordLoginAttempt } from "../lib/login-attempts";
 import { passwordChangedEmail, type Mailer } from "../lib/mail";
 import { hashPassword, passwordProblem, verifyPassword } from "../lib/password";
+import { isRetiredCredential } from "../lib/retired-credential";
 import {
   clearSessionCookie,
   createSession,
@@ -94,6 +95,15 @@ export function authRouter(db: Db, config: AppConfig, deps: { mailer: Mailer }):
     user: User,
     via: "password" | "mfa" | "invite" | "password_reset"
   ) {
+    // Reset/invite redemption updates the database; do not inspect its stale
+    // pre-reset snapshot. Also close the pending-MFA path for retired accounts.
+    const currentUser = await findUserById(db, user.id);
+    if (!currentUser) throw unauthorized();
+    user = currentUser;
+    if (isRetiredCredential(user.passwordHash)) {
+      await revokeAllSessions(db, user.id);
+      throw new HttpError(401, "INVALID_CREDENTIALS", "Email or password is incorrect.");
+    }
     const ip = req.ip ?? null;
     const { token } = await createSession(db, { userId: user.id, ip, userAgent: req.get("user-agent") ?? null }, config);
     await db.update(usersTable).set({ lastLoginAt: new Date() }).where(eq(usersTable.id, user.id));

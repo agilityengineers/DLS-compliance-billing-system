@@ -4,3 +4,4 @@
 - [GitHub updates after artifact migration](github-updates-after-artifact-migration.md) — a successful upstream merge may update only the archive; port runtime changes into the live artifact.
 - [API startup readiness](api-startup-readiness.md) — distinguish port availability from database readiness; never bypass initialization to pass publishing checks.
 - [Marketing content approval](marketing-content-approval.md) — owner approved existing copy and imagery; retain them rather than replacing earlier drafts.
+- [Interim publication scope](interim-publication-scope.md) — owner deferred full-production checks; do not block interim website publication or claim readiness passed.

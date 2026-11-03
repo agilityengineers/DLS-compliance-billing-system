@@ -11,12 +11,8 @@
 //      shown to belong to (the default organization while it is the only
 //      one, or the one named in CONSULTATION_IMPORT_ORG_SLUG) — otherwise
 //      left in place with the reason logged
-// Nothing here ever changes an existing account's password unless
-// SUPER_ADMIN_FORCE_RESET=true, and re-seeding the registry never overwrites an
-// agency's own policy decisions. The one state change made to an existing
-// account is to flag one still holding the retired bootstrap password so that
-// it must be replaced at its next sign-in (see LEGACY_BOOTSTRAP_HASH): the
-// password itself is left alone, and the flag is audited and logged.
+// Existing passwords change only through explicit recovery. Retired
+// credentials cannot authenticate; bootstrap flags them and revokes sessions.
 import { and, count, eq } from "drizzle-orm";
 import { organizationsTable, usersTable, type Db } from "@workspace/db";
 import { seedLeadDefaults, seedRequirements } from "@workspace/db/seed";
@@ -28,18 +24,18 @@ import { hashPassword, passwordProblem } from "./password";
 import { recordAudit } from "./audit";
 import { revokeAllSessions } from "./session";
 import { findUserByEmail } from "./users";
+import { LEGACY_BOOTSTRAP_HASH } from "./retired-credential";
 
 /**
  * The scrypt hash that earlier builds committed as the Super Admin's default
  * password. The password behind it was known to anyone with the repository,
  * so it is retired: nothing is ever created from it again. It is kept ONLY so
  * that an account still carrying it can be recognised on boot and made to
- * choose a new password at its next sign-in. The hash has a fixed salt, which
+ * recover through a verified channel, never sign in with it. The fixed salt
  * is what makes an exact string comparison sufficient — the password itself
  * no longer appears anywhere in this codebase.
  */
-export const LEGACY_BOOTSTRAP_HASH =
-  "scrypt$16384$8$1$DiQ+q1qbZruivKGHhq4U6Q==$k3SD+tIebz7KXvjNkyBmOFH48BSFlu8s2dMsanCUmH7GveHdEPW53JbVqMJ9S6lYxYg0chxbGKPhVa9HjdjcXg==";
+export { LEGACY_BOOTSTRAP_HASH } from "./retired-credential";
 
 export interface BootstrapResult {
   platformRowsAdded: number;
@@ -221,14 +217,16 @@ export async function bootstrapPlatform(db: Db, config: AppConfig): Promise<Boot
   // An account created by an earlier build from the committed hash, whose
   // owner never changed the password, is holding a password anyone with the
   // repository could read. The password is not touched (that would be a
-  // silent credential change); the account is flagged so its next sign-in
-  // must choose a new one, and the flag is audited. Idempotent: once the
-  // password changes the hash no longer matches.
+  // silent credential change). Authentication rejects this hash, sessions are
+  // revoked even for previously flagged accounts, and recovery must use a
+  // verified reset link or explicit operator-controlled force reset.
   const legacyRows = await db
-    .select({ id: usersTable.id, email: usersTable.email, orgId: usersTable.orgId })
+    .select({ id: usersTable.id, email: usersTable.email, orgId: usersTable.orgId, mustChangePassword: usersTable.mustChangePassword })
     .from(usersTable)
-    .where(and(eq(usersTable.passwordHash, LEGACY_BOOTSTRAP_HASH), eq(usersTable.mustChangePassword, false)));
+    .where(eq(usersTable.passwordHash, LEGACY_BOOTSTRAP_HASH));
   for (const row of legacyRows) {
+    await revokeAllSessions(db, row.id);
+    if (row.mustChangePassword) continue;
     await db.update(usersTable).set({ mustChangePassword: true, updatedAt: new Date() }).where(eq(usersTable.id, row.id));
     await recordAudit(db, {
       orgId: row.orgId,
@@ -240,10 +238,10 @@ export async function bootstrapPlatform(db: Db, config: AppConfig): Promise<Boot
     });
     logger.warn(
       { email: row.email },
-      "Account still holds the retired bootstrap password that earlier builds shipped; it must choose a new one at its next sign-in"
+      "Account holds a retired bootstrap password: authentication blocked and sessions revoked; verified recovery required"
     );
   }
-  const legacyPasswordAccountsFlagged = legacyRows.length;
+  const legacyPasswordAccountsFlagged = legacyRows.filter((row) => !row.mustChangePassword).length;
 
   // ── The break-glass account ─────────────────────────────────────────────
   // One provider password is a single point of failure: lose it, and the only

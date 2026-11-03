@@ -14,3 +14,13 @@ Do not equate managed table synchronization with execution of SQL migrations or 
 **Why:** A successful publish can coexist with missing audit protections and an empty migration journal. Checking the journal alone cannot distinguish absent tables from missing bookkeeping.
 
 **How to apply:** Verify production readiness and security objects read-only. Use the supported Publish schema flow; do not add production DDL scripts or startup migration workarounds. Do not suppress readiness failures merely to make publishing appear healthy.
+
+Do not present a newly backfilled audit chain as proof that historical entries
+were protected before the chain existed.
+
+**Why:** Read-only production inspection confirmed existing unchained audit
+entries alongside missing chain and append-only triggers. Hashing those entries
+later cannot establish whether they were altered before protection began.
+
+**How to apply:** Any supported repair must explicitly document the integrity
+baseline and distinguish pre-repair history from subsequently protected entries.

@@ -1,8 +1,9 @@
 // Client records — the durable client data in the portal.
 //
 // The record itself (demographics, contact details, address, status, the
-// service plan window, diagnoses, health and support notes) rides the
-// `clients.core` switch. What hangs off it is switchable on its own, so the
+// service plan window and diagnoses) rides the `clients.core` switch.
+// Health/support notes additionally require `clients.health` for reads/writes.
+// What hangs off it is switchable on its own, so the
 // provider can make each part available per organization and the Admin can
 // decide which roles get it:
 //
@@ -305,6 +306,25 @@ export function toClientJson(c: ClientRow): ClientJson {
   };
 }
 
+const HEALTH_FIELDS = [
+  "allergies", "medicalConcerns", "supervisionRequirements", "generalInformation",
+  "hasBehaviorSupportPlan", "behaviorSupportPlanNotes",
+] as const;
+
+function visibleClient(c: ClientRow, auth: AuthContext) {
+  const result: Partial<ClientJson> = toClientJson(c);
+  if (!auth.effectiveKeys.has("clients.health")) {
+    for (const key of HEALTH_FIELDS) delete result[key];
+  }
+  return result;
+}
+
+function requireHealthForWrite(body: object, auth: AuthContext) {
+  if (!auth.effectiveKeys.has("clients.health") && HEALTH_FIELDS.some((key) => Object.hasOwn(body, key))) {
+    throw forbidden("Health information requires clients.health access.");
+  }
+}
+
 export function toContactJson(r: ClientContactRow) {
   return {
     id: r.id,
@@ -532,19 +552,20 @@ export function clientsRouter(db: Db, _config: AppConfig, _deps: { mailer: Maile
           : eq(clientsTable.orgId, orgId)
       )
       .orderBy(asc(clientsTable.lastName), asc(clientsTable.firstName));
-    res.json({ clients: rows.map(toClientJson) });
+    res.json({ clients: rows.map((row) => visibleClient(row, requireAuthContext(res))) });
   });
 
   router.get("/clients/:id", async (req, res) => {
     const orgId = requireOrgId(res);
     const row = await loadClient(db, orgId, String(req.params.id));
-    res.json({ client: toClientJson(row) });
+    res.json({ client: visibleClient(row, requireAuthContext(res)) });
   });
 
   router.post("/clients", async (req, res) => {
     const auth = requireAuthContext(res);
     const orgId = requireOrgId(res);
     const body = ClientBody.parse(req.body);
+    requireHealthForWrite(body, auth);
     if (body.sampleKey && body.sourceLeadId) throw badRequest("A practice record cannot come from an inquiry.");
 
     // A practice client is copied at most once per organization: asking again
@@ -655,7 +676,7 @@ export function clientsRouter(db: Db, _config: AppConfig, _deps: { mailer: Maile
         details: { clientId: client.id, from: fromStage?.key ?? null, to: wonStage.key },
       });
     }
-    res.status(201).json({ client: toClientJson(client), convertedLeadId: lead?.id ?? null });
+    res.status(201).json({ client: visibleClient(client, auth), convertedLeadId: lead?.id ?? null });
   });
 
   router.patch("/clients/:id", async (req, res) => {
@@ -663,6 +684,7 @@ export function clientsRouter(db: Db, _config: AppConfig, _deps: { mailer: Maile
     const orgId = requireOrgId(res);
     const current = await loadClient(db, orgId, String(req.params.id));
     const body = ClientPatch.parse(req.body);
+    requireHealthForWrite(body, auth);
     const { status, firstName, lastName, ...fields } = body;
     const values = definedOnly({ firstName, lastName, ...fieldValues(fields, "patch") });
     const statusChange = status !== undefined && status !== current.status ? { from: current.status, to: status } : null;
@@ -670,7 +692,7 @@ export function clientsRouter(db: Db, _config: AppConfig, _deps: { mailer: Maile
     // Admin's call; office staff edit the chart but do not change its status.
     if (statusChange && roleOf(auth.effectiveUser) !== "Admin") throw forbidden("Only an Admin can change a client's status.");
     if (Object.keys(values).length === 0 && !statusChange) {
-      res.json({ client: toClientJson(current) });
+      res.json({ client: visibleClient(current, auth) });
       return;
     }
     let updated: ClientRow;
@@ -691,7 +713,7 @@ export function clientsRouter(db: Db, _config: AppConfig, _deps: { mailer: Maile
     if (statusChange) {
       await recordAudit(db, { ...actor, action: "client.status_changed", targetType: "client", targetId: current.id, details: statusChange });
     }
-    res.json({ client: toClientJson(updated) });
+    res.json({ client: visibleClient(updated, auth) });
   });
 
   // ── contacts ─────────────────────────────────────────────────────────

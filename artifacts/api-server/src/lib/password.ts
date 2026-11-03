@@ -3,6 +3,7 @@
 //   scrypt$<N>$<r>$<p>$<salt b64>$<hash b64>
 import { randomBytes, randomInt, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
+import { isRetiredCredential } from "./retired-credential";
 
 const scrypt = promisify(scryptCallback) as (
   password: string,
@@ -27,6 +28,7 @@ export async function hashPassword(password: string): Promise<string> {
 }
 
 export async function verifyPassword(password: string, stored: string): Promise<boolean> {
+  if (isRetiredCredential(stored)) return false;
   const parts = stored.split("$");
   if (parts.length !== 6 || parts[0] !== "scrypt") return false;
   const n = Number(parts[1]);
