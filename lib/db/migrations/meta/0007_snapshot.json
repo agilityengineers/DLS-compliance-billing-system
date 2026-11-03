@@ -1,5 +1,5 @@
 {
-  "id": "1dadb421-7bd8-4540-ad60-2b43eabf1d3f",
+  "id": "9281f8ee-b95f-43c7-80e2-d86db0d06258",
   "prevId": "fb54014e-433a-445f-a661-6b5dd45c30a8",
   "version": "7",
   "dialect": "postgresql",
@@ -377,6 +377,72 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.platform_org_features": {
+      "name": "platform_org_features",
+      "schema": "",
+      "columns": {
+        "org_id": {
+          "name": "org_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "enabled": {
+          "name": "enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "platform_org_features_org_id_organizations_id_fk": {
+          "name": "platform_org_features_org_id_organizations_id_fk",
+          "tableFrom": "platform_org_features",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "org_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "platform_org_features_org_id_key_pk": {
+          "name": "platform_org_features_org_id_key_pk",
+          "columns": [
+            "org_id",
+            "key"
+          ]
+        }
+      },
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
@@ -1674,721 +1740,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.client_authorizations": {
-      "name": "client_authorizations",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "org_id": {
-          "name": "org_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "client_id": {
-          "name": "client_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "auth_number": {
-          "name": "auth_number",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "payer_name": {
-          "name": "payer_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "service": {
-          "name": "service",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "billing_code": {
-          "name": "billing_code",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "start_date": {
-          "name": "start_date",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "end_date": {
-          "name": "end_date",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "approved_units": {
-          "name": "approved_units",
-          "type": "double precision",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "unit_basis": {
-          "name": "unit_basis",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'unit'"
-        },
-        "weekly_cap_units": {
-          "name": "weekly_cap_units",
-          "type": "double precision",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "rate_per_unit": {
-          "name": "rate_per_unit",
-          "type": "double precision",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'active'"
-        },
-        "permit_over_budget": {
-          "name": "permit_over_budget",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "exclude_from_submission": {
-          "name": "exclude_from_submission",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "notes": {
-          "name": "notes",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "idx_client_authorizations_client": {
-          "name": "idx_client_authorizations_client",
-          "columns": [
-            {
-              "expression": "client_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "idx_client_authorizations_org_end": {
-          "name": "idx_client_authorizations_org_end",
-          "columns": [
-            {
-              "expression": "org_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "end_date",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "client_authorizations_org_id_organizations_id_fk": {
-          "name": "client_authorizations_org_id_organizations_id_fk",
-          "tableFrom": "client_authorizations",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "org_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "client_authorizations_client_id_clients_id_fk": {
-          "name": "client_authorizations_client_id_clients_id_fk",
-          "tableFrom": "client_authorizations",
-          "tableTo": "clients",
-          "columnsFrom": [
-            "client_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "client_authorizations_service_check": {
-          "name": "client_authorizations_service_check",
-          "value": "\"client_authorizations\".\"service\" in ('SCC', 'Job_Coaching', 'Day_Habilitation', 'Early_Intervention', 'NMT', 'Other')"
-        },
-        "client_authorizations_basis_check": {
-          "name": "client_authorizations_basis_check",
-          "value": "\"client_authorizations\".\"unit_basis\" in ('unit', 'hour', 'trip', 'dollar')"
-        },
-        "client_authorizations_status_check": {
-          "name": "client_authorizations_status_check",
-          "value": "\"client_authorizations\".\"status\" in ('active', 'pending', 'void')"
-        },
-        "client_authorizations_dates_check": {
-          "name": "client_authorizations_dates_check",
-          "value": "\"client_authorizations\".\"end_date\" >= \"client_authorizations\".\"start_date\""
-        },
-        "client_authorizations_units_check": {
-          "name": "client_authorizations_units_check",
-          "value": "\"client_authorizations\".\"approved_units\" >= 0 and (\"client_authorizations\".\"weekly_cap_units\" is null or \"client_authorizations\".\"weekly_cap_units\" >= 0)"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.client_contacts": {
-      "name": "client_contacts",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "org_id": {
-          "name": "org_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "client_id": {
-          "name": "client_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "kind": {
-          "name": "kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "relationship": {
-          "name": "relationship",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "phone": {
-          "name": "phone",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "email": {
-          "name": "email",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "address1": {
-          "name": "address1",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "city": {
-          "name": "city",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "state": {
-          "name": "state",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "zip": {
-          "name": "zip",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "npi": {
-          "name": "npi",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "is_primary": {
-          "name": "is_primary",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "notes": {
-          "name": "notes",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "idx_client_contacts_client": {
-          "name": "idx_client_contacts_client",
-          "columns": [
-            {
-              "expression": "client_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "client_contacts_org_id_organizations_id_fk": {
-          "name": "client_contacts_org_id_organizations_id_fk",
-          "tableFrom": "client_contacts",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "org_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "client_contacts_client_id_clients_id_fk": {
-          "name": "client_contacts_client_id_clients_id_fk",
-          "tableFrom": "client_contacts",
-          "tableTo": "clients",
-          "columnsFrom": [
-            "client_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "client_contacts_kind_check": {
-          "name": "client_contacts_kind_check",
-          "value": "\"client_contacts\".\"kind\" in ('responsible_party', 'guardian', 'emergency', 'physician', 'case_manager', 'other')"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.client_files": {
-      "name": "client_files",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "org_id": {
-          "name": "org_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "client_id": {
-          "name": "client_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "category": {
-          "name": "category",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "file_name": {
-          "name": "file_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "content_type": {
-          "name": "content_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "size_bytes": {
-          "name": "size_bytes",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "content": {
-          "name": "content",
-          "type": "bytea",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "start_date": {
-          "name": "start_date",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "end_date": {
-          "name": "end_date",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "notes": {
-          "name": "notes",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "uploaded_by_user_id": {
-          "name": "uploaded_by_user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "idx_client_files_client": {
-          "name": "idx_client_files_client",
-          "columns": [
-            {
-              "expression": "client_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "client_files_org_id_organizations_id_fk": {
-          "name": "client_files_org_id_organizations_id_fk",
-          "tableFrom": "client_files",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "org_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "client_files_client_id_clients_id_fk": {
-          "name": "client_files_client_id_clients_id_fk",
-          "tableFrom": "client_files",
-          "tableTo": "clients",
-          "columnsFrom": [
-            "client_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "client_files_uploaded_by_user_id_users_id_fk": {
-          "name": "client_files_uploaded_by_user_id_users_id_fk",
-          "tableFrom": "client_files",
-          "tableTo": "users",
-          "columnsFrom": [
-            "uploaded_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "client_files_size_check": {
-          "name": "client_files_size_check",
-          "value": "\"client_files\".\"size_bytes\" > 0 and \"client_files\".\"size_bytes\" <= 10485760"
-        },
-        "client_files_dates_check": {
-          "name": "client_files_dates_check",
-          "value": "\"client_files\".\"end_date\" is null or \"client_files\".\"start_date\" is null or \"client_files\".\"end_date\" >= \"client_files\".\"start_date\""
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.client_insurance_policies": {
-      "name": "client_insurance_policies",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "org_id": {
-          "name": "org_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "client_id": {
-          "name": "client_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "policy_type": {
-          "name": "policy_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'primary'"
-        },
-        "payer_name": {
-          "name": "payer_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "member_id": {
-          "name": "member_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "group_number": {
-          "name": "group_number",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'active'"
-        },
-        "start_date": {
-          "name": "start_date",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "end_date": {
-          "name": "end_date",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "policy_holder_name": {
-          "name": "policy_holder_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "policy_holder_relationship": {
-          "name": "policy_holder_relationship",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "notes": {
-          "name": "notes",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "idx_client_insurance_policies_client": {
-          "name": "idx_client_insurance_policies_client",
-          "columns": [
-            {
-              "expression": "client_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "client_insurance_policies_org_id_organizations_id_fk": {
-          "name": "client_insurance_policies_org_id_organizations_id_fk",
-          "tableFrom": "client_insurance_policies",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "org_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "client_insurance_policies_client_id_clients_id_fk": {
-          "name": "client_insurance_policies_client_id_clients_id_fk",
-          "tableFrom": "client_insurance_policies",
-          "tableTo": "clients",
-          "columnsFrom": [
-            "client_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "client_insurance_policies_type_check": {
-          "name": "client_insurance_policies_type_check",
-          "value": "\"client_insurance_policies\".\"policy_type\" in ('primary', 'secondary', 'tertiary')"
-        },
-        "client_insurance_policies_status_check": {
-          "name": "client_insurance_policies_status_check",
-          "value": "\"client_insurance_policies\".\"status\" in ('active', 'inactive')"
-        },
-        "client_insurance_policies_dates_check": {
-          "name": "client_insurance_policies_dates_check",
-          "value": "\"client_insurance_policies\".\"end_date\" is null or \"client_insurance_policies\".\"start_date\" is null or \"client_insurance_policies\".\"end_date\" >= \"client_insurance_policies\".\"start_date\""
-        }
-      },
-      "isRLSEnabled": false
-    },
     "public.clients": {
       "name": "clients",
       "schema": "",
@@ -2412,12 +1763,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "middle_name": {
-          "name": "middle_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "last_name": {
           "name": "last_name",
           "type": "text",
@@ -2436,18 +1781,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "phone_cell": {
-          "name": "phone_cell",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "phone_work": {
-          "name": "phone_work",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "medicaid_id": {
           "name": "medicaid_id",
           "type": "text",
@@ -2457,96 +1790,6 @@
         "date_of_birth": {
           "name": "date_of_birth",
           "type": "date",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "gender": {
-          "name": "gender",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "gender_identity": {
-          "name": "gender_identity",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "marital_status": {
-          "name": "marital_status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "ethnicity": {
-          "name": "ethnicity",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "race": {
-          "name": "race",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "guardianship_status": {
-          "name": "guardianship_status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "account_code": {
-          "name": "account_code",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "admission_date": {
-          "name": "admission_date",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "discharge_date": {
-          "name": "discharge_date",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "address1": {
-          "name": "address1",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "address2": {
-          "name": "address2",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "city": {
-          "name": "city",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "state": {
-          "name": "state",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "county": {
-          "name": "county",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "zip": {
-          "name": "zip",
-          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
@@ -2631,43 +1874,6 @@
         "residence_lng": {
           "name": "residence_lng",
           "type": "double precision",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "allergies": {
-          "name": "allergies",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "medical_concerns": {
-          "name": "medical_concerns",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "supervision_requirements": {
-          "name": "supervision_requirements",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "general_information": {
-          "name": "general_information",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "has_behavior_support_plan": {
-          "name": "has_behavior_support_plan",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "behavior_support_plan_notes": {
-          "name": "behavior_support_plan_notes",
-          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
@@ -2813,19 +2019,7 @@
       "checkConstraints": {
         "clients_status_check": {
           "name": "clients_status_check",
-          "value": "\"clients\".\"status\" in ('Active', 'Inactive', 'Interim', 'Discharged', 'Deceased')"
-        },
-        "clients_gender_check": {
-          "name": "clients_gender_check",
-          "value": "\"clients\".\"gender\" is null or \"clients\".\"gender\" in ('Male', 'Female', 'Other', 'Unknown')"
-        },
-        "clients_guardianship_check": {
-          "name": "clients_guardianship_check",
-          "value": "\"clients\".\"guardianship_status\" is null or \"clients\".\"guardianship_status\" in ('Not applicable', 'Guardian', 'Court appointed')"
-        },
-        "clients_marital_check": {
-          "name": "clients_marital_check",
-          "value": "\"clients\".\"marital_status\" is null or \"clients\".\"marital_status\" in ('Single', 'Married', 'Divorced', 'Separated', 'Widowed', 'Other')"
+          "value": "\"clients\".\"status\" in ('Active', 'Inactive')"
         }
       },
       "isRLSEnabled": false

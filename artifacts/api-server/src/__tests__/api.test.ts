@@ -564,7 +564,14 @@ describe.skipIf(!TEST_URL)("api server", () => {
     expect(res.body.organizations).toHaveLength(3);
     const dls = res.body.organizations.find((o: any) => o.id === orgId);
     const qa = dls.features.find((f: any) => f.key === "qa.flags");
-    expect(qa).toEqual({ key: "qa.flags", platformEnabled: true, orgEnabled: true, roles: { Scheduler: false } });
+    expect(qa).toEqual({
+      key: "qa.flags",
+      platformEnabled: true,
+      platformDefault: true,
+      platformOverride: null,
+      orgEnabled: true,
+      roles: { Scheduler: false },
+    });
     const reports = dls.features.find((f: any) => f.key === "reports.utilization");
     expect(reports.orgEnabled).toBe(false); // switched off while viewing as Lisa
     const other = res.body.organizations.find((o: any) => o.name === "Other Agency");

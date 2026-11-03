@@ -341,6 +341,12 @@ export const platformApi = {
   setFeature: (key: FeatureKey, enabled: boolean) =>
     apiFetch<{ key: FeatureKey; enabled: boolean }>(`/platform/features/${key}`, { method: "PUT", json: { enabled } }),
   adoption: () => apiFetch<{ organizations: OrgAdoptionRow[] }>("/platform/adoption"),
+  /** Tier 1 for one organization: true / false override the switchboard for it, null follows the switchboard again. */
+  setOrgFeature: (orgId: string, key: FeatureKey, enabled: boolean | null) =>
+    apiFetch<{ key: FeatureKey; orgId: string; enabled: boolean | null; state: FeatureState }>(`/platform/organizations/${orgId}/features/${key}`, {
+      method: "PUT",
+      json: { enabled },
+    }),
   organizations: () => apiFetch<{ organizations: OrganizationRow[]; platformUsers: AccountRow[] }>("/platform/organizations"),
   createOrganization: (input: { name: string; slug?: string }) =>
     apiFetch<{ organization: { id: string; name: string; slug: string; status: string } }>("/platform/organizations", { method: "POST", json: input }),
