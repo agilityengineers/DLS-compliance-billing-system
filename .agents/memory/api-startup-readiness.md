@@ -24,3 +24,18 @@ later cannot establish whether they were altered before protection began.
 
 **How to apply:** Any supported repair must explicitly document the integrity
 baseline and distinguish pre-repair history from subsequently protected entries.
+
+Development schema synchronization can install tables without advancing the SQL
+migration journal, and can leave older check constraints unchanged.
+
+**Why:** After a Git rebase, startup tried to recreate existing tables because
+the development journal lagged behind the actual schema. Table existence alone
+was insufficient: a client-status constraint still had its older definition.
+
+**How to apply:** Before reconciling development migration bookkeeping, compare
+columns, defaults, nullability, constraints and indexes against a fresh database
+built from the migrations. Repair differences before recording verified entries;
+leave genuinely unapplied migrations for the normal runner. Never blindly mark
+all migrations applied or use this development repair path on production.
+When comparing PGlite with older PostgreSQL versions, NOT NULL may appear as
+named catalog constraints only in PGlite; compare column nullability instead.
