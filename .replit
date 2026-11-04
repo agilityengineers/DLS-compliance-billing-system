@@ -25,4 +25,5 @@ channel = "stable-25_05"
 [userenv]
 
 [userenv.production]
-SUPER_ADMIN_FORCE_RESET = "true"
+
+[userenv.development]
