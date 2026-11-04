@@ -126,6 +126,12 @@ const ClientBody = ClientFields.extend({
   lastName: z.string().trim().min(1).max(120),
   /** The inquiry this client came from; converting it is part of the same write. */
   sourceLeadId: z.uuid().optional(),
+  /**
+   * Marks the new row as a PRACTICE record copied from one of the app's
+   * synthetic demo clients (the value is that demo client's id). Creating the
+   * same practice client twice returns the copy that already exists.
+   */
+  sampleKey: z.string().trim().min(1).max(64).optional(),
 });
 
 const ClientPatch = ClientFields.extend({
@@ -239,6 +245,8 @@ export interface ClientJson {
   status: ClientRow["status"];
   /** The inquiry this client was created from, when there was one. */
   sourceLeadId: string | null;
+  /** Set on a practice record (a copy of a synthetic demo client); null for a real person. */
+  sampleKey: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -291,6 +299,7 @@ export function toClientJson(c: ClientRow): ClientJson {
     behaviorSupportPlanNotes: c.behaviorSupportPlanNotes,
     status: c.status,
     sourceLeadId: c.sourceLeadId,
+    sampleKey: c.sampleKey,
     createdAt: c.createdAt.toISOString(),
     updatedAt: c.updatedAt.toISOString(),
   };
@@ -536,6 +545,23 @@ export function clientsRouter(db: Db, _config: AppConfig, _deps: { mailer: Maile
     const auth = requireAuthContext(res);
     const orgId = requireOrgId(res);
     const body = ClientBody.parse(req.body);
+    if (body.sampleKey && body.sourceLeadId) throw badRequest("A practice record cannot come from an inquiry.");
+
+    // A practice client is copied at most once per organization: asking again
+    // (a second tab, a double click) hands back the copy that already exists.
+    const existingSample = async (): Promise<ClientRow | undefined> =>
+      body.sampleKey
+        ? (await db
+            .select()
+            .from(clientsTable)
+            .where(and(eq(clientsTable.orgId, orgId), eq(clientsTable.sampleKey, body.sampleKey)))
+            .limit(1))[0]
+        : undefined;
+    const already = await existingSample();
+    if (already) {
+      res.json({ client: toClientJson(already), convertedLeadId: null });
+      return;
+    }
 
     interface Conversion {
       client: ClientRow;
@@ -574,6 +600,7 @@ export function clientsRouter(db: Db, _config: AppConfig, _deps: { mailer: Maile
             activeDiagnoses: values.activeDiagnoses ?? [],
             createdByUserId: auth.realUser.id,
             sourceLeadId: lead?.id ?? null,
+            sampleKey: body.sampleKey ?? null,
           })
           .returning();
         if (lead && wonStage) {
@@ -598,6 +625,13 @@ export function clientsRouter(db: Db, _config: AppConfig, _deps: { mailer: Maile
       });
     } catch (e) {
       const violated = uniqueViolationOf(e);
+      if (violated === "uq_clients_org_sample_key") {
+        const raced = await existingSample();
+        if (raced) {
+          res.json({ client: toClientJson(raced), convertedLeadId: null });
+          return;
+        }
+      }
       if (violated === "uq_clients_source_lead" || violated === "uq_leads_converted_client") throw alreadyConverted();
       if (violated !== null) throw conflict("MEDICAID_ID_TAKEN", "A client with that Medicaid ID already exists.");
       throw e;
@@ -610,7 +644,7 @@ export function clientsRouter(db: Db, _config: AppConfig, _deps: { mailer: Maile
       action: "client.created",
       targetType: "client",
       targetId: client.id,
-      details: { sourceLeadId: lead?.id ?? null },
+      details: { sourceLeadId: lead?.id ?? null, ...(client.sampleKey ? { practiceRecord: true } : {}) },
     });
     if (lead && wonStage) {
       await recordAudit(db, {

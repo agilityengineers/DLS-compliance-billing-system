@@ -6,7 +6,7 @@
 import "server-only";
 import { isApiAuth } from "@/lib/auth/mode";
 import { apiFetch } from "@/lib/api/client";
-import type { ClientRecord } from "@/lib/api/admin";
+import type { ClientCreateInput, ClientRecord } from "@/lib/api/admin";
 import { getSessionContext } from "@/lib/auth/session";
 import { subscribeRevalidate } from "@/shims/nav-bridge";
 import type { Client } from "@/lib/supabase/types";
@@ -68,6 +68,44 @@ export function clientRecordToClient(c: ClientRecord): Client {
     behavior_support_plan_notes: c.behaviorSupportPlanNotes,
     status: c.status,
     is_record: true,
+    sample_key: c.sampleKey ?? null,
+  };
+}
+
+/**
+ * The create request that copies a synthetic demo client into the database as
+ * a PRACTICE record (flagged by sampleKey), so every tab of the client page
+ * works on it. The API returns the existing copy if one was already made.
+ */
+export function demoClientToSampleInput(c: Client): ClientCreateInput {
+  const text = (v: string | null | undefined) => (v ? v : undefined);
+  return {
+    sampleKey: c.id,
+    firstName: c.first_name,
+    lastName: c.last_name,
+    middleName: text(c.middle_name),
+    medicaidId: text(c.medicaid_id),
+    dateOfBirth: text(c.date_of_birth),
+    activeDiagnoses: c.active_diagnoses ?? [],
+    insuranceProvider: text(c.insurance_provider),
+    servicePlanStart: text(c.service_plan_start),
+    servicePlanEnd: text(c.service_plan_end),
+    authorizedSccHoursPerWeek: c.authorized_scc_hours_per_week,
+    authorizedNmtTripsPerWeek: c.authorized_nmt_trips_per_week,
+    authorizedJcHoursPerWeek: c.authorized_jc_hours_per_week,
+    authorizedDhHoursPerWeek: c.authorized_dh_hours_per_week,
+    authorizedEiHoursPerWeek: c.authorized_ei_hours_per_week,
+    caseManagerName: text(c.case_manager_name),
+    ccbName: text(c.ccb_name),
+    residenceLat: c.residence_gps?.lat ?? null,
+    residenceLng: c.residence_gps?.lng ?? null,
+    email: text(c.email),
+    phone: text(c.phone),
+    city: text(c.city),
+    state: text(c.state),
+    county: text(c.county),
+    zip: text(c.zip),
+    address1: text(c.address1),
   };
 }
 

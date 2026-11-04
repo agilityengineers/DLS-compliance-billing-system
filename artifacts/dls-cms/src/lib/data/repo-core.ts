@@ -169,8 +169,15 @@ export async function listClients(
   if (isDemoMode()) {
     // Real records first (the API's `clients` table, incl. converted leads),
     // then the synthetic demo clients — the same merge the staff list does.
+    // A demo client that has already been copied into the database as a
+    // practice record shows once — as that record, which has a working page.
+    // Every demo client is flagged practice data (sample_key = its own id).
     const records = await listClientRecords();
-    let rows = [...records, ...getDemoStore().data.clients].map((c) => ({ ...c, calculated_age: ageOf(c.date_of_birth) }));
+    const copied = new Set(records.map((r) => r.sample_key).filter(Boolean));
+    const demo = getDemoStore().data.clients
+      .filter((c) => !copied.has(c.id))
+      .map((c) => ({ ...c, sample_key: c.id }));
+    let rows = [...records, ...demo].map((c) => ({ ...c, calculated_age: ageOf(c.date_of_birth) }));
     if (search) {
       const q = search.toLowerCase();
       rows = rows.filter((c) =>

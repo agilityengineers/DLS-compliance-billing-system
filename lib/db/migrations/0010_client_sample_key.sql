@@ -1,0 +1,2 @@
+ALTER TABLE "clients" ADD COLUMN "sample_key" text;--> statement-breakpoint
+CREATE UNIQUE INDEX "uq_clients_org_sample_key" ON "clients" USING btree ("org_id","sample_key") WHERE "clients"."sample_key" is not null;

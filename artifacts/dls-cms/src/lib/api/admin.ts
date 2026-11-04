@@ -688,6 +688,8 @@ export interface ClientRecord {
   status: ClientStatus;
   /** The inquiry this client was created from, when there was one. */
   sourceLeadId: string | null;
+  /** Set on a practice record (a copy of a synthetic demo client); null for a real person. */
+  sampleKey?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -742,6 +744,8 @@ export interface ClientCreateInput extends ClientFieldsInput {
   lastName: string;
   /** The inquiry this client comes from; the API converts it in the same write. */
   sourceLeadId?: string;
+  /** Copy a synthetic demo client (by its id) as a PRACTICE record. Idempotent. */
+  sampleKey?: string;
 }
 
 export interface ClientPatchInput extends ClientFieldsInput {
