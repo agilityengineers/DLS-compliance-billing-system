@@ -7,7 +7,7 @@ describe("provider navigation", () => {
     const sections = navForRole("Super_Admin", new Set());
     // A copy rather than the same array: the menu is filtered per role now.
     expect(sections).toEqual(PLATFORM_NAV);
-    expect(sections.map((s) => s.label)).toEqual(["Overview", "Organizations & people", "Capabilities", "Security & compliance", "System"]);
+    expect(sections.map((s) => s.label)).toEqual(["Overview", "Organizations & people", "Capabilities", "Security & compliance", "Website", "System"]);
     expect(sections.every((s) => s.defaultOpen)).toBe(true);
     const hrefs = PLATFORM_LINKS.map((l) => l.href);
     expect(hrefs).toEqual([
@@ -20,6 +20,7 @@ describe("provider navigation", () => {
       "/admin/platform/security",
       "/admin/platform/sessions",
       "/admin/platform/audit",
+      "/admin/platform/website",
       "/admin/platform/system",
     ]);
     expect(new Set(hrefs).size).toBe(hrefs.length);
@@ -46,6 +47,7 @@ describe("provider navigation", () => {
     );
     // …but is never offered the switchboard it would be refused.
     expect(hrefs).not.toContain("/admin/platform/features");
+    expect(hrefs).not.toContain("/admin/platform/website");
     // A section with nothing left in it disappears rather than sitting empty.
     expect(support.every((s) => s.items.length > 0)).toBe(true);
     // The Super Admin still sees everything.

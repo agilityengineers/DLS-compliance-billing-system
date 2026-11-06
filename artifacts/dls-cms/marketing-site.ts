@@ -4,7 +4,8 @@ import type { Plugin } from "vite";
 
 // Keep the approved GitHub website as the source of truth, separate from the SPA.
 const site = path.resolve(import.meta.dirname, "../../site");
-const pages = new Set(["index.html", "about.html", "services.html", "contact.html"]);
+// Keep in step with WEBSITE_PAGES in lib/features/src/website.ts (the pages a news block can be placed on).
+const pages = new Set(["index.html", "about.html", "services.html", "contact.html", "news.html", "privacy.html", "accessibility.html"]);
 // Crawler files that must live at the site root next to the pages.
 const rootFiles = new Set(["robots.txt", "sitemap.xml"]);
 const types: Record<string, string> = {

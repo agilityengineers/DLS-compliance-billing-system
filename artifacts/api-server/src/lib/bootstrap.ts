@@ -25,6 +25,7 @@ import { recordAudit } from "./audit";
 import { revokeAllSessions } from "./session";
 import { findUserByEmail } from "./users";
 import { LEGACY_BOOTSTRAP_HASH } from "./retired-credential";
+import { seedWebsiteFeeds } from "./website-feeds";
 
 /**
  * The scrypt hash that earlier builds committed as the Super Admin's default
@@ -64,6 +65,8 @@ export interface BootstrapResult {
   consultationsImported: number;
   /** Why stored consultation requests were left where they are, when they were. */
   consultationImportSkipped: string | null;
+  /** True on the boot that put the website's starting news feed in place. */
+  websiteFeedsSeeded: boolean;
 }
 
 /** How many accounts still carry the retired bootstrap password, flagged or not. */
@@ -128,6 +131,16 @@ export async function bootstrapPlatform(db: Db, config: AppConfig): Promise<Boot
     }
   } catch (err) {
     logger.error({ err }, "Could not import stored consultation requests; they remain in consultation_requests");
+  }
+
+  // The public website's news feed and the two blocks that show it, the first
+  // time only. A failure is logged, never fatal: the website keeps its static
+  // fallback and the Super Admin can add the feed by hand.
+  let websiteFeedsSeeded = false;
+  try {
+    websiteFeedsSeeded = await seedWebsiteFeeds(db);
+  } catch (err) {
+    logger.error({ err }, "Could not seed the website's news feed");
   }
 
   // ── The provider account ────────────────────────────────────────────────
@@ -309,5 +322,6 @@ export async function bootstrapPlatform(db: Db, config: AppConfig): Promise<Boot
     leadDefaultsChecked,
     consultationsImported,
     consultationImportSkipped,
+    websiteFeedsSeeded,
   };
 }

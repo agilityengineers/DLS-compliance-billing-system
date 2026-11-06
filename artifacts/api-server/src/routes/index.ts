@@ -12,9 +12,13 @@ import { leadsRouter } from "./leads";
 import { orgRouter } from "./org";
 import { platformRouter } from "./platform";
 import { publicRouter } from "./public";
+import { websiteRouter } from "./website";
+import type { FeedFetcher } from "../lib/website-feeds";
 
 export interface RouterDeps {
   mailer: Mailer;
+  /** Reads a website feed; tests swap in a fake so nothing leaves the machine. */
+  feedFetcher?: FeedFetcher;
 }
 
 export function apiRouter(db: Db, config: AppConfig, deps: RouterDeps): IRouter {
@@ -22,6 +26,7 @@ export function apiRouter(db: Db, config: AppConfig, deps: RouterDeps): IRouter 
   router.use(healthRouter(db));
   router.use(authRouter(db, config, deps));
   router.use(publicRouter(db, config, deps));
+  router.use(websiteRouter(db, config, deps));
   router.use(platformRouter(db, config, deps));
   router.use(orgRouter(db, config, deps));
   router.use(leadsRouter(db, config, deps));

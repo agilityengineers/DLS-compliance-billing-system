@@ -427,6 +427,16 @@ ul.plain { list-style: none; margin: 0; padding: 0; }
 .news-card h3 a { color: var(--purple-800); text-decoration: none; }
 .news-card h3 a:hover { text-decoration: underline; }
 .news-card p { margin: 0; flex: 1; font-size: .975rem; }
+/* News blocks streamed from RSS feeds (js/main.js): the compact list layout and the notes shown while loading or empty */
+.feed-list { display: grid; gap: 0; max-width: 820px; }
+.feed-list__item { padding: 1.1rem 0; border-top: 1px solid var(--line); display: grid; gap: .35rem; }
+.feed-list__item:last-child { border-bottom: 1px solid var(--line); }
+.feed-list__item h3 { margin: 0; font-size: 1.1rem; }
+.feed-list__item h3 a { color: var(--purple-800); text-decoration: none; }
+.feed-list__item h3 a:hover { text-decoration: underline; }
+.feed-list__item p { margin: 0; font-size: .975rem; }
+.feed-note { grid-column: 1 / -1; margin: 0; padding: 1.25rem 1.4rem; border: 1px dashed var(--line); border-radius: var(--radius); background: #fff; color: var(--ink-700); }
+.feed-section + .feed-section { padding-top: 0; }
 
 /* ---------------------------------------------------------------------
    13. SERVICE AREA
@@ -519,6 +529,13 @@ ul.plain { list-style: none; margin: 0; padding: 0; }
 .page-hero .lead { color: rgba(255,255,255,.88); }
 .page-hero .breadcrumb, .page-hero .breadcrumb a { color: rgba(255,255,255,.7); }
 .page-hero .lead { max-width: 65ch; }
+.page-hero--plain::before { background: linear-gradient(100deg, var(--purple-900) 0%, var(--purple-800) 100%); }
+/* Long-form text: the Privacy and Accessibility pages */
+.prose { max-width: 760px; }
+.prose h3 { margin: 2rem 0 .5rem; }
+.prose ul { padding-left: 1.25rem; display: grid; gap: .4rem; }
+.prose address { font-style: normal; }
+.prose__updated { font-size: .9rem; color: var(--ink-500); }
 .breadcrumb { font-size: .9rem; color: var(--ink-500); margin-bottom: .75rem; }
 .breadcrumb a { color: var(--ink-500); }
 .breadcrumb span { margin: 0 .4rem; }
