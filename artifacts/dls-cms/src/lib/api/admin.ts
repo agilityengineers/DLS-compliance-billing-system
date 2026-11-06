@@ -1095,3 +1095,62 @@ export const billingApi = {
     fileUrl: (id: string) => `/api/billing/submissions/${id}/file`,
   },
 };
+
+// ── public website news feeds (Super Admin) ────────────────────────────────
+export interface WebsiteFeedRow {
+  id: string;
+  name: string;
+  url: string;
+  enabled: boolean;
+  lastFetchedAt: string | null;
+  lastError: string | null;
+  lastItemCount: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WebsiteFeedBlockRow {
+  id: string;
+  slug: string;
+  title: string;
+  intro: string | null;
+  feedIds: string[];
+  maxItems: number;
+  layout: "grid" | "list";
+  showImages: boolean;
+  showSummaries: boolean;
+  pages: string[];
+  enabled: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WebsiteFeedItem {
+  title: string;
+  link: string;
+  date: string | null;
+  summary: string;
+  image: string | null;
+}
+
+export type WebsiteFeedBlockInput = Omit<WebsiteFeedBlockRow, "id" | "createdAt" | "updatedAt">;
+
+export const websiteApi = {
+  state: () =>
+    apiFetch<{ feeds: WebsiteFeedRow[]; blocks: WebsiteFeedBlockRow[]; pages: { page: string; label: string }[] }>("/platform/website"),
+  preview: (url: string) =>
+    apiFetch<{ url: string; title: string; items: WebsiteFeedItem[] }>("/platform/website/feeds/preview", { method: "POST", json: { url } }),
+  addFeed: (input: { name: string; url: string; enabled?: boolean }) =>
+    apiFetch<{ feed: WebsiteFeedRow }>("/platform/website/feeds", { method: "POST", json: input }),
+  updateFeed: (id: string, patch: { name?: string; url?: string; enabled?: boolean }) =>
+    apiFetch<{ feed: WebsiteFeedRow }>(`/platform/website/feeds/${id}`, { method: "PATCH", json: patch }),
+  refreshFeed: (id: string) =>
+    apiFetch<{ feed: WebsiteFeedRow; items: WebsiteFeedItem[] }>(`/platform/website/feeds/${id}/refresh`, { method: "POST" }),
+  removeFeed: (id: string) => apiFetch<{ ok: true }>(`/platform/website/feeds/${id}`, { method: "DELETE" }),
+  addBlock: (input: WebsiteFeedBlockInput) =>
+    apiFetch<{ block: WebsiteFeedBlockRow }>("/platform/website/blocks", { method: "POST", json: input }),
+  updateBlock: (id: string, patch: Partial<WebsiteFeedBlockInput>) =>
+    apiFetch<{ block: WebsiteFeedBlockRow }>(`/platform/website/blocks/${id}`, { method: "PATCH", json: patch }),
+  removeBlock: (id: string) => apiFetch<{ ok: true }>(`/platform/website/blocks/${id}`, { method: "DELETE" }),
+};

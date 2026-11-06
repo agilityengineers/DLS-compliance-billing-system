@@ -9,6 +9,7 @@ import { logger } from "./lib/logger";
 import { createMailer, type Mailer } from "./lib/mail";
 import { attachSession, passwordChangeGate } from "./middlewares/auth";
 import { apiRouter } from "./routes";
+import type { FeedFetcher } from "./lib/website-feeds";
 
 /**
  * What the request log may show of a URL: the path only, and never a
@@ -28,9 +29,11 @@ export interface CreateAppOptions {
   quiet?: boolean;
   /** Injected so a test can capture mail instead of sending or logging it. */
   mailer?: Mailer;
+  /** Injected so a test can serve website feeds without the network. */
+  feedFetcher?: FeedFetcher;
 }
 
-export function createApp({ db, config = loadConfig(), quiet = false, mailer }: CreateAppOptions): Express {
+export function createApp({ db, config = loadConfig(), quiet = false, mailer, feedFetcher }: CreateAppOptions): Express {
   const app: Express = express();
   app.disable("x-powered-by");
   if (config.trustProxy) app.set("trust proxy", 1);
@@ -68,7 +71,7 @@ export function createApp({ db, config = loadConfig(), quiet = false, mailer }: 
   // A temporary or setup password unlocks exactly one thing: choosing a real one.
   app.use(passwordChangeGate);
 
-  app.use("/api", apiRouter(db, config, { mailer: mailer ?? createMailer(db, config) }));
+  app.use("/api", apiRouter(db, config, { mailer: mailer ?? createMailer(db, config), feedFetcher }));
   app.use("/api", (_req, _res, next) => next(notFound("No such API route.")));
   app.use(errorHandler);
 

@@ -22,6 +22,7 @@ export type SectionKey =
   | "PLATFORM_ORGS"
   | "PLATFORM_CAPABILITIES"
   | "PLATFORM_SECURITY"
+  | "PLATFORM_WEBSITE"
   | "PLATFORM_SYSTEM";
 
 export interface NavItem {
@@ -190,6 +191,20 @@ export const PLATFORM_NAV: NavSection[] = [
         icon: "ScrollText",
         capability: "platform.audit",
         description: "Every sign-in, switch flip and account change, with tamper checking and export."
+      }
+    ]
+  },
+  {
+    key: "PLATFORM_WEBSITE",
+    label: "Website",
+    defaultOpen: true,
+    items: [
+      {
+        href: "/admin/platform/website",
+        label: "News feeds",
+        icon: "Rss",
+        capability: "platform.website",
+        description: "The RSS feeds the public website streams in, and which pages show them."
       }
     ]
   },
