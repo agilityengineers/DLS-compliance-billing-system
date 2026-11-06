@@ -29,7 +29,8 @@ export function NewClientForm({ prefill }: { prefill?: IntakePrefill } = {}) {
     medicaid_id: "", date_of_birth: "",
     insurance_provider: "", service_plan_start: "", service_plan_end: "",
     authorized_scc_hours_per_week: 0, authorized_nmt_trips_per_week: 0,
-    case_manager_name: "", ccb_name: ""
+    case_manager_name: "", ccb_name: "",
+    ccb_phone: "", ccb_email: "", ccb_address1: "", ccb_city: "", ccb_state: "", ccb_zip: ""
   });
   const [diagnoses, setDiagnoses] = useState<Dx[]>([]);
   const [dx, setDx] = useState<Dx>({ code: "", description: "" });
@@ -104,7 +105,15 @@ export function NewClientForm({ prefill }: { prefill?: IntakePrefill } = {}) {
           <div className="space-y-1.5"><Label>Authorized SCC hrs/week</Label><Input type="number" min={0} step={0.25} value={form.authorized_scc_hours_per_week} onChange={set("authorized_scc_hours_per_week")} /></div>
           <div className="space-y-1.5"><Label>Authorized NMT trips/week</Label><Input type="number" min={0} value={form.authorized_nmt_trips_per_week} onChange={set("authorized_nmt_trips_per_week")} /></div>
           <div className="space-y-1.5"><Label>Case manager</Label><Input value={form.case_manager_name} onChange={set("case_manager_name")} /></div>
-          <div className="space-y-1.5"><Label>CCB</Label><Input value={form.ccb_name} onChange={set("ccb_name")} /></div>
+          <div className="space-y-1.5"><Label>Case Management Agency (CCB)</Label><Input value={form.ccb_name} onChange={set("ccb_name")} /></div>
+          <div className="space-y-1.5"><Label>CCB phone</Label><Input type="tel" value={form.ccb_phone} onChange={set("ccb_phone")} /></div>
+          <div className="space-y-1.5"><Label>CCB email</Label><Input type="email" value={form.ccb_email} onChange={set("ccb_email")} /></div>
+          <div className="space-y-1.5 col-span-2"><Label>CCB address</Label><Input value={form.ccb_address1} onChange={set("ccb_address1")} /></div>
+          <div className="space-y-1.5"><Label>CCB city</Label><Input value={form.ccb_city} onChange={set("ccb_city")} /></div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5"><Label>CCB state</Label><Input maxLength={2} placeholder="CO" value={form.ccb_state} onChange={set("ccb_state")} /></div>
+            <div className="space-y-1.5"><Label>CCB ZIP</Label><Input maxLength={10} value={form.ccb_zip} onChange={set("ccb_zip")} /></div>
+          </div>
         </div>
 
         <fieldset className="space-y-3 rounded-lg border border-border p-4">

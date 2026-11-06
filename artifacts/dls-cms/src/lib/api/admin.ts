@@ -677,6 +677,12 @@ export interface ClientRecord {
   authorizedEiHoursPerWeek: number;
   caseManagerName: string | null;
   ccbName: string | null;
+  ccbPhone: string | null;
+  ccbEmail: string | null;
+  ccbAddress1: string | null;
+  ccbCity: string | null;
+  ccbState: string | null;
+  ccbZip: string | null;
   residenceLat: number | null;
   residenceLng: number | null;
   allergies: string | null;
@@ -729,6 +735,12 @@ export interface ClientFieldsInput {
   authorizedEiHoursPerWeek?: number;
   caseManagerName?: string;
   ccbName?: string;
+  ccbPhone?: string;
+  ccbEmail?: string;
+  ccbAddress1?: string;
+  ccbCity?: string;
+  ccbState?: string;
+  ccbZip?: string;
   residenceLat?: number | null;
   residenceLng?: number | null;
   allergies?: string;

@@ -187,6 +187,49 @@ describe.skipIf(!TEST_URL)("client records", () => {
     expect(refused.status).toBe(400);
   });
 
+  it("keeps the Case Management Agency's own phone, email and address with its name", async () => {
+    const created = await api(
+      "POST",
+      "/api/clients",
+      {
+        firstName: "Cora",
+        lastName: "Lindqvist",
+        ccbName: "Weld County CMA",
+        ccbPhone: "970-555-0199",
+        ccbEmail: "Intake@WeldCMA.example.test",
+        ccbAddress1: "800 8th Ave",
+        ccbCity: "Greeley",
+        ccbState: "co",
+        ccbZip: "80631",
+      },
+      adminCookie
+    );
+    expect(created.status).toBe(201);
+    expect(created.body.client).toMatchObject({
+      ccbName: "Weld County CMA",
+      ccbPhone: "970-555-0199",
+      ccbEmail: "intake@weldcma.example.test",
+      ccbAddress1: "800 8th Ave",
+      ccbCity: "Greeley",
+      ccbState: "CO",
+      ccbZip: "80631",
+    });
+    const id = created.body.client.id as string;
+
+    // An edit touches only what it sends; an empty string clears a field.
+    const edited = await api("PATCH", `/api/clients/${id}`, { ccbPhone: "970-555-0123", ccbZip: "" }, schedulerCookie);
+    expect(edited.status).toBe(200);
+    expect(edited.body.client).toMatchObject({ ccbPhone: "970-555-0123", ccbZip: null, ccbCity: "Greeley", ccbEmail: "intake@weldcma.example.test" });
+
+    const badEmail = await api("PATCH", `/api/clients/${id}`, { ccbEmail: "not-an-email" }, adminCookie);
+    expect(badEmail.status).toBe(400);
+
+    // A client entered without them just has none.
+    const plain = await api("POST", "/api/clients", { firstName: "Dev", lastName: "Patel" }, adminCookie);
+    expect(plain.status).toBe(201);
+    expect(plain.body.client).toMatchObject({ ccbPhone: null, ccbEmail: null, ccbAddress1: null, ccbCity: null, ccbState: null, ccbZip: null });
+  });
+
   it("lets only an Admin change the status, and audits it without the chart", async () => {
     const office = await api("PATCH", `/api/clients/${clientId}`, { status: "Inactive" }, schedulerCookie);
     expect(office.status).toBe(403);

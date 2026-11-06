@@ -55,6 +55,12 @@ export interface Client {
   authorized_ei_hours_per_week: number;
   case_manager_name: string | null;
   ccb_name: string | null;
+  ccb_phone?: string | null;
+  ccb_email?: string | null;
+  ccb_address1?: string | null;
+  ccb_city?: string | null;
+  ccb_state?: string | null;
+  ccb_zip?: string | null;
   residence_gps: { lat: number; lng: number } | null;
   // ── Present on real client records (the API's `clients` table) ─────────
   email?: string | null;

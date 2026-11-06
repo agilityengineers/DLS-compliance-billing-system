@@ -112,6 +112,12 @@ const ClientFields = z.object({
   authorizedEiHoursPerWeek: z.coerce.number().min(0).max(168).optional(),
   caseManagerName: optionalText(120),
   ccbName: optionalText(120),
+  ccbPhone: optionalText(40),
+  ccbEmail: z.union([z.literal(""), z.email().max(254)]).optional(),
+  ccbAddress1: optionalText(200),
+  ccbCity: optionalText(120),
+  ccbState: optionalText(2),
+  ccbZip: optionalText(10),
   residenceLat: z.coerce.number().min(-90).max(90).nullable().optional(),
   residenceLng: z.coerce.number().min(-180).max(180).nullable().optional(),
   allergies: optionalText(2000),
@@ -235,6 +241,12 @@ export interface ClientJson {
   authorizedEiHoursPerWeek: number;
   caseManagerName: string | null;
   ccbName: string | null;
+  ccbPhone: string | null;
+  ccbEmail: string | null;
+  ccbAddress1: string | null;
+  ccbCity: string | null;
+  ccbState: string | null;
+  ccbZip: string | null;
   residenceLat: number | null;
   residenceLng: number | null;
   allergies: string | null;
@@ -290,6 +302,12 @@ export function toClientJson(c: ClientRow): ClientJson {
     authorizedEiHoursPerWeek: c.authorizedEiHoursPerWeek,
     caseManagerName: c.caseManagerName,
     ccbName: c.ccbName,
+    ccbPhone: c.ccbPhone,
+    ccbEmail: c.ccbEmail,
+    ccbAddress1: c.ccbAddress1,
+    ccbCity: c.ccbCity,
+    ccbState: c.ccbState,
+    ccbZip: c.ccbZip,
     residenceLat: c.residenceLat,
     residenceLng: c.residenceLng,
     allergies: c.allergies,
@@ -453,6 +471,12 @@ function fieldValues(body: z.infer<typeof ClientFields>, mode: "create" | "patch
     authorizedEiHoursPerWeek: body.authorizedEiHoursPerWeek ?? (mode === "create" ? 0 : undefined),
     caseManagerName: text(body.caseManagerName),
     ccbName: text(body.ccbName),
+    ccbPhone: text(body.ccbPhone),
+    ccbEmail: body.ccbEmail === undefined ? (mode === "create" ? null : undefined) : body.ccbEmail === "" ? null : body.ccbEmail.toLowerCase(),
+    ccbAddress1: text(body.ccbAddress1),
+    ccbCity: text(body.ccbCity),
+    ccbState: body.ccbState === undefined ? (mode === "create" ? null : undefined) : body.ccbState === "" ? null : body.ccbState.toUpperCase(),
+    ccbZip: text(body.ccbZip),
     residenceLat: body.residenceLat === undefined ? (mode === "create" ? null : undefined) : body.residenceLat,
     residenceLng: body.residenceLng === undefined ? (mode === "create" ? null : undefined) : body.residenceLng,
     allergies: text(body.allergies),

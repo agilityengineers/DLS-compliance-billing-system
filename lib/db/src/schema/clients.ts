@@ -170,6 +170,13 @@ export const clientsTable = pgTable(
     authorizedEiHoursPerWeek: doublePrecision("authorized_ei_hours_per_week").notNull().default(0),
     caseManagerName: text("case_manager_name"),
     ccbName: text("ccb_name"),
+    /** The Case Management Agency's own contact details (not the case manager's). */
+    ccbPhone: text("ccb_phone"),
+    ccbEmail: text("ccb_email"),
+    ccbAddress1: text("ccb_address1"),
+    ccbCity: text("ccb_city"),
+    ccbState: text("ccb_state"),
+    ccbZip: text("ccb_zip"),
     residenceLat: doublePrecision("residence_lat"),
     residenceLng: doublePrecision("residence_lng"),
     // ── health and support, read before a visit ──────────────────────────

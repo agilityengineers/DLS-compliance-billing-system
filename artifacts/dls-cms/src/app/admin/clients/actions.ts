@@ -28,6 +28,12 @@ const ClientSchema = z.object({
   authorized_nmt_trips_per_week: z.coerce.number().int().min(0),
   case_manager_name: z.string().optional(),
   ccb_name: z.string().optional(),
+  ccb_phone: z.string().max(40).optional(),
+  ccb_email: z.string().regex(/^$|^[^\s@]+@[^\s@]+\.[^\s@]+$/, "Enter a valid email address for the Case Management Agency.").optional(),
+  ccb_address1: z.string().max(200).optional(),
+  ccb_city: z.string().max(120).optional(),
+  ccb_state: z.string().max(2).optional(),
+  ccb_zip: z.string().max(10).optional(),
   active_diagnoses: z.array(z.object({ code: z.string(), description: z.string() })),
   /** The inquiry this client comes from (Leads → Convert to client). */
   source_lead_id: z.string().uuid().optional()
@@ -66,6 +72,12 @@ export async function createClientRecord(input: unknown): Promise<{ ok: boolean;
       authorized_ei_hours_per_week: 0,
       case_manager_name: d.case_manager_name || null,
       ccb_name: d.ccb_name || null,
+      ccb_phone: d.ccb_phone || null,
+      ccb_email: d.ccb_email || null,
+      ccb_address1: d.ccb_address1 || null,
+      ccb_city: d.ccb_city || null,
+      ccb_state: d.ccb_state || null,
+      ccb_zip: d.ccb_zip || null,
       residence_gps: null
     },
     ctx.auditCtx,
