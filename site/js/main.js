@@ -61,6 +61,9 @@
   const fmtDate = (d) => { const t = new Date(d); return isNaN(t) ? "" : t.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }); };
   const safeHref = (u) => (/^https?:\/\//i.test(u || "") ? u : "");
 
+  // Cards whose article has no image (or whose image fails to load) show the full DLS logo instead.
+  const BRAND_FIGURE = '<figure class="photo photo--brand" aria-hidden="true"><img src="assets/logo-full.webp" alt="" width="1200" height="607" loading="lazy"></figure>';
+
   function feedItemHtml(it, block) {
     const link = safeHref(it.link);
     if (!link || !it.title) return "";
@@ -74,7 +77,7 @@
     const image = safeHref(it.image);
     const figure = image
       ? '<figure class="photo"><img src="' + esc(image) + '" alt="" loading="lazy" width="1000" height="563" referrerpolicy="no-referrer"></figure>'
-      : block.showImages ? '<figure class="photo photo--brand" aria-hidden="true"><img src="assets/logo-monkey.webp" alt=""></figure>' : "";
+      : block.showImages ? BRAND_FIGURE : "";
     return '<article class="news-card">' + figure + '<div class="news-card__body"><span class="news-card__meta">' + meta + "</span>" +
       '<h3><a href="' + href + '" rel="noopener" target="_blank">' + esc(it.title) + "</a></h3>" + summary +
       '<a class="link-arrow" href="' + href + '" rel="noopener" target="_blank">Read the article<span class="visually-hidden">: ' + esc(it.title) + "</span></a></div></article>";
@@ -85,6 +88,13 @@
     slot.classList.toggle("grid--3", block.layout !== "list");
     slot.classList.toggle("feed-list", block.layout === "list");
     slot.innerHTML = block.items.map((it) => feedItemHtml(it, block)).join("");
+    // A feed image that is listed but will not load (moved, deleted, blocked) falls back to the logo.
+    slot.querySelectorAll(".news-card .photo:not(.photo--brand) img").forEach((img) => {
+      img.addEventListener("error", () => {
+        const fig = img.closest("figure");
+        if (fig) fig.outerHTML = BRAND_FIGURE;
+      }, { once: true });
+    });
   }
 
   function emptySlot(slot) {

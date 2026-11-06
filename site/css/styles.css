@@ -419,8 +419,9 @@ ul.plain { list-style: none; margin: 0; padding: 0; }
 .news-card { background: #fff; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line); display: flex; flex-direction: column; transition: transform .18s, box-shadow .18s; }
 .news-card:hover { transform: translateY(-3px); box-shadow: var(--shadow); }
 .news-card .photo { border-radius: 0; aspect-ratio: 16 / 9; box-shadow: none; background: var(--purple-100); }
-.news-card .photo--brand { display: grid; place-items: center; background: var(--purple-100); }
-.news-card .photo--brand img { width: 38%; height: auto; object-fit: contain; opacity: .9; }
+/* Fallback when a feed item has no image: the full DLS logo, centred on the brand purple */
+.news-card .photo--brand { display: grid; place-items: center; background: var(--purple-100); padding: 1rem 1.25rem; }
+.news-card .photo--brand img { position: static; width: 82%; height: auto; max-height: 100%; object-fit: contain; }
 .news-card__body { padding: 1.25rem 1.4rem 1.5rem; display: flex; flex-direction: column; gap: .5rem; flex: 1; }
 .news-card__meta { font-size: .8rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--gold-700); }
 .news-card h3 { margin: 0; font-size: 1.15rem; }
