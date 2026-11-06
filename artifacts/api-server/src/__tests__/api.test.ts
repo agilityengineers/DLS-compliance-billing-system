@@ -9,6 +9,9 @@ import { LEGACY_BOOTSTRAP_HASH, bootstrapPlatform } from "../lib/bootstrap";
 import { loadConfig } from "../lib/config";
 import { Mailer, MemoryTransport } from "../lib/mail";
 import { totpCodeNow } from "../lib/totp";
+import { createSession, loadSession } from "../lib/session";
+import { issueAuthToken } from "../lib/auth-tokens";
+import { verifyPassword } from "../lib/password";
 
 const TEST_URL = process.env.TEST_DATABASE_URL;
 
@@ -702,7 +705,7 @@ describe.skipIf(!TEST_URL)("api server", () => {
     expect((await api("GET", "/api/auth/me", undefined, superCookie)).status).toBe(200);
   });
 
-  it("flags an account still holding the retired bootstrap password without changing it", async () => {
+  it("blocks retired credentials and sessions, then permits verified recovery", async () => {
     const [legacy] = await handle.db
       .insert(usersTable)
       .values({
@@ -715,7 +718,19 @@ describe.skipIf(!TEST_URL)("api server", () => {
         mustChangePassword: false,
       })
       .returning();
+    expect(await verifyPassword("any-password", LEGACY_BOOTSTRAP_HASH)).toBe(false);
+    const stale = await createSession(handle.db, { userId: legacy!.id, ip: null, userAgent: null }, config);
+    const cookie = `${config.cookieName}=${stale.token}`;
+    expect((await api("GET", "/api/auth/me", undefined, cookie)).status).toBe(401);
+    expect((await api("POST", "/api/auth/change-password", {
+      currentPassword: "any-password", newPassword: "Attacker-Password-2026",
+    }, cookie)).status).toBe(401);
+    expect((await api("POST", "/api/auth/login", {
+      email: legacy!.email, password: "any-password",
+    })).status).toBe(401);
+    const beforeBoot = await createSession(handle.db, { userId: legacy!.id, ip: null, userAgent: null }, config);
     const boot = await bootstrapPlatform(handle.db, config);
+    expect(await loadSession(handle.db, beforeBoot.token, config)).toBeNull();
     expect(boot.legacyPasswordAccountsFlagged).toBe(1);
     const [after] = await handle.db.select().from(usersTable).where(eq(usersTable.id, legacy!.id));
     expect(after!.mustChangePassword).toBe(true);
@@ -727,6 +742,19 @@ describe.skipIf(!TEST_URL)("api server", () => {
     expect(status.body.warnings.some((w: any) => w.severity === "warning" && w.message.includes("retired bootstrap password"))).toBe(true);
     // Flagging is idempotent: a second boot finds nothing new to flag.
     expect((await bootstrapPlatform(handle.db, config)).legacyPasswordAccountsFlagged).toBe(0);
+    const reset = await issueAuthToken(handle.db, { userId: legacy!.id, purpose: "password_reset", ttlMs: 60_000 });
+    expect((await api("POST", "/api/auth/reset-password", {
+      token: "not-a-valid-token", password: "Recovered-Password-2026",
+    })).status).toBe(400);
+    const recovered = await api("POST", "/api/auth/reset-password", {
+      token: reset.token, password: "Recovered-Password-2026",
+    });
+    expect(recovered.status).toBe(200);
+    expect((await api("GET", "/api/auth/me", undefined, recovered.cookie)).status).toBe(200);
+    expect((await api("POST", "/api/auth/reset-password", {
+      token: reset.token, password: "Another-Password-2026",
+    })).status).toBe(400);
+    expect((await api("GET", "/api/auth/me", undefined, cookie)).status).toBe(401);
     await handle.db.delete(usersTable).where(eq(usersTable.id, legacy!.id));
   });
 

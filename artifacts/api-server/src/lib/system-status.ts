@@ -137,7 +137,7 @@ export function systemWarnings(input: WarningInput): SystemWarning[] {
   if (input.legacyPasswordAccounts > 0) {
     warnings.push({
       severity: "warning",
-      message: `${input.legacyPasswordAccounts} account(s) still hold the retired bootstrap password that earlier builds shipped in the repository. Each is flagged to choose a new password at its next sign-in; until that happens treat the account as exposed and end its sessions if in doubt.`,
+      message: `${input.legacyPasswordAccounts} account(s) still hold the retired bootstrap password that earlier builds shipped in the repository. Sign-in is blocked and sessions are revoked. Recover through a verified password-reset link or an operator-controlled provider reset; the retired password cannot be used to choose a replacement.`,
     });
   }
   if (config.superAdminForceReset) {
