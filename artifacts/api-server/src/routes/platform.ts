@@ -114,7 +114,7 @@ const SupportRequestBody = z.object({
 });
 
 /** Audit actions are namespaced "<category>.<event>"; these are the categories. */
-export const AUDIT_CATEGORIES = ["auth", "platform", "org", "user", "session", "support", "lead", "lead_form", "lead_funnel", "client", "billing"] as const;
+export const AUDIT_CATEGORIES = ["auth", "platform", "org", "user", "session", "support", "lead", "lead_form", "lead_funnel", "client", "billing", "website"] as const;
 
 const AuditQuery = z.object({
   limit: z.coerce.number().int().min(1).max(500).catch(100),

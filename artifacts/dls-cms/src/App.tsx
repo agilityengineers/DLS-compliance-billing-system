@@ -51,6 +51,7 @@ import AdminPlatformSecurity from "@/app/admin/platform/security/page";
 import AdminPlatformSessions from "@/app/admin/platform/sessions/page";
 import AdminPlatformAudit from "@/app/admin/platform/audit/page";
 import AdminPlatformSystem from "@/app/admin/platform/system/page";
+import AdminPlatformWebsite from "@/app/admin/platform/website/page";
 
 // ── Field pages ───────────────────────────────────────────────────────────
 import FieldToday from "@/app/field/page";
@@ -150,6 +151,7 @@ function Router() {
       <Route path="/admin/platform/sessions">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminPlatformSessions as AsyncComponent)} />}</Route>
       <Route path="/admin/platform/audit">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminPlatformAudit as AsyncComponent)} />}</Route>
       <Route path="/admin/platform/system">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminPlatformSystem as AsyncComponent)} />}</Route>
+      <Route path="/admin/platform/website">{() => <AsyncRoute loader={withLayout(AdminLayout, AdminPlatformWebsite as AsyncComponent)} />}</Route>
 
       {/* Field app */}
       <Route path="/field">{() => <AsyncRoute loader={withLayoutElement(FieldLayout, <FieldToday />)} />}</Route>

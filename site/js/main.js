@@ -40,33 +40,113 @@
   /* ---------- Shared: escape text for innerHTML ---------- */
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
-  /* ---------- News: live from the DLS Media RSS feed ---------- */
-  const NEWS_FEED = "https://durablelifeskills.com/dls-media/feed/rss";
-  const newsGrid = document.querySelector("[data-news-feed]");
-  if (newsGrid) {
-    const fmt = (d) => { const t = new Date(d); return isNaN(t) ? "" : t.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }); };
-    const fullImg = (u) => (u || "").replace(/-thumb(\.\w+)$/, "$1"); // gallery thumbs have full-size siblings
-    const trim = (s, n) => { s = s.replace(/\s+/g, " ").trim(); if (s.length <= n) return s; s = s.slice(0, n); return s.slice(0, s.lastIndexOf(" ")) + "..."; };
-    fetch(NEWS_FEED).then((r) => { if (!r.ok) throw 0; return r.text(); }).then((xml) => {
-      const doc = new DOMParser().parseFromString(xml, "text/xml");
-      const items = [...doc.querySelectorAll("item")].slice(0, 3);
-      if (items.length < 3) return;
-      const ns = "http://search.yahoo.com/mrss/";
-      newsGrid.innerHTML = items.map((it) => {
-        const q = (sel) => (it.querySelector(sel) || {}).textContent || "";
-        const title = q("title").trim(), link = q("link").trim(), date = q("pubDate");
-        const media = it.getElementsByTagNameNS(ns, "content")[0] || it.getElementsByTagNameNS(ns, "thumbnail")[0];
-        let img = media ? fullImg(media.getAttribute("url")) : "";
-        if (/dummyImage/.test(img)) img = "";
-        const desc = trim(q("description"), 150);
-        return '<article class="news-card">' +
-          (img ? '<figure class="photo"><img src="' + esc(img) + '" alt="" loading="lazy" width="1000" height="563"></figure>' : '<figure class="photo photo--brand" aria-hidden="true"><img src="assets/logo-monkey.webp" alt=""></figure>') +
-          '<div class="news-card__body"><span class="news-card__meta">DLS Media · <time>' + esc(fmt(date)) + '</time></span>' +
-          '<h3><a href="' + esc(link) + '" rel="noopener" target="_blank">' + esc(title) + '</a></h3>' +
-          '<p>' + esc(desc) + '</p>' +
-          '<a class="link-arrow" href="' + esc(link) + '" rel="noopener" target="_blank">Read the article</a></div></article>';
-      }).join("");
-    }).catch(() => { /* keep the static fallback cards */ });
+  /* ---------- Portal settings (js/config.js) ---------- */
+  const DLS_CONFIG = window.DLS_CONFIG || {};
+  const API_BASE = String(DLS_CONFIG.apiBase || "").replace(/\/+$/, "");
+
+  /* ---------------------------------------------------------------------
+     NEWS BLOCKS  (RSS feeds the Super Admin manages in the portal)
+     ---------------------------------------------------------------------
+     The portal reads the feeds on its server and answers, for this page,
+     the news blocks placed on it: GET /api/public/website/feeds?page=…
+     A block goes into this page's <div data-feed-block="slug"> when there
+     is one (its <section data-feed-section="slug"> gets the block's heading
+     in [data-feed-title] and introduction in [data-feed-intro]); otherwise
+     it is added as its own section before the closing call to action.
+     A slot whose block is switched off or not placed on this page is
+     hidden, unless its section carries data-feed-empty, which is shown
+     instead. If the portal cannot be reached, the static markup stays.
+     --------------------------------------------------------------------- */
+  const FEEDS_ENDPOINT = API_BASE + "/api/public/website/feeds";
+  const fmtDate = (d) => { const t = new Date(d); return isNaN(t) ? "" : t.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }); };
+  const safeHref = (u) => (/^https?:\/\//i.test(u || "") ? u : "");
+
+  function feedItemHtml(it, block) {
+    const link = safeHref(it.link);
+    if (!link || !it.title) return "";
+    const href = esc(link);
+    const meta = esc(it.source) + (it.date ? ' · <time datetime="' + esc(it.date) + '">' + esc(fmtDate(it.date)) + "</time>" : "");
+    const summary = it.summary ? "<p>" + esc(it.summary) + "</p>" : "";
+    if (block.layout === "list") {
+      return '<article class="feed-list__item"><span class="news-card__meta">' + meta + "</span>" +
+        '<h3><a href="' + href + '" rel="noopener" target="_blank">' + esc(it.title) + "</a></h3>" + summary + "</article>";
+    }
+    const image = safeHref(it.image);
+    const figure = image
+      ? '<figure class="photo"><img src="' + esc(image) + '" alt="" loading="lazy" width="1000" height="563" referrerpolicy="no-referrer"></figure>'
+      : block.showImages ? '<figure class="photo photo--brand" aria-hidden="true"><img src="assets/logo-monkey.webp" alt=""></figure>' : "";
+    return '<article class="news-card">' + figure + '<div class="news-card__body"><span class="news-card__meta">' + meta + "</span>" +
+      '<h3><a href="' + href + '" rel="noopener" target="_blank">' + esc(it.title) + "</a></h3>" + summary +
+      '<a class="link-arrow" href="' + href + '" rel="noopener" target="_blank">Read the article<span class="visually-hidden">: ' + esc(it.title) + "</span></a></div></article>";
+  }
+
+  function fillSlot(slot, block) {
+    slot.classList.toggle("grid", block.layout !== "list");
+    slot.classList.toggle("grid--3", block.layout !== "list");
+    slot.classList.toggle("feed-list", block.layout === "list");
+    slot.innerHTML = block.items.map((it) => feedItemHtml(it, block)).join("");
+  }
+
+  function emptySlot(slot) {
+    const section = slot.closest("[data-feed-section]") || slot;
+    const note = section.getAttribute("data-feed-empty");
+    if (note) {
+      slot.classList.remove("grid", "grid--3", "feed-list");
+      slot.innerHTML = '<p class="feed-note">' + esc(note) + "</p>";
+    } else {
+      section.hidden = true;
+    }
+  }
+
+  function autoSection(block) {
+    const id = "feed-" + block.slug.replace(/[^a-z0-9-]/g, "") + "-title";
+    const section = document.createElement("section");
+    section.className = "section feed-section";
+    section.setAttribute("aria-labelledby", id);
+    section.setAttribute("data-feed-section", block.slug);
+    section.innerHTML = '<div class="container"><div class="section-head"><h2 id="' + id + '" data-feed-title></h2><p data-feed-intro></p></div>' +
+      '<div data-feed-block="' + esc(block.slug) + '"></div></div>';
+    const main = document.getElementById("main") || document.body;
+    const cta = main.querySelector(":scope > .cta");
+    main.insertBefore(section, cta || null);
+    return section.querySelector("[data-feed-block]");
+  }
+
+  function renderFeedBlocks(blocks) {
+    const slots = new Map();
+    document.querySelectorAll("[data-feed-block]").forEach((el) => slots.set(el.getAttribute("data-feed-block"), el));
+    blocks.forEach((block) => {
+      let slot = slots.get(block.slug);
+      slots.delete(block.slug);
+      if (!slot) {
+        if (!block.items.length) return;
+        slot = autoSection(block);
+      }
+      const section = slot.closest("[data-feed-section]");
+      if (section) {
+        const title = section.querySelector("[data-feed-title]");
+        const intro = section.querySelector("[data-feed-intro]");
+        if (title) title.textContent = block.title;
+        if (intro) { intro.textContent = block.intro || ""; intro.hidden = !block.intro; }
+      }
+      if (block.items.length) fillSlot(slot, block); else emptySlot(slot);
+    });
+    // Slots this page has but no block was placed in.
+    slots.forEach((slot) => emptySlot(slot));
+  }
+
+  // Every page asks: the Super Admin can place a block on any of them.
+  {
+    const pagePath = location.pathname || "/";
+    fetch(FEEDS_ENDPOINT + "?page=" + encodeURIComponent(pagePath), { headers: { Accept: "application/json" }, credentials: "omit" })
+      .then((r) => { if (!r.ok) throw 0; return r.json(); })
+      .then((data) => { if (data && Array.isArray(data.blocks)) renderFeedBlocks(data.blocks); else throw 0; })
+      .catch(() => {
+        // Keep any static fallback; replace a "Loading…" note with an honest one.
+        document.querySelectorAll("[data-feed-block] .feed-note").forEach((note) => {
+          note.innerHTML = 'The latest articles could not be loaded just now. You can read them at <a href="https://durablelifeskills.com/dls-media/" rel="noopener" target="_blank">DLS Media</a>.';
+        });
+      });
   }
 
   /* ---------- Section eyebrows: draw in on first view ---------- */
@@ -222,8 +302,6 @@
      well as the key, so a key sent again with changed answers is still
      stored as a new inquiry.)
      --------------------------------------------------------------------- */
-  const DLS_CONFIG = window.DLS_CONFIG || {};
-  const API_BASE = String(DLS_CONFIG.apiBase || "").replace(/\/+$/, "");
   const LEAD_ENDPOINT = API_BASE + "/api/public/leads";
   const FORM_SCHEMA_ENDPOINT = API_BASE + "/api/public/forms/contact";
   const CONTACT_FALLBACK = "You can also call (970) 893-2145 or email info@durablelifeskills.com.";

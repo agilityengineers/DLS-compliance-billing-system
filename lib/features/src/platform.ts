@@ -29,6 +29,8 @@ export const PLATFORM_CAPABILITIES = [
   "platform.audit",
   /** Read system status and run a maintenance job by hand. */
   "platform.system",
+  /** Manage the public website's news feeds and where they appear. */
+  "platform.website",
 ] as const;
 
 export type PlatformCapability = (typeof PLATFORM_CAPABILITIES)[number];
@@ -73,4 +75,5 @@ export const PLATFORM_CAPABILITY_LABELS: Record<PlatformCapability, string> = {
   "platform.sessions": "End another person's session",
   "platform.audit": "Read the audit log and verify its chain",
   "platform.system": "Read system status and run a maintenance job",
+  "platform.website": "Manage the public website's news feeds",
 };
