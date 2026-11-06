@@ -74,7 +74,7 @@
     const image = safeHref(it.image);
     const figure = image
       ? '<figure class="photo"><img src="' + esc(image) + '" alt="" loading="lazy" width="1000" height="563" referrerpolicy="no-referrer"></figure>'
-      : block.showImages ? '<figure class="photo photo--brand" aria-hidden="true"><img src="assets/logo-monkey.webp" alt=""></figure>' : "";
+      : block.showImages ? '<figure class="photo photo--brand" aria-hidden="true"><img src="assets/logo-full.webp" alt="" width="1200" height="607" loading="lazy"></figure>' : "";
     return '<article class="news-card">' + figure + '<div class="news-card__body"><span class="news-card__meta">' + meta + "</span>" +
       '<h3><a href="' + href + '" rel="noopener" target="_blank">' + esc(it.title) + "</a></h3>" + summary +
       '<a class="link-arrow" href="' + href + '" rel="noopener" target="_blank">Read the article<span class="visually-hidden">: ' + esc(it.title) + "</span></a></div></article>";
