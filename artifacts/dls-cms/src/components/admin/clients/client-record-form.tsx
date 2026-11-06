@@ -22,6 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DiagnosisEntry } from "./diagnosis-entry";
 import { selectClass } from "./format";
 
 type Draft = {
@@ -122,7 +123,6 @@ export function ClientRecordForm({
 }) {
   const [draft, setDraft] = useState<Draft>(() => draftOf(client));
   const [diagnoses, setDiagnoses] = useState<ClientDiagnosis[]>(client.activeDiagnoses);
-  const [dx, setDx] = useState({ code: "", description: "" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -264,22 +264,13 @@ export function ClientRecordForm({
           Diagnoses <Badge variant="muted">{diagnoses.length}</Badge>
         </h2>
         <div className="space-y-3 p-4">
-          <div className="flex flex-wrap gap-2">
-            <Input aria-label="ICD-10 code" placeholder="ICD-10 code" className="w-36" value={dx.code} onChange={(e) => setDx({ ...dx, code: e.target.value })} />
-            <Input aria-label="Diagnosis description" placeholder="Description" className="min-w-48 flex-1" value={dx.description} onChange={(e) => setDx({ ...dx, description: e.target.value })} />
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                if (!dx.code.trim()) return;
-                setSaved(false);
-                setDiagnoses((d) => [...d, { code: dx.code.trim(), description: dx.description.trim(), isPrimary: d.length === 0 }]);
-                setDx({ code: "", description: "" });
-              }}
-            >
-              Add
-            </Button>
-          </div>
+          <DiagnosisEntry
+            existing={diagnoses}
+            onAdd={(d) => {
+              setSaved(false);
+              setDiagnoses((list) => [...list, { ...d, isPrimary: list.length === 0 }]);
+            }}
+          />
           <ul className="divide-y divide-border rounded-md border border-border text-sm">
             {diagnoses.map((d, i) => (
               <li key={`${d.code}-${i}`} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
