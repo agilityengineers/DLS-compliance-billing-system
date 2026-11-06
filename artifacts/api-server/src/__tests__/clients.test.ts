@@ -477,6 +477,50 @@ describe.skipIf(!TEST_URL)("client records", () => {
     });
   });
 
+  it("records a rep payee separately from guardianship, keeps their paperwork, and clears them when no longer applicable", async () => {
+    const created = await api("POST", "/api/clients", { firstName: "Rosa", lastName: "Payne", guardianshipStatus: "Not applicable" }, adminCookie);
+    expect(created.status).toBe(201);
+    const id = created.body.client.id as string;
+    expect(created.body.client).toMatchObject({ repPayeeStatus: null, repPayeeName: null });
+
+    const set = await api(
+      "PATCH",
+      `/api/clients/${id}`,
+      {
+        repPayeeStatus: "Rep payee",
+        repPayeeName: "Marcus Payne",
+        repPayeeAddress1: "12 Elm St",
+        repPayeeCity: "Greeley",
+        repPayeeState: "co",
+        repPayeeZip: "80631",
+        repPayeePhone: "970-555-0144",
+        repPayeeEmail: "Marcus@Example.test",
+        repPayeeNumber: "SSA-445-21",
+      },
+      schedulerCookie
+    );
+    expect(set.status).toBe(200);
+    expect(set.body.client).toMatchObject({
+      guardianshipStatus: "Not applicable",
+      repPayeeStatus: "Rep payee",
+      repPayeeName: "Marcus Payne",
+      repPayeeState: "CO",
+      repPayeeEmail: "marcus@example.test",
+      repPayeeNumber: "SSA-445-21",
+    });
+    expect((await api("PATCH", `/api/clients/${id}`, { repPayeeStatus: "Someone" }, adminCookie)).status).toBe(400);
+    expect((await api("PATCH", `/api/clients/${id}`, { repPayeeEmail: "not-an-email" }, adminCookie)).status).toBe(400);
+
+    const q = new URLSearchParams({ fileName: "payee appointment.pdf", category: "Rep payee paperwork" });
+    const uploaded = await upload(`/api/clients/${id}/files?${q}`, new TextEncoder().encode("%PDF-1.4\n"), "application/pdf", schedulerCookie);
+    expect(uploaded.status).toBe(201);
+    expect(uploaded.body.file.category).toBe("Rep payee paperwork");
+
+    const cleared = await api("PATCH", `/api/clients/${id}`, { repPayeeStatus: "Not applicable" }, adminCookie);
+    expect(cleared.status).toBe(200);
+    expect(cleared.body.client).toMatchObject({ repPayeeStatus: "Not applicable", repPayeeName: null, repPayeeAddress1: null, repPayeeEmail: null, repPayeeNumber: null });
+  });
+
   it("keeps everything inside one organization", async () => {
     expect((await api("GET", `/api/clients/${clientId}`, undefined, otherAdminCookie)).status).toBe(404);
     expect((await api("PATCH", `/api/clients/${clientId}`, { city: "Elsewhere" }, otherAdminCookie)).status).toBe(404);

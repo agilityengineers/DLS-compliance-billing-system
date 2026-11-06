@@ -604,6 +604,9 @@ export const CLIENT_STATUSES: readonly ClientStatus[] = ["Active", "Inactive", "
 export type ClientGender = "Male" | "Female" | "Other" | "Unknown";
 export const CLIENT_GENDERS: readonly ClientGender[] = ["Male", "Female", "Other", "Unknown"];
 export const GUARDIANSHIP_STATUSES = ["Not applicable", "Guardian", "Court appointed"] as const;
+export const REP_PAYEE_STATUSES = ["Not applicable", "Rep payee"] as const;
+/** The Files category the rep payee paperwork is filed under. */
+export const REP_PAYEE_FILE_CATEGORY = "Rep payee paperwork";
 export const MARITAL_STATUSES = ["Single", "Married", "Divorced", "Separated", "Widowed", "Other"] as const;
 export type ClientContactKind = "responsible_party" | "guardian" | "emergency" | "physician" | "case_manager" | "other";
 export const CLIENT_CONTACT_KIND_LABELS: Record<ClientContactKind, string> = {
@@ -657,6 +660,16 @@ export interface ClientRecord {
   ethnicity: string | null;
   race: string | null;
   guardianshipStatus: string | null;
+  repPayeeStatus: string | null;
+  repPayeeName: string | null;
+  repPayeeAddress1: string | null;
+  repPayeeAddress2: string | null;
+  repPayeeCity: string | null;
+  repPayeeState: string | null;
+  repPayeeZip: string | null;
+  repPayeePhone: string | null;
+  repPayeeEmail: string | null;
+  repPayeeNumber: string | null;
   accountCode: string | null;
   admissionDate: string | null;
   dischargeDate: string | null;
@@ -709,6 +722,16 @@ export interface ClientFieldsInput {
   ethnicity?: string;
   race?: string;
   guardianshipStatus?: string;
+  repPayeeStatus?: string;
+  repPayeeName?: string;
+  repPayeeAddress1?: string;
+  repPayeeAddress2?: string;
+  repPayeeCity?: string;
+  repPayeeState?: string;
+  repPayeeZip?: string;
+  repPayeePhone?: string;
+  repPayeeEmail?: string;
+  repPayeeNumber?: string;
   accountCode?: string;
   admissionDate?: string;
   dischargeDate?: string;

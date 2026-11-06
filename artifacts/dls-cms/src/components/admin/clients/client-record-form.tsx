@@ -10,6 +10,7 @@ import {
   CLIENT_STATUSES,
   GUARDIANSHIP_STATUSES,
   MARITAL_STATUSES,
+  REP_PAYEE_STATUSES,
   clientsApi,
   type ClientDiagnosis,
   type ClientGender,
@@ -22,6 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ClientRepPayeeFiles } from "./client-rep-payee-files";
 import { selectClass } from "./format";
 
 type Draft = {
@@ -40,6 +42,16 @@ type Draft = {
   ethnicity: string;
   race: string;
   guardianshipStatus: string;
+  repPayeeStatus: string;
+  repPayeeName: string;
+  repPayeeAddress1: string;
+  repPayeeAddress2: string;
+  repPayeeCity: string;
+  repPayeeState: string;
+  repPayeeZip: string;
+  repPayeePhone: string;
+  repPayeeEmail: string;
+  repPayeeNumber: string;
   accountCode: string;
   admissionDate: string;
   dischargeDate: string;
@@ -79,6 +91,16 @@ function draftOf(c: ClientRecord): Draft {
     ethnicity: c.ethnicity ?? "",
     race: c.race ?? "",
     guardianshipStatus: c.guardianshipStatus ?? "",
+    repPayeeStatus: c.repPayeeStatus ?? "",
+    repPayeeName: c.repPayeeName ?? "",
+    repPayeeAddress1: c.repPayeeAddress1 ?? "",
+    repPayeeAddress2: c.repPayeeAddress2 ?? "",
+    repPayeeCity: c.repPayeeCity ?? "",
+    repPayeeState: c.repPayeeState ?? "",
+    repPayeeZip: c.repPayeeZip ?? "",
+    repPayeePhone: c.repPayeePhone ?? "",
+    repPayeeEmail: c.repPayeeEmail ?? "",
+    repPayeeNumber: c.repPayeeNumber ?? "",
     accountCode: c.accountCode ?? "",
     admissionDate: c.admissionDate ?? "",
     dischargeDate: c.dischargeDate ?? "",
@@ -114,10 +136,13 @@ function Field({ id, label, children, className }: { id: string; label: string; 
 export function ClientRecordForm({
   client,
   isAdmin,
+  canUploadFiles = false,
   onSaved,
 }: {
   client: ClientRecord;
   isAdmin: boolean;
+  /** Whether this person has the paperwork folder (clients.paperwork), which the rep payee upload uses. */
+  canUploadFiles?: boolean;
   onSaved: (client: ClientRecord) => void;
 }) {
   const [draft, setDraft] = useState<Draft>(() => draftOf(client));
@@ -136,6 +161,8 @@ export function ClientRecordForm({
       <Input id={`client-${id}`} type={type} value={String(draft[id])} onChange={set(id)} {...extra} />
     </Field>
   );
+
+  const isRepPayee = draft.repPayeeStatus === "Rep payee";
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -199,6 +226,40 @@ export function ClientRecordForm({
           </Field>
           {text("ethnicity", "Ethnicity")}
           {text("race", "Race")}
+        </div>
+      </section>
+
+      <section className="rounded-card border border-border bg-card">
+        <h2 className="border-b border-border px-4 py-3 font-medium">Rep payee</h2>
+        <div className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3">
+          <Field id="client-repPayeeStatus" label="Rep payee">
+            <select id="client-repPayeeStatus" className={selectClass} value={draft.repPayeeStatus} onChange={set("repPayeeStatus")}>
+              <option value="">Not recorded</option>
+              {REP_PAYEE_STATUSES.map((g) => (
+                <option key={g} value={g}>{g}</option>
+              ))}
+            </select>
+          </Field>
+          {isRepPayee && (
+            <>
+              {text("repPayeeName", "Rep payee name", "text", { required: true })}
+              {text("repPayeeNumber", "Payee / account number")}
+              {text("repPayeePhone", "Phone", "tel")}
+              {text("repPayeeEmail", "Email", "email")}
+              {text("repPayeeAddress1", "Address")}
+              {text("repPayeeAddress2", "Address line 2")}
+              {text("repPayeeCity", "City")}
+              {text("repPayeeState", "State", "text", { maxLength: 2, placeholder: "CO" })}
+              {text("repPayeeZip", "ZIP", "text", { maxLength: 10 })}
+              {canUploadFiles ? (
+                <ClientRepPayeeFiles clientId={client.id} />
+              ) : (
+                <p className="text-xs text-muted-foreground sm:col-span-2 lg:col-span-3">
+                  Uploading the rep payee paperwork needs access to the client&apos;s Files.
+                </p>
+              )}
+            </>
+          )}
         </div>
       </section>
 
