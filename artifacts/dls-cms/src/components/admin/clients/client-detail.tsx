@@ -128,7 +128,7 @@ export function ClientDetail({
         </TabsList>
         {tabs.includes("record") && (
           <TabsContent value="record" className="mt-4">
-            <ClientRecordForm key={client.updatedAt} client={client} isAdmin={isAdmin} onSaved={setClient} />
+            <ClientRecordForm key={client.updatedAt} client={client} isAdmin={isAdmin} today={today} onSaved={setClient} />
           </TabsContent>
         )}
         {tabs.includes("contacts") && (

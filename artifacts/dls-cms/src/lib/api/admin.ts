@@ -605,6 +605,8 @@ export type ClientGender = "Male" | "Female" | "Other" | "Unknown";
 export const CLIENT_GENDERS: readonly ClientGender[] = ["Male", "Female", "Other", "Unknown"];
 export const GUARDIANSHIP_STATUSES = ["Not applicable", "Guardian", "Court appointed"] as const;
 export const MARITAL_STATUSES = ["Single", "Married", "Divorced", "Separated", "Widowed", "Other"] as const;
+/** Guardianship statuses that need the guardian's details on the record. */
+export const GUARDIAN_REQUIRED_STATUSES: readonly string[] = ["Guardian", "Court appointed"];
 export type ClientContactKind = "responsible_party" | "guardian" | "emergency" | "physician" | "case_manager" | "other";
 export const CLIENT_CONTACT_KIND_LABELS: Record<ClientContactKind, string> = {
   responsible_party: "Responsible party",
@@ -657,6 +659,15 @@ export interface ClientRecord {
   ethnicity: string | null;
   race: string | null;
   guardianshipStatus: string | null;
+  guardianName: string | null;
+  guardianRelationship: string | null;
+  guardianEmail: string | null;
+  guardianPhone: string | null;
+  guardianAddress1: string | null;
+  guardianAddress2: string | null;
+  guardianCity: string | null;
+  guardianState: string | null;
+  guardianZip: string | null;
   accountCode: string | null;
   admissionDate: string | null;
   dischargeDate: string | null;
@@ -709,6 +720,15 @@ export interface ClientFieldsInput {
   ethnicity?: string;
   race?: string;
   guardianshipStatus?: string;
+  guardianName?: string;
+  guardianRelationship?: string;
+  guardianEmail?: string;
+  guardianPhone?: string;
+  guardianAddress1?: string;
+  guardianAddress2?: string;
+  guardianCity?: string;
+  guardianState?: string;
+  guardianZip?: string;
   accountCode?: string;
   admissionDate?: string;
   dischargeDate?: string;
@@ -887,6 +907,30 @@ export interface ClientFileMeta {
   notes?: string;
 }
 
+/** Sends one file to an upload route: the bytes as the body, the record as the query string. */
+async function uploadFile(path: string, file: File, meta: Partial<ClientFileMeta>): Promise<{ file: ClientFile }> {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(meta)) if (value !== undefined && value !== "") params.set(key, String(value));
+  const res = await fetch(`/api${path}?${params}`, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "content-type": file.type || "application/octet-stream", accept: "application/json" },
+    body: file,
+  });
+  const text = await res.text();
+  let body: unknown = null;
+  try {
+    body = text ? JSON.parse(text) : null;
+  } catch {
+    body = text;
+  }
+  if (!res.ok) {
+    const err = (body as { error?: { code?: string; message?: string } } | null)?.error;
+    throw new ApiClientError(res.status, err?.code ?? "SERVER_ERROR", err?.message ?? (res.status === 413 ? "That file is too large." : `Upload failed (${res.status}).`));
+  }
+  return body as { file: ClientFile };
+}
+
 export const clientsApi = {
   list: (filters: { status?: ClientStatus } = {}) => apiFetch<{ clients: ClientRecord[] }>(`/clients${query(filters)}`),
   get: (id: string) => apiFetch<{ client: ClientRecord }>(`/clients/${id}`),
@@ -924,33 +968,22 @@ export const clientsApi = {
   files: {
     list: (clientId: string) => apiFetch<ClientFilesResponse>(`/clients/${clientId}/files`),
     /** The bytes go as the body and the record as the query string; see the API route. */
-    upload: async (clientId: string, file: File, meta: ClientFileMeta): Promise<{ file: ClientFile }> => {
-      const params = new URLSearchParams();
-      for (const [key, value] of Object.entries(meta)) if (value !== undefined && value !== "") params.set(key, String(value));
-      const res = await fetch(`/api/clients/${clientId}/files?${params}`, {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "content-type": file.type || "application/octet-stream", accept: "application/json" },
-        body: file,
-      });
-      const text = await res.text();
-      let body: unknown = null;
-      try {
-        body = text ? JSON.parse(text) : null;
-      } catch {
-        body = text;
-      }
-      if (!res.ok) {
-        const err = (body as { error?: { code?: string; message?: string } } | null)?.error;
-        throw new ApiClientError(res.status, err?.code ?? "SERVER_ERROR", err?.message ?? (res.status === 413 ? "That file is too large." : `Upload failed (${res.status}).`));
-      }
-      return body as { file: ClientFile };
-    },
+    upload: (clientId: string, file: File, meta: ClientFileMeta) => uploadFile(`/clients/${clientId}/files`, file, meta),
     update: (clientId: string, id: string, patch: Partial<ClientFileMeta>) =>
       apiFetch<{ file: ClientFile }>(`/clients/${clientId}/files/${id}`, { method: "PATCH", json: patch }),
     remove: (clientId: string, id: string) => apiFetch<{ ok: true }>(`/clients/${clientId}/files/${id}`, { method: "DELETE" }),
     /** A download, so it goes through the browser rather than fetch. */
     contentUrl: (clientId: string, id: string) => `/api/clients/${clientId}/files/${id}/content`,
+  },
+
+  /** The guardian's paperwork, filed under "Guardianship papers"; available with the record itself. */
+  guardianshipPapers: {
+    list: (clientId: string) =>
+      apiFetch<{ files: ClientFile[]; maxBytes: number; contentTypes: string[] }>(`/clients/${clientId}/guardianship-papers`),
+    upload: (clientId: string, file: File, meta: { fileName: string; startDate?: string; endDate?: string; notes?: string }) =>
+      uploadFile(`/clients/${clientId}/guardianship-papers`, file, meta),
+    remove: (clientId: string, id: string) => apiFetch<{ ok: true }>(`/clients/${clientId}/guardianship-papers/${id}`, { method: "DELETE" }),
+    contentUrl: (clientId: string, id: string) => `/api/clients/${clientId}/guardianship-papers/${id}/content`,
   },
 };
 
