@@ -1,12 +1,16 @@
 // app/admin/clients/new/page.tsx — intake form with live age + diagnosis count
+// and the face-sheet photo, which is uploaded once the record exists.
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { clientsApi } from "@/lib/api/admin";
+import { errorMessage } from "@/lib/api/client";
+import { PHOTO_ACCEPT, PhotoFrame, photoProblem } from "@/components/admin/clients/client-photo";
 import { createClientRecord } from "../actions";
 
 interface Dx { code: string; description: string }
@@ -20,7 +24,7 @@ export interface IntakePrefill {
   phone: string;
 }
 
-export function NewClientForm({ prefill }: { prefill?: IntakePrefill } = {}) {
+export function NewClientForm({ prefill, photoEnabled = false }: { prefill?: IntakePrefill; photoEnabled?: boolean } = {}) {
   const router = useRouter();
   const [form, setForm] = useState({
     first_name: prefill?.first_name ?? "", middle_name: "", last_name: prefill?.last_name ?? "",
@@ -35,6 +39,17 @@ export function NewClientForm({ prefill }: { prefill?: IntakePrefill } = {}) {
   const [dx, setDx] = useState<Dx>({ code: "", description: "" });
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  /** Set when the client was created but the photo did not save: where to go on from here. */
+  const [createdAt, setCreatedAt] = useState<string | null>(null);
+  const photoInput = useRef<HTMLInputElement>(null);
+
+  // A local preview of the picked photo, released when it changes or the form goes away.
+  const preview = useMemo(() => (photo ? URL.createObjectURL(photo) : null), [photo]);
+  useEffect(() => () => {
+    if (preview) URL.revokeObjectURL(preview);
+  }, [preview]);
 
   const age = useMemo(() => {
     if (!form.date_of_birth) return null;
@@ -53,9 +68,22 @@ export function NewClientForm({ prefill }: { prefill?: IntakePrefill } = {}) {
     e.preventDefault();
     setSaving(true); setError(null);
     const res = await createClientRecord({ ...form, active_diagnoses: diagnoses, source_lead_id: prefill?.lead_id });
+    if (!res.ok) { setSaving(false); setError(res.error ?? "Failed to save."); return; }
+    const next = prefill ? `/admin/leads/${prefill.lead_id}` : res.id ? `/admin/clients/${res.id}` : "/admin/clients";
+    // The photo needs the record to hang on, so it goes up second. If it
+    // fails the client still exists: say so rather than lose the intake.
+    if (photo && res.id) {
+      try {
+        await clientsApi.photo.upload(res.id, photo);
+      } catch (e) {
+        setSaving(false);
+        setCreatedAt(`/admin/clients/${res.id}`);
+        setError(`The client was created, but the photo did not save: ${errorMessage(e)} You can add it from the client's record.`);
+        return;
+      }
+    }
     setSaving(false);
-    if (!res.ok) { setError(res.error ?? "Failed to save."); return; }
-    router.push(prefill ? `/admin/leads/${prefill.lead_id}` : res.id ? `/admin/clients/${res.id}` : "/admin/clients");
+    router.push(next);
   }
 
   return (
@@ -67,6 +95,42 @@ export function NewClientForm({ prefill }: { prefill?: IntakePrefill } = {}) {
         </p>
       )}
       <form onSubmit={onSubmit} className="space-y-5">
+        {photoEnabled && (
+          <fieldset className="flex flex-wrap items-center gap-4 rounded-lg border border-border p-4">
+            <legend className="px-1 text-sm font-medium">Client photo</legend>
+            <PhotoFrame
+              src={preview}
+              initials={`${form.first_name.charAt(0)}${form.last_name.charAt(0)}`.toUpperCase() || "?"}
+              size="md"
+            />
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted-foreground">Shown on the client&apos;s face sheet so staff can recognise them. JPEG, PNG or WebP, up to 5 MB. Optional.</p>
+              <input
+                ref={photoInput}
+                type="file"
+                accept={PHOTO_ACCEPT}
+                className="sr-only"
+                aria-label="Client photo"
+                onChange={(e) => {
+                  const file = e.target.files?.[0] ?? null;
+                  e.target.value = "";
+                  if (!file) return;
+                  const problem = photoProblem(file);
+                  setPhotoError(problem);
+                  if (!problem) setPhoto(file);
+                }}
+              />
+              <div className="flex gap-2">
+                <Button type="button" size="sm" variant="outline" onClick={() => photoInput.current?.click()}>
+                  {photo ? "Choose a different photo" : "Upload photo"}
+                </Button>
+                {photo && <Button type="button" size="sm" variant="ghost" onClick={() => setPhoto(null)}>Remove</Button>}
+              </div>
+              {photoError && <p className="text-xs text-destructive" role="alert">{photoError}</p>}
+            </div>
+          </fieldset>
+        )}
+
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1.5"><Label>First name</Label><Input required value={form.first_name} onChange={set("first_name")} /></div>
           <div className="space-y-1.5"><Label>Last name</Label><Input required value={form.last_name} onChange={set("last_name")} /></div>
@@ -134,8 +198,14 @@ export function NewClientForm({ prefill }: { prefill?: IntakePrefill } = {}) {
 
         {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
         <div className="flex gap-3">
-          <Button type="submit" disabled={saving}>{saving ? "Saving…" : "Create client"}</Button>
-          <Button type="button" variant="ghost" onClick={() => router.back()}>Cancel</Button>
+          {createdAt ? (
+            <Button type="button" onClick={() => router.push(createdAt)}>Go to the client</Button>
+          ) : (
+            <>
+              <Button type="submit" disabled={saving}>{saving ? "Saving…" : "Create client"}</Button>
+              <Button type="button" variant="ghost" onClick={() => router.back()}>Cancel</Button>
+            </>
+          )}
         </div>
       </form>
     </div>

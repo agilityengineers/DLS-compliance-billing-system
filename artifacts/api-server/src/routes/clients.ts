@@ -12,6 +12,9 @@
 //   clients.authorizations  /clients/:id/authorizations  prior authorizations as records
 //   clients.paperwork       /clients/:id/files           documents on file, stored here
 //
+// The face-sheet photo (/clients/:id/photo) is part of the record itself, so
+// it rides clients.core with the rest of the face sheet.
+//
 // Creating a client from a lead is the conversion: the client row, the lead's
 // move to the funnel's "won" stage and the timeline entry land in one
 // transaction, so a lead can never be half-converted. The lead row is locked
@@ -37,6 +40,8 @@ import {
   CLIENT_FILE_CONTENT_TYPES,
   CLIENT_FILE_MAX_BYTES,
   CLIENT_GENDERS,
+  CLIENT_PHOTO_CONTENT_TYPES,
+  CLIENT_PHOTO_MAX_BYTES,
   CLIENT_STATUSES,
   GUARDIANSHIP_STATUSES,
   MARITAL_STATUSES,
@@ -46,6 +51,7 @@ import {
   clientContactsTable,
   clientFilesTable,
   clientInsurancePoliciesTable,
+  clientPhotosTable,
   clientsTable,
   leadActivitiesTable,
   leadsTable,
@@ -53,6 +59,7 @@ import {
   type ClientContactRow,
   type ClientFileRow,
   type ClientInsurancePolicyRow,
+  type ClientPhotoContentType,
   type ClientRow,
   type Db,
   type DbOrTx,
@@ -248,6 +255,8 @@ export interface ClientJson {
   sourceLeadId: string | null;
   /** Set on a practice record (a copy of a synthetic demo client); null for a real person. */
   sampleKey: string | null;
+  /** When the face-sheet photo was last set; null when there is none. */
+  photoUpdatedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -301,6 +310,7 @@ export function toClientJson(c: ClientRow): ClientJson {
     status: c.status,
     sourceLeadId: c.sourceLeadId,
     sampleKey: c.sampleKey,
+    photoUpdatedAt: c.photoUpdatedAt ? c.photoUpdatedAt.toISOString() : null,
     createdAt: c.createdAt.toISOString(),
     updatedAt: c.updatedAt.toISOString(),
   };
@@ -513,6 +523,22 @@ async function loadClient(db: DbOrTx, orgId: string, id: string): Promise<Client
     .limit(1);
   if (!row) throw notFound("Client not found.");
   return row;
+}
+
+/**
+ * Whether the bytes really are the image the Content-Type claims, by their
+ * signature. A photo is shown inline, so a mislabelled upload (HTML or a
+ * script called image/png) must never reach a browser.
+ */
+export function photoMatchesType(bytes: Buffer, type: ClientPhotoContentType): boolean {
+  switch (type) {
+    case "image/jpeg":
+      return bytes.length > 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+    case "image/png":
+      return bytes.length > 8 && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+    case "image/webp":
+      return bytes.length > 12 && bytes.subarray(0, 4).toString("ascii") === "RIFF" && bytes.subarray(8, 12).toString("ascii") === "WEBP";
+  }
 }
 
 /** A safe file name for a Content-Disposition header: ASCII, no quotes or path. */
@@ -976,6 +1002,76 @@ export function clientsRouter(db: Db, _config: AppConfig, _deps: { mailer: Maile
     if (!row) throw notFound("Authorization not found.");
     await recordAudit(db, { ...actorFor(req, auth, orgId), action: "client.authorization_removed", targetType: "client", targetId: client.id, details: { authorizationId: row.id, service: row.service } });
     res.json({ ok: true });
+  });
+
+  // ── the face-sheet photo ─────────────────────────────────────────────
+  router.get("/clients/:id/photo", async (req, res) => {
+    const orgId = requireOrgId(res);
+    const client = await loadClient(db, orgId, String(req.params.id));
+    const [row] = await db.select().from(clientPhotosTable).where(eq(clientPhotosTable.clientId, client.id)).limit(1);
+    if (!row) throw notFound("No photo on file.");
+    // Shown inline in an <img>, never as a page: the type was checked against
+    // the bytes on the way in, nosniff keeps the browser to it, and the
+    // sandbox policy defangs it if it is ever opened directly.
+    res.setHeader("Content-Type", row.contentType);
+    res.setHeader("Content-Length", String(row.sizeBytes));
+    res.setHeader("Content-Disposition", "inline");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Content-Security-Policy", "sandbox");
+    res.setHeader("Cache-Control", "private, max-age=300");
+    res.send(row.content);
+  });
+
+  /** The photo's bytes as the request body, its type in Content-Type. Replaces any photo already on file. */
+  router.put("/clients/:id/photo", raw({ type: () => true, limit: CLIENT_PHOTO_MAX_BYTES }), async (req, res) => {
+    const auth = requireAuthContext(res);
+    const orgId = requireOrgId(res);
+    const client = await loadClient(db, orgId, String(req.params.id));
+    const contentType = (req.headers["content-type"] ?? "").split(";")[0]!.trim().toLowerCase();
+    if (!(CLIENT_PHOTO_CONTENT_TYPES as readonly string[]).includes(contentType)) {
+      throw badRequest("Upload the photo as a JPEG, PNG or WebP image.");
+    }
+    const content = Buffer.isBuffer(req.body) ? (req.body as Buffer) : Buffer.alloc(0);
+    if (content.length === 0) throw badRequest("The upload was empty.");
+    if (!photoMatchesType(content, contentType as ClientPhotoContentType)) throw badRequest("That file is not the image it says it is.");
+    const now = new Date();
+    const updated = await db.transaction(async (tx) => {
+      await tx
+        .insert(clientPhotosTable)
+        .values({ clientId: client.id, orgId, contentType: contentType as ClientPhotoContentType, sizeBytes: content.length, content, uploadedByUserId: auth.realUser.id })
+        .onConflictDoUpdate({
+          target: clientPhotosTable.clientId,
+          set: { contentType: contentType as ClientPhotoContentType, sizeBytes: content.length, content, uploadedByUserId: auth.realUser.id, updatedAt: now },
+        });
+      const [row] = (await tx
+        .update(clientsTable)
+        .set({ photoUpdatedAt: now, updatedAt: now })
+        .where(and(eq(clientsTable.orgId, orgId), eq(clientsTable.id, client.id)))
+        .returning()) as [ClientRow];
+      return row;
+    });
+    await recordAudit(db, { ...actorFor(req, auth, orgId), action: client.photoUpdatedAt ? "client.photo_replaced" : "client.photo_added", targetType: "client", targetId: client.id, details: { sizeBytes: content.length } });
+    res.json({ client: visibleClient(updated, auth) });
+  });
+
+  router.delete("/clients/:id/photo", async (req, res) => {
+    const auth = requireAuthContext(res);
+    const orgId = requireOrgId(res);
+    const client = await loadClient(db, orgId, String(req.params.id));
+    const now = new Date();
+    const result = await db.transaction(async (tx) => {
+      const removed = await tx.delete(clientPhotosTable).where(eq(clientPhotosTable.clientId, client.id)).returning({ clientId: clientPhotosTable.clientId });
+      const [row] = (await tx
+        .update(clientsTable)
+        .set({ photoUpdatedAt: null, ...(removed.length > 0 ? { updatedAt: now } : {}) })
+        .where(and(eq(clientsTable.orgId, orgId), eq(clientsTable.id, client.id)))
+        .returning()) as [ClientRow];
+      return { row, removed: removed.length > 0 };
+    });
+    if (result.removed) {
+      await recordAudit(db, { ...actorFor(req, auth, orgId), action: "client.photo_removed", targetType: "client", targetId: client.id, details: {} });
+    }
+    res.json({ client: visibleClient(result.row, auth) });
   });
 
   // ── files on record ──────────────────────────────────────────────────

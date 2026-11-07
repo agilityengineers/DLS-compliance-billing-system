@@ -65,6 +65,12 @@ describe.skipIf(!TEST_URL)("client records", () => {
     return { status: res.status, body: text ? JSON.parse(text) : null, cookie: null, headers: res.headers };
   }
 
+  async function putPhoto(path: string, bytes: Uint8Array, contentType: string, cookie: string): Promise<ApiResponse> {
+    const res = await fetch(base + path, { method: "PUT", headers: { "content-type": contentType, cookie }, body: bytes });
+    const text = await res.text();
+    return { status: res.status, body: text ? JSON.parse(text) : null, cookie: null, headers: res.headers };
+  }
+
   async function createAndSignIn(org: string, email: string, role: string): Promise<string> {
     const created = await api("POST", "/api/platform/users", { orgId: org, email, fullName: "Someone", role }, superCookie);
     expect(created.status).toBe(201);
@@ -474,6 +480,65 @@ describe.skipIf(!TEST_URL)("client records", () => {
       expect((await api("DELETE", `/api/clients/${clientId}/files/${fileId}`, undefined, adminCookie)).status).toBe(200);
       expect((await fetch(`${base}/api/clients/${clientId}/files/${fileId}/content`, { headers: { cookie: adminCookie } })).status).toBe(404);
       expect((await api("GET", `/api/clients/${clientId}/files`, undefined, adminCookie)).body.files).toHaveLength(0);
+    });
+  });
+
+  describe("face-sheet photo", () => {
+    // The smallest real PNG: a 1×1 transparent pixel.
+    const png = Uint8Array.from(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=", "base64"));
+    const jpeg = Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00]);
+
+    it("has none until one is uploaded", async () => {
+      const got = await api("GET", `/api/clients/${clientId}`, undefined, adminCookie);
+      expect(got.body.client.photoUpdatedAt).toBeNull();
+      expect((await fetch(`${base}/api/clients/${clientId}/photo`, { headers: { cookie: adminCookie } })).status).toBe(404);
+    });
+
+    it("stores a photo, stamps the record, and serves it inline as the image it is", async () => {
+      const res = await putPhoto(`/api/clients/${clientId}/photo`, png, "image/png", schedulerCookie);
+      expect(res.status).toBe(200);
+      expect(res.body.client.photoUpdatedAt).toEqual(expect.any(String));
+
+      const photo = await fetch(`${base}/api/clients/${clientId}/photo`, { headers: { cookie: adminCookie } });
+      expect(photo.status).toBe(200);
+      expect(photo.headers.get("content-type")).toBe("image/png");
+      expect(photo.headers.get("x-content-type-options")).toBe("nosniff");
+      expect(photo.headers.get("content-security-policy")).toBe("sandbox");
+      expect(new Uint8Array(await photo.arrayBuffer())).toEqual(png);
+
+      const audit = await api("GET", "/api/org/audit?limit=10", undefined, adminCookie);
+      const entry = (audit.body.entries as any[]).find((e) => e.action === "client.photo_added");
+      expect(entry.details).toEqual({ sizeBytes: png.length });
+    });
+
+    it("replaces the photo rather than keeping two", async () => {
+      const res = await putPhoto(`/api/clients/${clientId}/photo`, jpeg, "image/jpeg", adminCookie);
+      expect(res.status).toBe(200);
+      const photo = await fetch(`${base}/api/clients/${clientId}/photo`, { headers: { cookie: adminCookie } });
+      expect(photo.headers.get("content-type")).toBe("image/jpeg");
+      expect(new Uint8Array(await photo.arrayBuffer())).toEqual(jpeg);
+      const audit = await api("GET", "/api/org/audit?limit=10", undefined, adminCookie);
+      expect((audit.body.entries as any[]).some((e) => e.action === "client.photo_replaced")).toBe(true);
+    });
+
+    it("refuses anything that is not a JPEG, PNG or WebP, and anything mislabelled as one", async () => {
+      const html = new TextEncoder().encode("<html><script>alert(1)</script></html>");
+      expect((await putPhoto(`/api/clients/${clientId}/photo`, html, "text/html", adminCookie)).status).toBe(400);
+      expect((await putPhoto(`/api/clients/${clientId}/photo`, html, "image/png", adminCookie)).status).toBe(400);
+      expect((await putPhoto(`/api/clients/${clientId}/photo`, new TextEncoder().encode("<svg/>"), "image/svg+xml", adminCookie)).status).toBe(400);
+      expect((await putPhoto(`/api/clients/${clientId}/photo`, new Uint8Array(0), "image/png", adminCookie)).status).toBe(400);
+    });
+
+    it("stays inside the organization", async () => {
+      expect((await fetch(`${base}/api/clients/${clientId}/photo`, { headers: { cookie: otherAdminCookie } })).status).toBe(404);
+      expect((await putPhoto(`/api/clients/${clientId}/photo`, png, "image/png", otherAdminCookie)).status).toBe(404);
+    });
+
+    it("removes the photo and clears the stamp", async () => {
+      const res = await api("DELETE", `/api/clients/${clientId}/photo`, undefined, adminCookie);
+      expect(res.status).toBe(200);
+      expect(res.body.client.photoUpdatedAt).toBeNull();
+      expect((await fetch(`${base}/api/clients/${clientId}/photo`, { headers: { cookie: adminCookie } })).status).toBe(404);
     });
   });
 

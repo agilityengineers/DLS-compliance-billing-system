@@ -15,6 +15,10 @@
 //   client_files               the paperwork on file for the client, by
 //                              category, with the dates it covers, stored in
 //                              the database so nothing depends on a bucket
+//   client_photos              the one photo on the client's face sheet, so
+//                              staff can recognise the person they serve; kept
+//                              apart from the row so listing clients never
+//                              drags image bytes along
 //
 // The four weekly `authorized_*_per_week` columns stay on the client row for
 // now: claim readiness reads them, and the authorization records are the
@@ -107,6 +111,16 @@ export const CLIENT_FILE_CONTENT_TYPES = [
   "text/csv",
 ] as const;
 
+/** The largest photo the face sheet accepts. */
+export const CLIENT_PHOTO_MAX_BYTES = 5 * 1024 * 1024;
+
+/**
+ * What the face sheet shows: formats every browser renders. No SVG (it can
+ * carry script) and no HEIC (most browsers cannot show it).
+ */
+export const CLIENT_PHOTO_CONTENT_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
+export type ClientPhotoContentType = (typeof CLIENT_PHOTO_CONTENT_TYPES)[number];
+
 export interface ClientDiagnosis {
   code: string;
   description: string;
@@ -198,6 +212,12 @@ export const clientsTable = pgTable(
      * inside the organization, so a practice client is copied at most once.
      */
     sampleKey: text("sample_key"),
+    /**
+     * When the face-sheet photo was last set; null when there is none. The
+     * bytes live in client_photos; this stamp tells a reader there is one
+     * and doubles as the cache-buster for its URL.
+     */
+    photoUpdatedAt: timestamp("photo_updated_at", { withTimezone: true }),
     ...timestamps,
   },
   (t) => [
@@ -356,9 +376,33 @@ export const clientFilesTable = pgTable(
   ]
 );
 
+export const clientPhotosTable = pgTable(
+  "client_photos",
+  {
+    /** One photo per client: replacing it overwrites this row. */
+    clientId: uuid("client_id")
+      .primaryKey()
+      .references(() => clientsTable.id, { onDelete: "cascade" }),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizationsTable.id, { onDelete: "cascade" }),
+    contentType: text("content_type").$type<ClientPhotoContentType>().notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    content: bytea("content").notNull(),
+    uploadedByUserId: uuid("uploaded_by_user_id").references(() => usersTable.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (t) => [
+    index("idx_client_photos_org").on(t.orgId),
+    check("client_photos_size_check", sql`${t.sizeBytes} > 0 and ${t.sizeBytes} <= ${sql.raw(String(CLIENT_PHOTO_MAX_BYTES))}`),
+    check("client_photos_type_check", sql`${t.contentType} in ('image/jpeg', 'image/png', 'image/webp')`),
+  ]
+);
+
 export type ClientRow = typeof clientsTable.$inferSelect;
 export type ClientInsert = typeof clientsTable.$inferInsert;
 export type ClientContactRow = typeof clientContactsTable.$inferSelect;
 export type ClientInsurancePolicyRow = typeof clientInsurancePoliciesTable.$inferSelect;
 export type ClientAuthorizationRow = typeof clientAuthorizationsTable.$inferSelect;
 export type ClientFileRow = typeof clientFilesTable.$inferSelect;
+export type ClientPhotoRow = typeof clientPhotosTable.$inferSelect;

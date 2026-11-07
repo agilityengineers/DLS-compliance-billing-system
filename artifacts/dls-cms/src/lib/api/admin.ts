@@ -690,9 +690,15 @@ export interface ClientRecord {
   sourceLeadId: string | null;
   /** Set on a practice record (a copy of a synthetic demo client); null for a real person. */
   sampleKey?: string | null;
+  /** When the face-sheet photo was last set; null when there is none. */
+  photoUpdatedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
+
+/** The largest face-sheet photo the API accepts, and the formats it takes (mirrors lib/db). */
+export const CLIENT_PHOTO_MAX_BYTES = 5 * 1024 * 1024;
+export const CLIENT_PHOTO_CONTENT_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
 
 /** Everything intake or an edit may send; "" clears a text field on an edit. */
 export interface ClientFieldsInput {
@@ -927,24 +933,7 @@ export const clientsApi = {
     upload: async (clientId: string, file: File, meta: ClientFileMeta): Promise<{ file: ClientFile }> => {
       const params = new URLSearchParams();
       for (const [key, value] of Object.entries(meta)) if (value !== undefined && value !== "") params.set(key, String(value));
-      const res = await fetch(`/api/clients/${clientId}/files?${params}`, {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "content-type": file.type || "application/octet-stream", accept: "application/json" },
-        body: file,
-      });
-      const text = await res.text();
-      let body: unknown = null;
-      try {
-        body = text ? JSON.parse(text) : null;
-      } catch {
-        body = text;
-      }
-      if (!res.ok) {
-        const err = (body as { error?: { code?: string; message?: string } } | null)?.error;
-        throw new ApiClientError(res.status, err?.code ?? "SERVER_ERROR", err?.message ?? (res.status === 413 ? "That file is too large." : `Upload failed (${res.status}).`));
-      }
-      return body as { file: ClientFile };
+      return sendRaw<{ file: ClientFile }>("POST", `/api/clients/${clientId}/files?${params}`, file);
     },
     update: (clientId: string, id: string, patch: Partial<ClientFileMeta>) =>
       apiFetch<{ file: ClientFile }>(`/clients/${clientId}/files/${id}`, { method: "PATCH", json: patch }),
@@ -952,7 +941,38 @@ export const clientsApi = {
     /** A download, so it goes through the browser rather than fetch. */
     contentUrl: (clientId: string, id: string) => `/api/clients/${clientId}/files/${id}/content`,
   },
+
+  /** The one photo on the client's face sheet. */
+  photo: {
+    /** The image's bytes as the body; replaces any photo already on file. */
+    upload: (clientId: string, file: File) => sendRaw<{ client: ClientRecord }>("PUT", `/api/clients/${clientId}/photo`, file),
+    remove: (clientId: string) => apiFetch<{ client: ClientRecord }>(`/clients/${clientId}/photo`, { method: "DELETE" }),
+    /** For an <img src>; the stamp changes the URL whenever the photo does, so a browser never shows a stale one. */
+    url: (clientId: string, photoUpdatedAt: string) => `/api/clients/${clientId}/photo?v=${encodeURIComponent(photoUpdatedAt)}`,
+  },
 };
+
+/** A browser upload with the file as the raw body, answered with JSON (the paperwork folder and the photo). */
+async function sendRaw<T>(method: "POST" | "PUT", url: string, file: File): Promise<T> {
+  const res = await fetch(url, {
+    method,
+    credentials: "same-origin",
+    headers: { "content-type": file.type || "application/octet-stream", accept: "application/json" },
+    body: file,
+  });
+  const text = await res.text();
+  let body: unknown = null;
+  try {
+    body = text ? JSON.parse(text) : null;
+  } catch {
+    body = text;
+  }
+  if (!res.ok) {
+    const err = (body as { error?: { code?: string; message?: string } } | null)?.error;
+    throw new ApiClientError(res.status, err?.code ?? "SERVER_ERROR", err?.message ?? (res.status === 413 ? "That file is too large." : `Upload failed (${res.status}).`));
+  }
+  return body as T;
+}
 
 // ── billing: payers, the fee schedule, the claim ledger ────────────────────
 // Mirrors artifacts/api-server/src/routes/billing.ts.

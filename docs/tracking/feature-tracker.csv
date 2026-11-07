@@ -70,7 +70,7 @@
 69,Client,Client Intake Form - Personal Information,Fluid Consistencies,Multi-select,,,Missing,No fluid consistencies.,,,ask (day habilitation?),,,
 70,Client,Client Intake Form - Personal Information,Eating Guideline,Multi-select,,,Missing,No eating guideline.,,,ask (day habilitation?),,,
 71,Client,Client Intake Form - Personal Information,Behavior Management (BSP) + comment,Checkbox/Text,,,Built,"Behavior support plan checkbox with notes, on the Health & support tab.",clients.health,PR #36,,,,
-72,Client,Client Intake Form - Personal Information,Client photo,Image,,,Missing,No client photo.,,,,,,
+72,Client,Client Intake Form - Personal Information,Client photo,Image,,,Built,"Photo on the client's face sheet (top of the client page, beside the name): upload, change or remove; initials show when there is none. The intake form takes one too, with a preview, saved as the client is created. JPEG, PNG or WebP up to 5 MB, stored in the database. Not yet on the roster (row 43).",clients.core,branch claude/sweet-hawking-yav5cd,,,,
 73,Client,Client Intake Form - Responsible Party,"Name, Address, Phone, State, City, Zip",Text/Dropdown,,,Built,"Responsible party on the Contacts tab: name, relationship, phone, email, address; one contact can be marked primary.",clients.contacts,PR #36,,,,
 74,Client,Client Intake Form - Physical Characteristics,"Height (ft/in), Weight",Number,,,Missing,No height / weight.,,,ask,,,
 75,Client,Client Intake Form - Physical Characteristics,Skin Integrity,Dropdown,,,Missing,No skin integrity.,,,ask,,,

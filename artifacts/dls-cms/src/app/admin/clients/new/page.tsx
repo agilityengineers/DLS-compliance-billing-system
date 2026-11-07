@@ -23,5 +23,6 @@ export default async function NewClientPage(props: PageProps) {
       // The intake still works without the inquiry; it just starts empty.
     }
   }
-  return <NewClientForm prefill={prefill} />;
+  // The photo is stored by the API, so it is offered only with real sign-in.
+  return <NewClientForm prefill={prefill} photoEnabled={isApiAuth()} />;
 }
