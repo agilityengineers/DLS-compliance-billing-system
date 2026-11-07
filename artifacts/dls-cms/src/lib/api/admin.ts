@@ -605,15 +605,18 @@ export type ClientGender = "Male" | "Female" | "Other" | "Unknown";
 export const CLIENT_GENDERS: readonly ClientGender[] = ["Male", "Female", "Other", "Unknown"];
 export const GUARDIANSHIP_STATUSES = ["Not applicable", "Guardian", "Court appointed"] as const;
 export const MARITAL_STATUSES = ["Single", "Married", "Divorced", "Separated", "Widowed", "Other"] as const;
-export type ClientContactKind = "responsible_party" | "guardian" | "emergency" | "physician" | "case_manager" | "other";
+export type ClientContactKind = "responsible_party" | "guardian" | "emergency" | "physician" | "case_manager" | "external_provider" | "other";
 export const CLIENT_CONTACT_KIND_LABELS: Record<ClientContactKind, string> = {
   responsible_party: "Responsible party",
   guardian: "Guardian",
   emergency: "Emergency contact",
   physician: "Physician",
   case_manager: "Case manager",
+  external_provider: "External provider",
   other: "Other",
 };
+/** The care-team roles, also managed from the record's "Care team" section. */
+export const CARE_TEAM_CONTACT_KINDS: readonly ClientContactKind[] = ["case_manager", "external_provider"];
 export type PolicyType = "primary" | "secondary" | "tertiary";
 export type PolicyStatus = "active" | "inactive";
 export type AuthorizationService = "SCC" | "Job_Coaching" | "Day_Habilitation" | "Early_Intervention" | "NMT" | "Other";
@@ -762,6 +765,8 @@ export interface ClientContact {
   name: string;
   relationship: string | null;
   phone: string | null;
+  phoneWork: string | null;
+  phoneCell: string | null;
   email: string | null;
   address1: string | null;
   city: string | null;
@@ -770,6 +775,8 @@ export interface ClientContact {
   npi: string | null;
   isPrimary: boolean;
   notes: string | null;
+  /** When the person took on the role (YYYY-MM-DD). */
+  startDate: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -779,6 +786,8 @@ export interface ClientContactInput {
   name: string;
   relationship?: string;
   phone?: string;
+  phoneWork?: string;
+  phoneCell?: string;
   email?: string;
   address1?: string;
   city?: string;
@@ -787,6 +796,7 @@ export interface ClientContactInput {
   npi?: string;
   isPrimary?: boolean;
   notes?: string;
+  startDate?: string;
 }
 
 export interface ClientPolicy {

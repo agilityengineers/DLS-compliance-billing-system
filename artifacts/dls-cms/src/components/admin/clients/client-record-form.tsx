@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { selectClass } from "./format";
+import { ClientCareTeam } from "./client-care-team";
 
 type Draft = {
   firstName: string;
@@ -115,10 +116,13 @@ export function ClientRecordForm({
   client,
   isAdmin,
   onSaved,
+  careTeam = false,
 }: {
   client: ClientRecord;
   isAdmin: boolean;
   onSaved: (client: ClientRecord) => void;
+  /** Show the case manager / external provider drop-down (needs clients.contacts). */
+  careTeam?: boolean;
 }) {
   const [draft, setDraft] = useState<Draft>(() => draftOf(client));
   const [diagnoses, setDiagnoses] = useState<ClientDiagnosis[]>(client.activeDiagnoses);
@@ -126,6 +130,7 @@ export function ClientRecordForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [caseManagerNote, setCaseManagerNote] = useState<string | null>(null);
 
   const set = <K extends keyof Draft>(key: K) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setSaved(false);
@@ -149,6 +154,7 @@ export function ClientRecordForm({
       setDraft(draftOf(res.client));
       setDiagnoses(res.client.activeDiagnoses);
       setSaved(true);
+      setCaseManagerNote(null);
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -254,9 +260,21 @@ export function ClientRecordForm({
           {text("authorizedEiHoursPerWeek", "Early Intervention hrs / week", "number", { min: 0, step: 0.25 })}
           {text("authorizedNmtTripsPerWeek", "NMT trips / week", "number", { min: 0, step: 1 })}
         </div>
+        {caseManagerNote && <p className="px-4 pb-2 text-xs text-foreground" role="status">{caseManagerNote}</p>}
         <p className="px-4 pb-4 text-xs text-muted-foreground">
           Claim readiness still reads these weekly caps. Record the authorization itself, with its number and period, on the Authorizations tab.
         </p>
+        {careTeam && (
+          <ClientCareTeam
+            clientId={client.id}
+            onCaseManagerChanged={(name) => {
+              if (name === draft.caseManagerName) return;
+              setSaved(false);
+              setDraft((d) => ({ ...d, caseManagerName: name }));
+              setCaseManagerNote(`Case manager set to ${name}, the most recent on file. Save the record to keep it.`);
+            }}
+          />
+        )}
       </section>
 
       <section className="rounded-card border border-border bg-card">

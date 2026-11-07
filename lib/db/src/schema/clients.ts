@@ -6,7 +6,8 @@
 //                              and support notes staff read before a visit
 //   client_contacts            the people around the client: responsible
 //                              party, guardian, emergency contact, physician,
-//                              case manager
+//                              and the care team: case manager and other
+//                              external providers, with the date each began
 //   client_insurance_policies  primary / secondary coverage with the member
 //                              and group numbers a claim needs
 //   client_authorizations      prior authorizations as records of their own:
@@ -52,7 +53,15 @@ export type GuardianshipStatus = (typeof GUARDIANSHIP_STATUSES)[number];
 export const MARITAL_STATUSES = ["Single", "Married", "Divorced", "Separated", "Widowed", "Other"] as const;
 export type MaritalStatus = (typeof MARITAL_STATUSES)[number];
 
-export const CLIENT_CONTACT_KINDS = ["responsible_party", "guardian", "emergency", "physician", "case_manager", "other"] as const;
+export const CLIENT_CONTACT_KINDS = [
+  "responsible_party",
+  "guardian",
+  "emergency",
+  "physician",
+  "case_manager",
+  "external_provider",
+  "other",
+] as const;
 export type ClientContactKind = (typeof CLIENT_CONTACT_KINDS)[number];
 
 export const POLICY_TYPES = ["primary", "secondary", "tertiary"] as const;
@@ -232,6 +241,9 @@ export const clientContactsTable = pgTable(
     name: text("name").notNull(),
     relationship: text("relationship"),
     phone: text("phone"),
+    /** Separate work and cell numbers, mainly for case managers and external providers. */
+    phoneWork: text("phone_work"),
+    phoneCell: text("phone_cell"),
     email: text("email"),
     address1: text("address1"),
     city: text("city"),
@@ -241,13 +253,15 @@ export const clientContactsTable = pgTable(
     npi: text("npi"),
     isPrimary: boolean("is_primary").notNull().default(false),
     notes: text("notes"),
+    /** When this person took on the role for the client, e.g. the day a case manager was assigned. */
+    startDate: date("start_date"),
     ...timestamps,
   },
   (t) => [
     index("idx_client_contacts_client").on(t.clientId),
     check(
       "client_contacts_kind_check",
-      sql`${t.kind} in ('responsible_party', 'guardian', 'emergency', 'physician', 'case_manager', 'other')`
+      sql`${t.kind} in ('responsible_party', 'guardian', 'emergency', 'physician', 'case_manager', 'external_provider', 'other')`
     ),
   ]
 );
