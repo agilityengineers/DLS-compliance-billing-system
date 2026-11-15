@@ -16,6 +16,7 @@ import { ClientInsuranceTab } from "./client-insurance-tab";
 import { ClientAuthorizationsTab, type AuthorizationUsage } from "./client-authorizations-tab";
 import { ClientFilesTab } from "./client-files-tab";
 import { ClientHealthTab } from "./client-health-tab";
+import { ClientPhoto } from "./client-photo";
 import { STATUS_VARIANT, clientName, formatDate } from "./format";
 
 /** A delivered service, as the page could see it: enough to count usage against an authorization. */
@@ -98,14 +99,19 @@ export function ClientDetail({
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
+        <div className="space-y-2">
           <Link href="/admin/clients" className="text-sm text-plum hover:underline">← Clients</Link>
-          <h1 className="page-title mt-1">{clientName(client)}</h1>
-          <p className="text-sm text-muted-foreground">
-            {client.medicaidId ? `Medicaid ID ${client.medicaidId}` : "No Medicaid ID yet"}
-            {client.dateOfBirth ? ` · born ${formatDate(client.dateOfBirth)}` : ""}
-            {client.caseManagerName ? ` · case manager ${client.caseManagerName}` : ""}
-          </p>
+          <div className="flex flex-wrap items-start gap-4">
+            <ClientPhoto client={client} onSaved={setClient} />
+            <div>
+              <h1 className="page-title">{clientName(client)}</h1>
+              <p className="text-sm text-muted-foreground">
+                {client.medicaidId ? `Medicaid ID ${client.medicaidId}` : "No Medicaid ID yet"}
+                {client.dateOfBirth ? ` · born ${formatDate(client.dateOfBirth)}` : ""}
+                {client.caseManagerName ? ` · case manager ${client.caseManagerName}` : ""}
+              </p>
+            </div>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {client.sampleKey && <Badge variant="warning">Practice</Badge>}
