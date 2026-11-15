@@ -68,6 +68,7 @@ export interface Client {
   ethnicity?: string | null;
   race?: string | null;
   guardianship_status?: string | null;
+  rep_payee_status?: string | null;
   account_code?: string | null;
   admission_date?: string | null;
   discharge_date?: string | null;

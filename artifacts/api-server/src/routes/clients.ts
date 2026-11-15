@@ -42,6 +42,7 @@ import {
   MARITAL_STATUSES,
   POLICY_STATUSES,
   POLICY_TYPES,
+  REP_PAYEE_STATUSES,
   clientAuthorizationsTable,
   clientContactsTable,
   clientFilesTable,
@@ -92,6 +93,16 @@ const ClientFields = z.object({
   ethnicity: optionalText(80),
   race: optionalText(80),
   guardianshipStatus: optionalChoice(GUARDIANSHIP_STATUSES),
+  repPayeeStatus: optionalChoice(REP_PAYEE_STATUSES),
+  repPayeeName: optionalText(200),
+  repPayeeAddress1: optionalText(200),
+  repPayeeAddress2: optionalText(200),
+  repPayeeCity: optionalText(120),
+  repPayeeState: optionalText(2),
+  repPayeeZip: optionalText(10),
+  repPayeePhone: optionalText(40),
+  repPayeeEmail: z.union([z.literal(""), z.email().max(254)]).optional(),
+  repPayeeNumber: optionalText(60),
   accountCode: optionalText(40),
   admissionDate: optionalDate,
   dischargeDate: optionalDate,
@@ -215,6 +226,16 @@ export interface ClientJson {
   ethnicity: string | null;
   race: string | null;
   guardianshipStatus: string | null;
+  repPayeeStatus: string | null;
+  repPayeeName: string | null;
+  repPayeeAddress1: string | null;
+  repPayeeAddress2: string | null;
+  repPayeeCity: string | null;
+  repPayeeState: string | null;
+  repPayeeZip: string | null;
+  repPayeePhone: string | null;
+  repPayeeEmail: string | null;
+  repPayeeNumber: string | null;
   accountCode: string | null;
   admissionDate: string | null;
   dischargeDate: string | null;
@@ -270,6 +291,16 @@ export function toClientJson(c: ClientRow): ClientJson {
     ethnicity: c.ethnicity,
     race: c.race,
     guardianshipStatus: c.guardianshipStatus,
+    repPayeeStatus: c.repPayeeStatus,
+    repPayeeName: c.repPayeeName,
+    repPayeeAddress1: c.repPayeeAddress1,
+    repPayeeAddress2: c.repPayeeAddress2,
+    repPayeeCity: c.repPayeeCity,
+    repPayeeState: c.repPayeeState,
+    repPayeeZip: c.repPayeeZip,
+    repPayeePhone: c.repPayeePhone,
+    repPayeeEmail: c.repPayeeEmail,
+    repPayeeNumber: c.repPayeeNumber,
     accountCode: c.accountCode,
     admissionDate: c.admissionDate,
     dischargeDate: c.dischargeDate,
@@ -419,6 +450,33 @@ function normalizeDiagnoses(list: z.infer<typeof Diagnosis>[]): z.infer<typeof D
 /** The column values a create or an edit sets, from the validated body. */
 function fieldValues(body: z.infer<typeof ClientFields>, mode: "create" | "patch") {
   const text = mode === "create" ? blankToNull : patchText;
+  return { ...coreFieldValues(body, mode, text), ...repPayeeValues(body, mode, text) };
+}
+
+/**
+ * The rep payee columns. Details are kept only alongside "Rep payee": a body
+ * that sets the status to anything else (or clears it) clears them too, so a
+ * hidden, stale payee never lingers on the record.
+ */
+function repPayeeValues(body: z.infer<typeof ClientFields>, mode: "create" | "patch", text: typeof blankToNull | typeof patchText) {
+  const status = text(body.repPayeeStatus) as ClientRow["repPayeeStatus"] | undefined;
+  const clearDetails = body.repPayeeStatus !== undefined && body.repPayeeStatus !== "Rep payee";
+  const detail = (v: string | undefined) => (clearDetails ? null : text(v));
+  return {
+    repPayeeStatus: status,
+    repPayeeName: detail(body.repPayeeName),
+    repPayeeAddress1: detail(body.repPayeeAddress1),
+    repPayeeAddress2: detail(body.repPayeeAddress2),
+    repPayeeCity: detail(body.repPayeeCity),
+    repPayeeState: clearDetails ? null : body.repPayeeState === undefined ? (mode === "create" ? null : undefined) : body.repPayeeState === "" ? null : body.repPayeeState.toUpperCase(),
+    repPayeeZip: detail(body.repPayeeZip),
+    repPayeePhone: detail(body.repPayeePhone),
+    repPayeeEmail: clearDetails ? null : body.repPayeeEmail === undefined ? (mode === "create" ? null : undefined) : body.repPayeeEmail === "" ? null : body.repPayeeEmail.toLowerCase(),
+    repPayeeNumber: detail(body.repPayeeNumber),
+  };
+}
+
+function coreFieldValues(body: z.infer<typeof ClientFields>, mode: "create" | "patch", text: typeof blankToNull | typeof patchText) {
   return {
     middleName: text(body.middleName),
     email: body.email === undefined ? (mode === "create" ? null : undefined) : body.email === "" ? null : body.email.toLowerCase(),
