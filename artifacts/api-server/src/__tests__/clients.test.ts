@@ -279,6 +279,52 @@ describe.skipIf(!TEST_URL)("client records", () => {
       expect((await api("DELETE", `/api/clients/${clientId}/contacts/${physician.body.contact.id}`, undefined, adminCookie)).status).toBe(404);
     });
 
+    it("records a case manager and an external provider with work and cell phones and a start date", async () => {
+      const cm = await api(
+        "POST",
+        `/api/clients/${clientId}/contacts`,
+        {
+          kind: "case_manager",
+          name: "Jordan Lee",
+          relationship: "Larimer County CCB",
+          phoneWork: "970-555-0140",
+          phoneCell: "970-555-0141",
+          email: "jlee@ccb.example",
+          address1: "100 Main St",
+          city: "Fort Collins",
+          state: "co",
+          zip: "80521",
+          startDate: "2026-03-02",
+        },
+        schedulerCookie
+      );
+      expect(cm.status).toBe(201);
+      expect(cm.body.contact).toMatchObject({
+        kind: "case_manager",
+        phoneWork: "970-555-0140",
+        phoneCell: "970-555-0141",
+        state: "CO",
+        startDate: "2026-03-02",
+      });
+
+      const provider = await api("POST", `/api/clients/${clientId}/contacts`, { kind: "external_provider", name: "Sam Ortiz", relationship: "Speech therapist" }, adminCookie);
+      expect(provider.status).toBe(201);
+      expect(provider.body.contact).toMatchObject({ kind: "external_provider", startDate: null, phoneWork: null, phoneCell: null });
+
+      const badDate = await api("POST", `/api/clients/${clientId}/contacts`, { kind: "external_provider", name: "Bad Date", startDate: "03/02/2026" }, adminCookie);
+      expect(badDate.status).toBe(400);
+
+      const edited = await api("PATCH", `/api/clients/${clientId}/contacts/${provider.body.contact.id}`, { startDate: "2026-04-15", phoneCell: "970-555-0150" }, adminCookie);
+      expect(edited.status).toBe(200);
+      expect(edited.body.contact).toMatchObject({ startDate: "2026-04-15", phoneCell: "970-555-0150", name: "Sam Ortiz" });
+      const cleared = await api("PATCH", `/api/clients/${clientId}/contacts/${provider.body.contact.id}`, { startDate: "" }, adminCookie);
+      expect(cleared.body.contact.startDate).toBeNull();
+
+      for (const id of [cm.body.contact.id, provider.body.contact.id]) {
+        expect((await api("DELETE", `/api/clients/${clientId}/contacts/${id}`, undefined, adminCookie)).status).toBe(200);
+      }
+    });
+
     it("closes when the provider withholds the capability, while the record stays open", async () => {
       expect((await api("PUT", "/api/platform/features/clients.contacts", { enabled: false }, superCookie)).status).toBe(200);
       expect((await api("GET", `/api/clients/${clientId}/contacts`, undefined, adminCookie)).status).toBe(403);

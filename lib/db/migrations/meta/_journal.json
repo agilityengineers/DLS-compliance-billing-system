@@ -85,6 +85,13 @@
       "when": 1793921329644,
       "tag": "0011_website_feeds",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1794087459545,
+      "tag": "0012_client_care_team",
+      "breakpoints": true
     }
   ]
 }

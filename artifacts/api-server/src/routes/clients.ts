@@ -146,6 +146,8 @@ const ContactBody = z.object({
   name: z.string().trim().min(1).max(160),
   relationship: optionalText(80),
   phone: optionalText(40),
+  phoneWork: optionalText(40),
+  phoneCell: optionalText(40),
   email: z.union([z.literal(""), z.email().max(254)]).optional(),
   address1: optionalText(200),
   city: optionalText(120),
@@ -154,6 +156,8 @@ const ContactBody = z.object({
   npi: z.union([z.literal(""), z.string().regex(/^\d{10}$/, "An NPI is 10 digits.")]).optional(),
   isPrimary: z.boolean().optional(),
   notes: optionalText(2000),
+  /** When the person took on the role, e.g. the day a case manager was assigned. */
+  startDate: optionalDate,
 });
 const ContactPatch = ContactBody.partial();
 
@@ -333,6 +337,8 @@ export function toContactJson(r: ClientContactRow) {
     name: r.name,
     relationship: r.relationship,
     phone: r.phone,
+    phoneWork: r.phoneWork,
+    phoneCell: r.phoneCell,
     email: r.email,
     address1: r.address1,
     city: r.city,
@@ -341,6 +347,7 @@ export function toContactJson(r: ClientContactRow) {
     npi: r.npi,
     isPrimary: r.isPrimary,
     notes: r.notes,
+    startDate: r.startDate,
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),
   };
@@ -742,6 +749,8 @@ export function clientsRouter(db: Db, _config: AppConfig, _deps: { mailer: Maile
         name: body.name,
         relationship: blankToNull(body.relationship),
         phone: blankToNull(body.phone),
+        phoneWork: blankToNull(body.phoneWork),
+        phoneCell: blankToNull(body.phoneCell),
         email: blankToNull(body.email)?.toLowerCase() ?? null,
         address1: blankToNull(body.address1),
         city: blankToNull(body.city),
@@ -750,6 +759,7 @@ export function clientsRouter(db: Db, _config: AppConfig, _deps: { mailer: Maile
         npi: blankToNull(body.npi),
         isPrimary: body.isPrimary ?? false,
         notes: blankToNull(body.notes),
+        startDate: blankToNull(body.startDate),
       })
       .returning();
     await recordAudit(db, { ...actorFor(req, auth, orgId), action: "client.contact_added", targetType: "client", targetId: client.id, details: { contactId: row!.id, kind: body.kind } });
@@ -766,6 +776,8 @@ export function clientsRouter(db: Db, _config: AppConfig, _deps: { mailer: Maile
       name: body.name,
       relationship: patchText(body.relationship),
       phone: patchText(body.phone),
+      phoneWork: patchText(body.phoneWork),
+      phoneCell: patchText(body.phoneCell),
       email: body.email === undefined ? undefined : body.email === "" ? null : body.email.toLowerCase(),
       address1: patchText(body.address1),
       city: patchText(body.city),
@@ -774,6 +786,7 @@ export function clientsRouter(db: Db, _config: AppConfig, _deps: { mailer: Maile
       npi: patchText(body.npi),
       isPrimary: body.isPrimary,
       notes: patchText(body.notes),
+      startDate: patchText(body.startDate),
     });
     const [row] = await db
       .update(clientContactsTable)
