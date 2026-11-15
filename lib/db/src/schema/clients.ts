@@ -48,6 +48,8 @@ export type ClientGender = (typeof CLIENT_GENDERS)[number];
 
 export const GUARDIANSHIP_STATUSES = ["Not applicable", "Guardian", "Court appointed"] as const;
 export type GuardianshipStatus = (typeof GUARDIANSHIP_STATUSES)[number];
+/** The statuses that mean someone else decides for the client, so the guardian's details are required. */
+export const GUARDIAN_REQUIRED_STATUSES: readonly GuardianshipStatus[] = ["Guardian", "Court appointed"];
 
 export const MARITAL_STATUSES = ["Single", "Married", "Divorced", "Separated", "Widowed", "Other"] as const;
 export type MaritalStatus = (typeof MARITAL_STATUSES)[number];
@@ -149,6 +151,18 @@ export const clientsTable = pgTable(
     ethnicity: text("ethnicity"),
     race: text("race"),
     guardianshipStatus: text("guardianship_status").$type<GuardianshipStatus>(),
+    // ── the guardian, when guardianship is "Guardian" or "Court appointed" ──
+    // Kept on the record itself (not only as a client_contacts row) so it is
+    // captured whatever feature switches the organization has on.
+    guardianName: text("guardian_name"),
+    guardianRelationship: text("guardian_relationship"),
+    guardianEmail: text("guardian_email"),
+    guardianPhone: text("guardian_phone"),
+    guardianAddress1: text("guardian_address1"),
+    guardianAddress2: text("guardian_address2"),
+    guardianCity: text("guardian_city"),
+    guardianState: text("guardian_state"),
+    guardianZip: text("guardian_zip"),
     /** The agency's own reference for the client, if it keeps one. */
     accountCode: text("account_code"),
     admissionDate: date("admission_date"),

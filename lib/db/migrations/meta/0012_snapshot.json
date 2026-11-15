@@ -1,5 +1,5 @@
 {
-  "id": "655d18dd-3d30-489a-95d1-e5d3fb85944f",
+  "id": "0c583da6-0333-49ec-9861-6097f51a9ac1",
   "prevId": "13e5569f-d64e-4bbd-846a-e4cae5ac108c",
   "version": "7",
   "dialect": "postgresql",
@@ -2562,6 +2562,60 @@
           "primaryKey": false,
           "notNull": false
         },
+        "guardian_name": {
+          "name": "guardian_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "guardian_relationship": {
+          "name": "guardian_relationship",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "guardian_email": {
+          "name": "guardian_email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "guardian_phone": {
+          "name": "guardian_phone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "guardian_address1": {
+          "name": "guardian_address1",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "guardian_address2": {
+          "name": "guardian_address2",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "guardian_city": {
+          "name": "guardian_city",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "guardian_state": {
+          "name": "guardian_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "guardian_zip": {
+          "name": "guardian_zip",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "account_code": {
           "name": "account_code",
           "type": "text",
@@ -2684,42 +2738,6 @@
         },
         "ccb_name": {
           "name": "ccb_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "ccb_phone": {
-          "name": "ccb_phone",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "ccb_email": {
-          "name": "ccb_email",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "ccb_address1": {
-          "name": "ccb_address1",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "ccb_city": {
-          "name": "ccb_city",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "ccb_state": {
-          "name": "ccb_state",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "ccb_zip": {
-          "name": "ccb_zip",
           "type": "text",
           "primaryKey": false,
           "notNull": false
