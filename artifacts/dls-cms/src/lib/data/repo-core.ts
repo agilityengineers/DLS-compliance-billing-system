@@ -260,6 +260,12 @@ export async function createClientRecord(
           authorizedEiHoursPerWeek: input.authorized_ei_hours_per_week,
           caseManagerName: input.case_manager_name ?? "",
           ccbName: input.ccb_name ?? "",
+          ccbPhone: input.ccb_phone ?? "",
+          ccbEmail: input.ccb_email ?? "",
+          ccbAddress1: input.ccb_address1 ?? "",
+          ccbCity: input.ccb_city ?? "",
+          ccbState: input.ccb_state ?? "",
+          ccbZip: input.ccb_zip ?? "",
           residenceLat: input.residence_gps?.lat ?? null,
           residenceLng: input.residence_gps?.lng ?? null,
           sourceLeadId: opts.sourceLeadId,
@@ -278,7 +284,11 @@ export async function createClientRecord(
     store.audit("clients", "INSERT", client.id, null, { ...client }, ctx);
     return { ok: true, id: client.id };
   }
-  const { residence_gps, ...rest } = input;
+  // The legacy Supabase table has no columns for the agency's contact
+  // details; those live only in the API's clients table.
+  /* eslint-disable @typescript-eslint/no-unused-vars */
+  const { residence_gps, ccb_phone, ccb_email, ccb_address1, ccb_city, ccb_state, ccb_zip, ...rest } = input;
+  /* eslint-enable @typescript-eslint/no-unused-vars */
   const { data, error } = await createDataClient()
     .from("clients")
     .insert({ ...rest, residence_gps: residence_gps ? `(${residence_gps.lat},${residence_gps.lng})` : null })
