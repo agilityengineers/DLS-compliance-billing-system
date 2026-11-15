@@ -4,7 +4,7 @@
 // shown only to an Admin because the API refuses it from anyone else.
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   CLIENT_GENDERS,
   CLIENT_STATUSES,
@@ -22,7 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { DiagnosisEntry } from "./diagnosis-entry";
+import { DiagnosisEntry, type DiagnosisEntryHandle } from "./diagnosis-entry";
 import { selectClass } from "./format";
 
 type Draft = {
@@ -123,6 +123,7 @@ export function ClientRecordForm({
 }) {
   const [draft, setDraft] = useState<Draft>(() => draftOf(client));
   const [diagnoses, setDiagnoses] = useState<ClientDiagnosis[]>(client.activeDiagnoses);
+  const dxEntry = useRef<DiagnosisEntryHandle>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -139,10 +140,19 @@ export function ClientRecordForm({
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setSaving(true);
     setError(null);
+    // A diagnosis typed but never added still counts; a bad one stops the save.
+    const pending = dxEntry.current?.takePending() ?? { status: "empty" as const };
+    if (pending.status === "invalid") {
+      setError(`Diagnosis not added: ${pending.error}`);
+      return;
+    }
+    const allDiagnoses: ClientDiagnosis[] =
+      pending.status === "ok" ? [...diagnoses, { ...pending.value, isPrimary: diagnoses.length === 0 }] : diagnoses;
+    if (pending.status === "ok") setDiagnoses(allDiagnoses);
+    setSaving(true);
     try {
-      const patch: ClientPatchInput = { ...draft, activeDiagnoses: diagnoses };
+      const patch: ClientPatchInput = { ...draft, activeDiagnoses: allDiagnoses };
       if (!isAdmin) delete patch.status;
       const res = await clientsApi.update(client.id, patch);
       onSaved(res.client);
@@ -265,6 +275,7 @@ export function ClientRecordForm({
         </h2>
         <div className="space-y-3 p-4">
           <DiagnosisEntry
+            ref={dxEntry}
             existing={diagnoses}
             onAdd={(d) => {
               setSaved(false);

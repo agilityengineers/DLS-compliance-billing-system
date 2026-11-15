@@ -1,13 +1,13 @@
 // app/admin/clients/new/page.tsx — intake form with live age + diagnosis count
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { DiagnosisEntry, type DiagnosisDraft } from "@/components/admin/clients/diagnosis-entry";
+import { DiagnosisEntry, type DiagnosisDraft, type DiagnosisEntryHandle } from "@/components/admin/clients/diagnosis-entry";
 import { createClientRecord } from "../actions";
 
 type Dx = DiagnosisDraft;
@@ -33,6 +33,7 @@ export function NewClientForm({ prefill }: { prefill?: IntakePrefill } = {}) {
     case_manager_name: "", ccb_name: ""
   });
   const [diagnoses, setDiagnoses] = useState<Dx[]>([]);
+  const dxEntry = useRef<DiagnosisEntryHandle>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -51,8 +52,17 @@ export function NewClientForm({ prefill }: { prefill?: IntakePrefill } = {}) {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setSaving(true); setError(null);
-    const res = await createClientRecord({ ...form, active_diagnoses: diagnoses, source_lead_id: prefill?.lead_id });
+    setError(null);
+    // A diagnosis typed but never added still counts; a bad one stops the save.
+    const pending = dxEntry.current?.takePending() ?? { status: "empty" as const };
+    if (pending.status === "invalid") {
+      setError(`Diagnosis not added: ${pending.error}`);
+      return;
+    }
+    const allDiagnoses = pending.status === "ok" ? [...diagnoses, pending.value] : diagnoses;
+    if (pending.status === "ok") setDiagnoses(allDiagnoses);
+    setSaving(true);
+    const res = await createClientRecord({ ...form, active_diagnoses: allDiagnoses, source_lead_id: prefill?.lead_id });
     setSaving(false);
     if (!res.ok) { setError(res.error ?? "Failed to save."); return; }
     router.push(prefill ? `/admin/leads/${prefill.lead_id}` : res.id ? `/admin/clients/${res.id}` : "/admin/clients");
@@ -111,7 +121,7 @@ export function NewClientForm({ prefill }: { prefill?: IntakePrefill } = {}) {
           <legend className="px-1 text-sm font-medium">
             Active diagnoses <Badge variant="muted">{diagnoses.length}</Badge>
           </legend>
-          <DiagnosisEntry existing={diagnoses} onAdd={(d) => setDiagnoses((list) => [...list, d])} />
+          <DiagnosisEntry ref={dxEntry} existing={diagnoses} onAdd={(d) => setDiagnoses((list) => [...list, d])} />
           <ul className="divide-y divide-border rounded-md border border-border text-sm">
             {diagnoses.map((d, i) => (
               <li key={`${d.code}-${i}`} className="flex items-center justify-between gap-2 px-3 py-2">

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeIcd10, validateDiagnosis } from "../diagnosis-entry";
+import { normalizeIcd10, pendingDiagnosis, validateDiagnosis } from "../diagnosis-entry";
 
 describe("normalizeIcd10", () => {
   it("trims and upper-cases", () => {
@@ -28,5 +28,23 @@ describe("validateDiagnosis", () => {
     const list = [{ code: "F84.0" }, { code: "G40.909" }];
     expect(validateDiagnosis({ code: "F71", description: "" }, list)).toMatchObject({ ok: true });
     expect(validateDiagnosis({ code: "f84.0", description: "" }, list)).toEqual({ ok: false, error: "F84.0 is already on the list." });
+  });
+});
+
+describe("pendingDiagnosis (what is left in the boxes on save)", () => {
+  it("is empty when nothing, or only spaces, is typed", () => {
+    expect(pendingDiagnosis({ code: " ", description: "  " }, [])).toEqual({ status: "empty" });
+  });
+
+  it("hands over a typed-but-not-added diagnosis so it is saved", () => {
+    expect(pendingDiagnosis({ code: "f71", description: "Moderate ID" }, [{ code: "F84.0" }])).toEqual({
+      status: "ok",
+      value: { code: "F71", description: "Moderate ID" },
+    });
+  });
+
+  it("stops the save for a description with no code, or a duplicate", () => {
+    expect(pendingDiagnosis({ code: "", description: "Autism" }, [])).toMatchObject({ status: "invalid" });
+    expect(pendingDiagnosis({ code: "F84.0", description: "" }, [{ code: "F84.0" }])).toMatchObject({ status: "invalid" });
   });
 });

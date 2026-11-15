@@ -5,9 +5,12 @@
 // the page's own form. So pressing Enter in either box would normally submit
 // the whole page. Here, Enter adds the diagnosis instead, and a missing code
 // or a duplicate shows a message rather than doing nothing.
+//
+// The parent form calls takePending() on save, so a diagnosis that was typed
+// but never added is not lost: it is added, or the save stops with a message.
 "use client";
 
-import { useRef, useState } from "react";
+import { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -40,16 +43,48 @@ export function validateDiagnosis(
   return { ok: true, value: { code, description } };
 }
 
-export function DiagnosisEntry({
-  existing,
-  onAdd,
-}: {
-  existing: readonly { code: string }[];
-  onAdd: (dx: DiagnosisDraft) => void;
-}) {
+/** What is left in the entry boxes when the page is saved. */
+export type PendingDiagnosis =
+  | { status: "empty" }
+  | { status: "ok"; value: DiagnosisDraft }
+  | { status: "invalid"; error: string };
+
+export interface DiagnosisEntryHandle {
+  /**
+   * Hand over whatever is still typed in the boxes. A valid entry is returned
+   * and the boxes are cleared; an invalid one stays put with its message shown.
+   */
+  takePending: () => PendingDiagnosis;
+}
+
+/** Sort out what is still typed in the boxes when the page is saved. */
+export function pendingDiagnosis(draft: DiagnosisDraft, existing: readonly { code: string }[]): PendingDiagnosis {
+  if (!draft.code.trim() && !draft.description.trim()) return { status: "empty" };
+  const res = validateDiagnosis(draft, existing);
+  return res.ok ? { status: "ok", value: res.value } : { status: "invalid", error: res.error };
+}
+
+export const DiagnosisEntry = forwardRef<
+  DiagnosisEntryHandle,
+  { existing: readonly { code: string }[]; onAdd: (dx: DiagnosisDraft) => void }
+>(function DiagnosisEntry({ existing, onAdd }, ref) {
   const [draft, setDraft] = useState<DiagnosisDraft>({ code: "", description: "" });
   const [error, setError] = useState<string | null>(null);
   const codeRef = useRef<HTMLInputElement>(null);
+
+  useImperativeHandle(ref, () => ({
+    takePending() {
+      const res = pendingDiagnosis(draft, existing);
+      if (res.status === "ok") {
+        setDraft({ code: "", description: "" });
+        setError(null);
+      } else if (res.status === "invalid") {
+        setError(res.error);
+        codeRef.current?.focus();
+      }
+      return res;
+    },
+  }), [draft, existing]);
 
   function add() {
     const res = validateDiagnosis(draft, existing);
@@ -109,4 +144,4 @@ export function DiagnosisEntry({
       )}
     </div>
   );
-}
+});
