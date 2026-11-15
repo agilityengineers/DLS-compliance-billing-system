@@ -187,6 +187,43 @@ describe.skipIf(!TEST_URL)("client records", () => {
     expect(refused.status).toBe(400);
   });
 
+  it("requires the guardian's name, phone and email when guardianship is set to a guardian", async () => {
+    const missing = await api("PATCH", `/api/clients/${clientId}`, { guardianshipStatus: "Court appointed", guardianName: "Maria Reyes" }, schedulerCookie);
+    expect(missing.status).toBe(400);
+    expect(missing.body.error.message).toContain("phone number, email address");
+
+    const ok = await api(
+      "PATCH",
+      `/api/clients/${clientId}`,
+      {
+        guardianshipStatus: "Court appointed",
+        guardianName: "Maria Reyes",
+        guardianRelationship: "Mother",
+        guardianPhone: "970-555-0102",
+        guardianEmail: "Maria@Example.test",
+        guardianAddress1: "45 Elm St",
+        guardianCity: "Greeley",
+        guardianState: "co",
+        guardianZip: "80631",
+      },
+      schedulerCookie
+    );
+    expect(ok.status).toBe(200);
+    expect(ok.body.client).toMatchObject({
+      guardianshipStatus: "Court appointed",
+      guardianName: "Maria Reyes",
+      guardianEmail: "maria@example.test",
+      guardianState: "CO",
+      guardianZip: "80631",
+    });
+
+    // Already on file: re-saving the status alone is fine; clearing a required detail is not.
+    expect((await api("PATCH", `/api/clients/${clientId}`, { guardianshipStatus: "Guardian" }, schedulerCookie)).status).toBe(200);
+    expect((await api("PATCH", `/api/clients/${clientId}`, { guardianshipStatus: "Guardian", guardianPhone: "" }, schedulerCookie)).status).toBe(400);
+    // No guardian, nothing required.
+    expect((await api("PATCH", `/api/clients/${clientId}`, { guardianshipStatus: "Not applicable" }, schedulerCookie)).status).toBe(200);
+  });
+
   it("lets only an Admin change the status, and audits it without the chart", async () => {
     const office = await api("PATCH", `/api/clients/${clientId}`, { status: "Inactive" }, schedulerCookie);
     expect(office.status).toBe(403);
@@ -475,6 +512,46 @@ describe.skipIf(!TEST_URL)("client records", () => {
       expect((await fetch(`${base}/api/clients/${clientId}/files/${fileId}/content`, { headers: { cookie: adminCookie } })).status).toBe(404);
       expect((await api("GET", `/api/clients/${clientId}/files`, undefined, adminCookie)).body.files).toHaveLength(0);
     });
+  });
+
+  it("takes guardianship papers from the record even with the Files tab off, and reaches nothing else", async () => {
+    const pdf = new TextEncoder().encode("%PDF-1.4 letters of guardianship");
+    // Something else in the folder, put there while the Files tab is on.
+    const other = await upload(`/api/clients/${clientId}/files?${new URLSearchParams({ fileName: "id.pdf", category: "Photo ID" })}`, pdf, "application/pdf", adminCookie);
+    expect(other.status).toBe(201);
+
+    expect((await api("PUT", "/api/org/features/clients.paperwork", { enabled: false }, adminCookie)).status).toBe(200);
+    try {
+      expect((await api("GET", `/api/clients/${clientId}/files`, undefined, schedulerCookie)).status).toBe(403);
+
+      // The category is fixed by the route, whatever the query string says.
+      const q = new URLSearchParams({ fileName: "letters.pdf", category: "Photo ID", endDate: "2027-06-30" });
+      const added = await upload(`/api/clients/${clientId}/guardianship-papers?${q}`, pdf, "application/pdf", schedulerCookie);
+      expect(added.status).toBe(201);
+      expect(added.body.file).toMatchObject({ category: "Guardianship papers", fileName: "letters.pdf", endDate: "2027-06-30" });
+      const paperId = added.body.file.id as string;
+
+      const listed = await api("GET", `/api/clients/${clientId}/guardianship-papers`, undefined, schedulerCookie);
+      expect(listed.status).toBe(200);
+      expect(listed.body.files.map((f: any) => f.id)).toEqual([paperId]);
+
+      const download = await fetch(`${base}/api/clients/${clientId}/guardianship-papers/${paperId}/content`, { headers: { cookie: schedulerCookie } });
+      expect(download.status).toBe(200);
+      expect(download.headers.get("content-disposition")).toContain("attachment");
+      expect(new Uint8Array(await download.arrayBuffer())).toEqual(pdf);
+
+      // The other document stays out of reach through these routes.
+      const otherId = other.body.file.id as string;
+      expect((await fetch(`${base}/api/clients/${clientId}/guardianship-papers/${otherId}/content`, { headers: { cookie: schedulerCookie } })).status).toBe(404);
+      expect((await api("DELETE", `/api/clients/${clientId}/guardianship-papers/${otherId}`, undefined, schedulerCookie)).status).toBe(404);
+      expect((await api("GET", `/api/clients/${clientId}/guardianship-papers`, undefined, otherAdminCookie)).status).toBe(404);
+
+      expect((await api("DELETE", `/api/clients/${clientId}/guardianship-papers/${paperId}`, undefined, schedulerCookie)).status).toBe(200);
+      expect((await api("GET", `/api/clients/${clientId}/guardianship-papers`, undefined, schedulerCookie)).body.files).toHaveLength(0);
+    } finally {
+      expect((await api("PUT", "/api/org/features/clients.paperwork", { enabled: true, roles: { Scheduler: true } }, adminCookie)).status).toBe(200);
+      await api("DELETE", `/api/clients/${clientId}/files/${other.body.file.id}`, undefined, adminCookie);
+    }
   });
 
   it("keeps everything inside one organization", async () => {

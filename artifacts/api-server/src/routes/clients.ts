@@ -25,7 +25,7 @@
 //
 // Audit entries name what changed (field names, ids, categories), never what
 // it changed to: the log is for accountability, not a second copy of the chart.
-import { Router, raw, type IRouter } from "express";
+import { Router, raw, type IRouter, type Request, type Response } from "express";
 import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import { z } from "zod/v4";
 import {
@@ -39,6 +39,7 @@ import {
   CLIENT_GENDERS,
   CLIENT_STATUSES,
   GUARDIANSHIP_STATUSES,
+  GUARDIAN_REQUIRED_STATUSES,
   MARITAL_STATUSES,
   POLICY_STATUSES,
   POLICY_TYPES,
@@ -51,6 +52,7 @@ import {
   leadsTable,
   type ClientAuthorizationRow,
   type ClientContactRow,
+  type ClientFileCategory,
   type ClientFileRow,
   type ClientInsurancePolicyRow,
   type ClientRow,
@@ -92,6 +94,15 @@ const ClientFields = z.object({
   ethnicity: optionalText(80),
   race: optionalText(80),
   guardianshipStatus: optionalChoice(GUARDIANSHIP_STATUSES),
+  guardianName: optionalText(120),
+  guardianRelationship: optionalText(80),
+  guardianEmail: z.union([z.literal(""), z.email().max(254)]).optional(),
+  guardianPhone: optionalText(40),
+  guardianAddress1: optionalText(200),
+  guardianAddress2: optionalText(200),
+  guardianCity: optionalText(120),
+  guardianState: optionalText(2),
+  guardianZip: optionalText(10),
   accountCode: optionalText(40),
   admissionDate: optionalDate,
   dischargeDate: optionalDate,
@@ -215,6 +226,15 @@ export interface ClientJson {
   ethnicity: string | null;
   race: string | null;
   guardianshipStatus: string | null;
+  guardianName: string | null;
+  guardianRelationship: string | null;
+  guardianEmail: string | null;
+  guardianPhone: string | null;
+  guardianAddress1: string | null;
+  guardianAddress2: string | null;
+  guardianCity: string | null;
+  guardianState: string | null;
+  guardianZip: string | null;
   accountCode: string | null;
   admissionDate: string | null;
   dischargeDate: string | null;
@@ -270,6 +290,15 @@ export function toClientJson(c: ClientRow): ClientJson {
     ethnicity: c.ethnicity,
     race: c.race,
     guardianshipStatus: c.guardianshipStatus,
+    guardianName: c.guardianName,
+    guardianRelationship: c.guardianRelationship,
+    guardianEmail: c.guardianEmail,
+    guardianPhone: c.guardianPhone,
+    guardianAddress1: c.guardianAddress1,
+    guardianAddress2: c.guardianAddress2,
+    guardianCity: c.guardianCity,
+    guardianState: c.guardianState,
+    guardianZip: c.guardianZip,
     accountCode: c.accountCode,
     admissionDate: c.admissionDate,
     dischargeDate: c.dischargeDate,
@@ -433,6 +462,17 @@ function fieldValues(body: z.infer<typeof ClientFields>, mode: "create" | "patch
     ethnicity: text(body.ethnicity),
     race: text(body.race),
     guardianshipStatus: text(body.guardianshipStatus) as ClientRow["guardianshipStatus"] | undefined,
+    guardianName: text(body.guardianName),
+    guardianRelationship: text(body.guardianRelationship),
+    guardianEmail:
+      body.guardianEmail === undefined ? (mode === "create" ? null : undefined) : body.guardianEmail === "" ? null : body.guardianEmail.toLowerCase(),
+    guardianPhone: text(body.guardianPhone),
+    guardianAddress1: text(body.guardianAddress1),
+    guardianAddress2: text(body.guardianAddress2),
+    guardianCity: text(body.guardianCity),
+    guardianState:
+      body.guardianState === undefined ? (mode === "create" ? null : undefined) : body.guardianState === "" ? null : body.guardianState.toUpperCase(),
+    guardianZip: text(body.guardianZip),
     accountCode: text(body.accountCode),
     admissionDate: text(body.admissionDate),
     dischargeDate: text(body.dischargeDate),
@@ -462,6 +502,31 @@ function fieldValues(body: z.infer<typeof ClientFields>, mode: "create" | "patch
     hasBehaviorSupportPlan: body.hasBehaviorSupportPlan ?? (mode === "create" ? false : undefined),
     behaviorSupportPlanNotes: text(body.behaviorSupportPlanNotes),
   };
+}
+
+/**
+ * When an edit sets guardianship to "Guardian" or "Court appointed", the
+ * record must say who the guardian is and how to reach them: name, phone and
+ * email, as they will stand after the edit. Intake (create) and edits that do
+ * not touch guardianship are left alone, so an older record without the
+ * details can still be saved field by field until someone fills them in.
+ */
+function requireGuardianDetails(
+  body: z.infer<typeof ClientFields>,
+  current: ClientRow,
+  values: Partial<Pick<ClientRow, "guardianName" | "guardianPhone" | "guardianEmail">>
+) {
+  const status = body.guardianshipStatus;
+  if (!status || !GUARDIAN_REQUIRED_STATUSES.includes(status)) return;
+  const after = (key: "guardianName" | "guardianPhone" | "guardianEmail") => (key in values ? values[key] : current[key]);
+  const missing = [
+    !after("guardianName") && "name",
+    !after("guardianPhone") && "phone number",
+    !after("guardianEmail") && "email address",
+  ].filter(Boolean);
+  if (missing.length > 0) {
+    throw badRequest(`A client with a guardian needs the guardian's ${missing.join(", ")}.`, { missing });
+  }
 }
 
 /** Drop the keys a PATCH did not mention so the update touches only what was sent. */
@@ -687,6 +752,7 @@ export function clientsRouter(db: Db, _config: AppConfig, _deps: { mailer: Maile
     requireHealthForWrite(body, auth);
     const { status, firstName, lastName, ...fields } = body;
     const values = definedOnly({ firstName, lastName, ...fieldValues(fields, "patch") });
+    requireGuardianDetails(body, current, values);
     const statusChange = status !== undefined && status !== current.status ? { from: current.status, to: status } : null;
     // Taking someone off the roster — or marking them deceased — is the
     // Admin's call; office staff edit the chart but do not change its status.
@@ -1012,11 +1078,12 @@ export function clientsRouter(db: Db, _config: AppConfig, _deps: { mailer: Maile
    * not touch it (wrong content type); the raw parser here caps it at the
    * folder's limit and answers 413 above it.
    */
-  router.post("/clients/:id/files", paperworkOn, raw({ type: () => true, limit: CLIENT_FILE_MAX_BYTES }), async (req, res) => {
+  /** Stores one upload (bytes in the body, record in the query string) and answers with it. */
+  async function storeUpload(req: Request, res: Response, forceCategory?: ClientFileCategory) {
     const auth = requireAuthContext(res);
     const orgId = requireOrgId(res);
     const client = await loadClient(db, orgId, String(req.params.id));
-    const meta = FileMeta.parse(req.query);
+    const meta = FileMeta.parse(forceCategory ? { ...req.query, category: forceCategory } : req.query);
     const contentType = (req.headers["content-type"] ?? "").split(";")[0]!.trim().toLowerCase();
     if (!(CLIENT_FILE_CONTENT_TYPES as readonly string[]).includes(contentType)) {
       throw badRequest("That kind of file is not accepted here. Upload a PDF, an image, a Word or Excel document, or a text file.");
@@ -1042,15 +1109,22 @@ export function clientsRouter(db: Db, _config: AppConfig, _deps: { mailer: Maile
       .returning(fileColumns);
     await recordAudit(db, { ...actorFor(req, auth, orgId), action: "client.file_added", targetType: "client", targetId: client.id, details: { fileId: row!.id, category: meta.category, sizeBytes: content.length } });
     res.status(201).json({ file: toFileJson(row!) });
-  });
+  }
 
-  router.get("/clients/:id/files/:fileId/content", paperworkOn, async (req, res) => {
+  /** Sends one file as a download; with a category, only a file of that category. */
+  async function sendContent(req: Request, res: Response, onlyCategory?: ClientFileCategory) {
     const orgId = requireOrgId(res);
     const client = await loadClient(db, orgId, String(req.params.id));
     const [row] = await db
       .select()
       .from(clientFilesTable)
-      .where(and(eq(clientFilesTable.clientId, client.id), eq(clientFilesTable.id, String(req.params.fileId))))
+      .where(
+        and(
+          eq(clientFilesTable.clientId, client.id),
+          eq(clientFilesTable.id, String(req.params.fileId)),
+          onlyCategory ? eq(clientFilesTable.category, onlyCategory) : undefined
+        )
+      )
       .limit(1);
     if (!row) throw notFound("File not found.");
     // Always a download, never rendered in the portal's own origin: a PDF or
@@ -1060,7 +1134,31 @@ export function clientsRouter(db: Db, _config: AppConfig, _deps: { mailer: Maile
     res.setHeader("Content-Disposition", `attachment; filename="${dispositionName(row.fileName)}"`);
     res.setHeader("Content-Security-Policy", "sandbox");
     res.send(row.content);
-  });
+  }
+
+  /** Removes one file; with a category, only a file of that category. */
+  async function removeFile(req: Request, res: Response, onlyCategory?: ClientFileCategory) {
+    const auth = requireAuthContext(res);
+    const orgId = requireOrgId(res);
+    const client = await loadClient(db, orgId, String(req.params.id));
+    const [row] = await db
+      .delete(clientFilesTable)
+      .where(
+        and(
+          eq(clientFilesTable.clientId, client.id),
+          eq(clientFilesTable.id, String(req.params.fileId)),
+          onlyCategory ? eq(clientFilesTable.category, onlyCategory) : undefined
+        )
+      )
+      .returning({ id: clientFilesTable.id, category: clientFilesTable.category });
+    if (!row) throw notFound("File not found.");
+    await recordAudit(db, { ...actorFor(req, auth, orgId), action: "client.file_removed", targetType: "client", targetId: client.id, details: { fileId: row.id, category: row.category } });
+    res.json({ ok: true });
+  }
+
+  const rawUpload = raw({ type: () => true, limit: CLIENT_FILE_MAX_BYTES });
+  router.post("/clients/:id/files", paperworkOn, rawUpload, (req, res) => storeUpload(req, res));
+  router.get("/clients/:id/files/:fileId/content", paperworkOn, (req, res) => sendContent(req, res));
 
   router.patch("/clients/:id/files/:fileId", paperworkOn, async (req, res) => {
     const auth = requireAuthContext(res);
@@ -1089,18 +1187,30 @@ export function clientsRouter(db: Db, _config: AppConfig, _deps: { mailer: Maile
     res.json({ file: toFileJson(row) });
   });
 
-  router.delete("/clients/:id/files/:fileId", paperworkOn, async (req, res) => {
-    const auth = requireAuthContext(res);
+  router.delete("/clients/:id/files/:fileId", paperworkOn, (req, res) => removeFile(req, res));
+
+  // ── guardianship papers ──────────────────────────────────────────────
+  // The paperwork a guardian's authority rests on, uploaded from the Guardian
+  // part of the record itself. These ride clients.core, not
+  // clients.paperwork, so a record with a guardian can always carry the
+  // papers; they land in the same folder under "Guardianship papers" and
+  // show on the Files tab wherever that is switched on. Every route is held
+  // to that one category, so it opens nothing else in the folder.
+  const GUARDIANSHIP_PAPERS: ClientFileCategory = "Guardianship papers";
+
+  router.get("/clients/:id/guardianship-papers", async (req, res) => {
     const orgId = requireOrgId(res);
     const client = await loadClient(db, orgId, String(req.params.id));
-    const [row] = await db
-      .delete(clientFilesTable)
-      .where(and(eq(clientFilesTable.clientId, client.id), eq(clientFilesTable.id, String(req.params.fileId))))
-      .returning({ id: clientFilesTable.id, category: clientFilesTable.category });
-    if (!row) throw notFound("File not found.");
-    await recordAudit(db, { ...actorFor(req, auth, orgId), action: "client.file_removed", targetType: "client", targetId: client.id, details: { fileId: row.id, category: row.category } });
-    res.json({ ok: true });
+    const rows = await db
+      .select(fileColumns)
+      .from(clientFilesTable)
+      .where(and(eq(clientFilesTable.clientId, client.id), eq(clientFilesTable.category, GUARDIANSHIP_PAPERS)))
+      .orderBy(desc(clientFilesTable.createdAt));
+    res.json({ files: rows.map(toFileJson), maxBytes: CLIENT_FILE_MAX_BYTES, contentTypes: CLIENT_FILE_CONTENT_TYPES });
   });
+  router.post("/clients/:id/guardianship-papers", rawUpload, (req, res) => storeUpload(req, res, GUARDIANSHIP_PAPERS));
+  router.get("/clients/:id/guardianship-papers/:fileId/content", (req, res) => sendContent(req, res, GUARDIANSHIP_PAPERS));
+  router.delete("/clients/:id/guardianship-papers/:fileId", (req, res) => removeFile(req, res, GUARDIANSHIP_PAPERS));
 
   return router;
 }
