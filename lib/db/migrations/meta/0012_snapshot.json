@@ -1,5 +1,5 @@
 {
-  "id": "737c0c07-e561-48de-8c03-ce44c7d6aff3",
+  "id": "0c583da6-0333-49ec-9861-6097f51a9ac1",
   "prevId": "13e5569f-d64e-4bbd-846a-e4cae5ac108c",
   "version": "7",
   "dialect": "postgresql",
@@ -2455,134 +2455,6 @@
       },
       "isRLSEnabled": false
     },
-    "public.client_photos": {
-      "name": "client_photos",
-      "schema": "",
-      "columns": {
-        "client_id": {
-          "name": "client_id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "org_id": {
-          "name": "org_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "content_type": {
-          "name": "content_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "size_bytes": {
-          "name": "size_bytes",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "content": {
-          "name": "content",
-          "type": "bytea",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "uploaded_by_user_id": {
-          "name": "uploaded_by_user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "idx_client_photos_org": {
-          "name": "idx_client_photos_org",
-          "columns": [
-            {
-              "expression": "org_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "client_photos_client_id_clients_id_fk": {
-          "name": "client_photos_client_id_clients_id_fk",
-          "tableFrom": "client_photos",
-          "tableTo": "clients",
-          "columnsFrom": [
-            "client_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "client_photos_org_id_organizations_id_fk": {
-          "name": "client_photos_org_id_organizations_id_fk",
-          "tableFrom": "client_photos",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "org_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "client_photos_uploaded_by_user_id_users_id_fk": {
-          "name": "client_photos_uploaded_by_user_id_users_id_fk",
-          "tableFrom": "client_photos",
-          "tableTo": "users",
-          "columnsFrom": [
-            "uploaded_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "client_photos_size_check": {
-          "name": "client_photos_size_check",
-          "value": "\"client_photos\".\"size_bytes\" > 0 and \"client_photos\".\"size_bytes\" <= 5242880"
-        },
-        "client_photos_type_check": {
-          "name": "client_photos_type_check",
-          "value": "\"client_photos\".\"content_type\" in ('image/jpeg', 'image/png', 'image/webp')"
-        }
-      },
-      "isRLSEnabled": false
-    },
     "public.clients": {
       "name": "clients",
       "schema": "",
@@ -2686,6 +2558,60 @@
         },
         "guardianship_status": {
           "name": "guardianship_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "guardian_name": {
+          "name": "guardian_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "guardian_relationship": {
+          "name": "guardian_relationship",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "guardian_email": {
+          "name": "guardian_email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "guardian_phone": {
+          "name": "guardian_phone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "guardian_address1": {
+          "name": "guardian_address1",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "guardian_address2": {
+          "name": "guardian_address2",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "guardian_city": {
+          "name": "guardian_city",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "guardian_state": {
+          "name": "guardian_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "guardian_zip": {
+          "name": "guardian_zip",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -2887,12 +2813,6 @@
         "sample_key": {
           "name": "sample_key",
           "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "photo_updated_at": {
-          "name": "photo_updated_at",
-          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         },
