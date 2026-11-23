@@ -1,5 +1,5 @@
 {
-  "id": "3041bdf1-93fd-4a74-b71b-d27feced54d1",
+  "id": "0c583da6-0333-49ec-9861-6097f51a9ac1",
   "prevId": "13e5569f-d64e-4bbd-846a-e4cae5ac108c",
   "version": "7",
   "dialect": "postgresql",
@@ -2562,62 +2562,56 @@
           "primaryKey": false,
           "notNull": false
         },
-        "rep_payee_status": {
-          "name": "rep_payee_status",
+        "guardian_name": {
+          "name": "guardian_name",
           "type": "text",
           "primaryKey": false,
           "notNull": false
         },
-        "rep_payee_name": {
-          "name": "rep_payee_name",
+        "guardian_relationship": {
+          "name": "guardian_relationship",
           "type": "text",
           "primaryKey": false,
           "notNull": false
         },
-        "rep_payee_address1": {
-          "name": "rep_payee_address1",
+        "guardian_email": {
+          "name": "guardian_email",
           "type": "text",
           "primaryKey": false,
           "notNull": false
         },
-        "rep_payee_address2": {
-          "name": "rep_payee_address2",
+        "guardian_phone": {
+          "name": "guardian_phone",
           "type": "text",
           "primaryKey": false,
           "notNull": false
         },
-        "rep_payee_city": {
-          "name": "rep_payee_city",
+        "guardian_address1": {
+          "name": "guardian_address1",
           "type": "text",
           "primaryKey": false,
           "notNull": false
         },
-        "rep_payee_state": {
-          "name": "rep_payee_state",
+        "guardian_address2": {
+          "name": "guardian_address2",
           "type": "text",
           "primaryKey": false,
           "notNull": false
         },
-        "rep_payee_zip": {
-          "name": "rep_payee_zip",
+        "guardian_city": {
+          "name": "guardian_city",
           "type": "text",
           "primaryKey": false,
           "notNull": false
         },
-        "rep_payee_phone": {
-          "name": "rep_payee_phone",
+        "guardian_state": {
+          "name": "guardian_state",
           "type": "text",
           "primaryKey": false,
           "notNull": false
         },
-        "rep_payee_email": {
-          "name": "rep_payee_email",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "rep_payee_number": {
-          "name": "rep_payee_number",
+        "guardian_zip": {
+          "name": "guardian_zip",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -2976,10 +2970,6 @@
         "clients_guardianship_check": {
           "name": "clients_guardianship_check",
           "value": "\"clients\".\"guardianship_status\" is null or \"clients\".\"guardianship_status\" in ('Not applicable', 'Guardian', 'Court appointed')"
-        },
-        "clients_rep_payee_check": {
-          "name": "clients_rep_payee_check",
-          "value": "\"clients\".\"rep_payee_status\" is null or \"clients\".\"rep_payee_status\" in ('Not applicable', 'Rep payee')"
         },
         "clients_marital_check": {
           "name": "clients_marital_check",

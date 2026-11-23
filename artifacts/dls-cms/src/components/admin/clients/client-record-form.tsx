@@ -9,8 +9,9 @@ import {
   CLIENT_GENDERS,
   CLIENT_STATUSES,
   GUARDIANSHIP_STATUSES,
-  MARITAL_STATUSES,
+  GUARDIAN_REQUIRED_STATUSES,
   REP_PAYEE_STATUSES,
+  MARITAL_STATUSES,
   clientsApi,
   type ClientDiagnosis,
   type ClientGender,
@@ -23,8 +24,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ClientRepPayeeFiles } from "./client-rep-payee-files";
 import { selectClass } from "./format";
+import { GuardianshipPapers, RepPayeePapers } from "./guardianship-papers";
 
 type Draft = {
   firstName: string;
@@ -42,6 +43,15 @@ type Draft = {
   ethnicity: string;
   race: string;
   guardianshipStatus: string;
+  guardianName: string;
+  guardianRelationship: string;
+  guardianEmail: string;
+  guardianPhone: string;
+  guardianAddress1: string;
+  guardianAddress2: string;
+  guardianCity: string;
+  guardianState: string;
+  guardianZip: string;
   repPayeeStatus: string;
   repPayeeName: string;
   repPayeeAddress1: string;
@@ -71,6 +81,12 @@ type Draft = {
   authorizedEiHoursPerWeek: number;
   caseManagerName: string;
   ccbName: string;
+  ccbPhone: string;
+  ccbEmail: string;
+  ccbAddress1: string;
+  ccbCity: string;
+  ccbState: string;
+  ccbZip: string;
   status: ClientStatus;
 };
 
@@ -91,6 +107,15 @@ function draftOf(c: ClientRecord): Draft {
     ethnicity: c.ethnicity ?? "",
     race: c.race ?? "",
     guardianshipStatus: c.guardianshipStatus ?? "",
+    guardianName: c.guardianName ?? "",
+    guardianRelationship: c.guardianRelationship ?? "",
+    guardianEmail: c.guardianEmail ?? "",
+    guardianPhone: c.guardianPhone ?? "",
+    guardianAddress1: c.guardianAddress1 ?? "",
+    guardianAddress2: c.guardianAddress2 ?? "",
+    guardianCity: c.guardianCity ?? "",
+    guardianState: c.guardianState ?? "",
+    guardianZip: c.guardianZip ?? "",
     repPayeeStatus: c.repPayeeStatus ?? "",
     repPayeeName: c.repPayeeName ?? "",
     repPayeeAddress1: c.repPayeeAddress1 ?? "",
@@ -120,6 +145,12 @@ function draftOf(c: ClientRecord): Draft {
     authorizedEiHoursPerWeek: c.authorizedEiHoursPerWeek,
     caseManagerName: c.caseManagerName ?? "",
     ccbName: c.ccbName ?? "",
+    ccbPhone: c.ccbPhone ?? "",
+    ccbEmail: c.ccbEmail ?? "",
+    ccbAddress1: c.ccbAddress1 ?? "",
+    ccbCity: c.ccbCity ?? "",
+    ccbState: c.ccbState ?? "",
+    ccbZip: c.ccbZip ?? "",
     status: c.status,
   };
 }
@@ -136,13 +167,13 @@ function Field({ id, label, children, className }: { id: string; label: string; 
 export function ClientRecordForm({
   client,
   isAdmin,
-  canUploadFiles = false,
+  today,
   onSaved,
 }: {
   client: ClientRecord;
   isAdmin: boolean;
-  /** Whether this person has the paperwork folder (clients.paperwork), which the rep payee upload uses. */
-  canUploadFiles?: boolean;
+  /** The agency's today (YYYY-MM-DD), for spotting lapsed guardianship papers. */
+  today: string;
   onSaved: (client: ClientRecord) => void;
 }) {
   const [draft, setDraft] = useState<Draft>(() => draftOf(client));
@@ -156,13 +187,13 @@ export function ClientRecordForm({
     setSaved(false);
     setDraft((d) => ({ ...d, [key]: e.target.type === "number" ? Number(e.target.value) : e.target.value }));
   };
+  const needsGuardian = GUARDIAN_REQUIRED_STATUSES.includes(draft.guardianshipStatus);
+  const isRepPayee = draft.repPayeeStatus === "Rep payee";
   const text = (id: keyof Draft, label: string, type = "text", extra: Partial<React.InputHTMLAttributes<HTMLInputElement>> = {}) => (
     <Field id={`client-${id}`} label={label}>
       <Input id={`client-${id}`} type={type} value={String(draft[id])} onChange={set(id)} {...extra} />
     </Field>
   );
-
-  const isRepPayee = draft.repPayeeStatus === "Rep payee";
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -229,8 +260,30 @@ export function ClientRecordForm({
         </div>
       </section>
 
-      <section className="rounded-card border border-border bg-card">
-        <h2 className="border-b border-border px-4 py-3 font-medium">Rep payee</h2>
+      {needsGuardian && (
+        <section className="rounded-card border border-border bg-card" aria-labelledby="client-guardian-heading">
+          <h2 id="client-guardian-heading" className="border-b border-border px-4 py-3 font-medium">Guardian</h2>
+          <p className="px-4 pt-3 text-sm text-muted-foreground">
+            Who decides for {draft.firstName || "this client"} and how to reach them. Name, phone and email are required while guardianship is
+            “{draft.guardianshipStatus}”. Upload the guardianship papers below.
+          </p>
+          <div className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3">
+            {text("guardianName", "Guardian name", "text", { required: true, autoComplete: "off" })}
+            {text("guardianRelationship", "Relationship to client", "text", { placeholder: "Mother, brother, public guardian…" })}
+            {text("guardianPhone", "Guardian phone", "tel", { required: true })}
+            {text("guardianEmail", "Guardian email", "email", { required: true })}
+            {text("guardianAddress1", "Guardian address", "text")}
+            {text("guardianAddress2", "Address line 2")}
+            {text("guardianCity", "City")}
+            {text("guardianState", "State", "text", { maxLength: 2, placeholder: "CO" })}
+            {text("guardianZip", "ZIP", "text", { maxLength: 10 })}
+          </div>
+          <GuardianshipPapers clientId={client.id} today={today} />
+        </section>
+      )}
+
+      <section className="rounded-card border border-border bg-card" aria-labelledby="client-rep-payee-heading">
+        <h2 id="client-rep-payee-heading" className="border-b border-border px-4 py-3 font-medium">Rep payee</h2>
         <div className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3">
           <Field id="client-repPayeeStatus" label="Rep payee">
             <select id="client-repPayeeStatus" className={selectClass} value={draft.repPayeeStatus} onChange={set("repPayeeStatus")}>
@@ -240,27 +293,27 @@ export function ClientRecordForm({
               ))}
             </select>
           </Field>
-          {isRepPayee && (
-            <>
-              {text("repPayeeName", "Rep payee name", "text", { required: true })}
+        </div>
+        {isRepPayee && (
+          <>
+            <p className="px-4 text-sm text-muted-foreground">
+              Who receives and manages {draft.firstName ? `${draft.firstName}’s` : "the client’s"} benefits. Name, phone and email are required; add the
+              payee or account number when the arrangement has one. Upload the paperwork below.
+            </p>
+            <div className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3">
+              {text("repPayeeName", "Rep payee name", "text", { required: true, autoComplete: "off" })}
               {text("repPayeeNumber", "Payee / account number")}
-              {text("repPayeePhone", "Phone", "tel")}
-              {text("repPayeeEmail", "Email", "email")}
-              {text("repPayeeAddress1", "Address")}
+              {text("repPayeePhone", "Rep payee phone", "tel", { required: true })}
+              {text("repPayeeEmail", "Rep payee email", "email", { required: true })}
+              {text("repPayeeAddress1", "Rep payee address")}
               {text("repPayeeAddress2", "Address line 2")}
               {text("repPayeeCity", "City")}
               {text("repPayeeState", "State", "text", { maxLength: 2, placeholder: "CO" })}
               {text("repPayeeZip", "ZIP", "text", { maxLength: 10 })}
-              {canUploadFiles ? (
-                <ClientRepPayeeFiles clientId={client.id} />
-              ) : (
-                <p className="text-xs text-muted-foreground sm:col-span-2 lg:col-span-3">
-                  Uploading the rep payee paperwork needs access to the client&apos;s Files.
-                </p>
-              )}
-            </>
-          )}
-        </div>
+            </div>
+            <RepPayeePapers clientId={client.id} today={today} />
+          </>
+        )}
       </section>
 
       <section className="rounded-card border border-border bg-card">
@@ -307,7 +360,13 @@ export function ClientRecordForm({
         <h2 className="border-b border-border px-4 py-3 font-medium">Care team &amp; weekly authorizations</h2>
         <div className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3">
           {text("caseManagerName", "Case manager")}
-          {text("ccbName", "CCB")}
+          {text("ccbName", "Case Management Agency (CCB)")}
+          {text("ccbPhone", "CCB phone", "tel")}
+          {text("ccbEmail", "CCB email", "email")}
+          {text("ccbAddress1", "CCB address")}
+          {text("ccbCity", "CCB city")}
+          {text("ccbState", "CCB state", "text", { maxLength: 2, placeholder: "CO" })}
+          {text("ccbZip", "CCB ZIP", "text", { maxLength: 10 })}
           {text("insuranceProvider", "Insurance provider (summary)")}
           {text("authorizedSccHoursPerWeek", "SCC hrs / week", "number", { min: 0, step: 0.25 })}
           {text("authorizedJcHoursPerWeek", "Job Coaching hrs / week", "number", { min: 0, step: 0.25 })}

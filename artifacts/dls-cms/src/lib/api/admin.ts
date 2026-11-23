@@ -605,9 +605,9 @@ export type ClientGender = "Male" | "Female" | "Other" | "Unknown";
 export const CLIENT_GENDERS: readonly ClientGender[] = ["Male", "Female", "Other", "Unknown"];
 export const GUARDIANSHIP_STATUSES = ["Not applicable", "Guardian", "Court appointed"] as const;
 export const REP_PAYEE_STATUSES = ["Not applicable", "Rep payee"] as const;
-/** The Files category the rep payee paperwork is filed under. */
-export const REP_PAYEE_FILE_CATEGORY = "Rep payee paperwork";
 export const MARITAL_STATUSES = ["Single", "Married", "Divorced", "Separated", "Widowed", "Other"] as const;
+/** Guardianship statuses that need the guardian's details on the record. */
+export const GUARDIAN_REQUIRED_STATUSES: readonly string[] = ["Guardian", "Court appointed"];
 export type ClientContactKind = "responsible_party" | "guardian" | "emergency" | "physician" | "case_manager" | "other";
 export const CLIENT_CONTACT_KIND_LABELS: Record<ClientContactKind, string> = {
   responsible_party: "Responsible party",
@@ -660,6 +660,15 @@ export interface ClientRecord {
   ethnicity: string | null;
   race: string | null;
   guardianshipStatus: string | null;
+  guardianName: string | null;
+  guardianRelationship: string | null;
+  guardianEmail: string | null;
+  guardianPhone: string | null;
+  guardianAddress1: string | null;
+  guardianAddress2: string | null;
+  guardianCity: string | null;
+  guardianState: string | null;
+  guardianZip: string | null;
   repPayeeStatus: string | null;
   repPayeeName: string | null;
   repPayeeAddress1: string | null;
@@ -690,6 +699,12 @@ export interface ClientRecord {
   authorizedEiHoursPerWeek: number;
   caseManagerName: string | null;
   ccbName: string | null;
+  ccbPhone: string | null;
+  ccbEmail: string | null;
+  ccbAddress1: string | null;
+  ccbCity: string | null;
+  ccbState: string | null;
+  ccbZip: string | null;
   residenceLat: number | null;
   residenceLng: number | null;
   allergies: string | null;
@@ -703,9 +718,15 @@ export interface ClientRecord {
   sourceLeadId: string | null;
   /** Set on a practice record (a copy of a synthetic demo client); null for a real person. */
   sampleKey?: string | null;
+  /** When the face-sheet photo was last set; null when there is none. */
+  photoUpdatedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
+
+/** The largest face-sheet photo the API accepts, and the formats it takes (mirrors lib/db). */
+export const CLIENT_PHOTO_MAX_BYTES = 5 * 1024 * 1024;
+export const CLIENT_PHOTO_CONTENT_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
 
 /** Everything intake or an edit may send; "" clears a text field on an edit. */
 export interface ClientFieldsInput {
@@ -722,6 +743,15 @@ export interface ClientFieldsInput {
   ethnicity?: string;
   race?: string;
   guardianshipStatus?: string;
+  guardianName?: string;
+  guardianRelationship?: string;
+  guardianEmail?: string;
+  guardianPhone?: string;
+  guardianAddress1?: string;
+  guardianAddress2?: string;
+  guardianCity?: string;
+  guardianState?: string;
+  guardianZip?: string;
   repPayeeStatus?: string;
   repPayeeName?: string;
   repPayeeAddress1?: string;
@@ -752,6 +782,12 @@ export interface ClientFieldsInput {
   authorizedEiHoursPerWeek?: number;
   caseManagerName?: string;
   ccbName?: string;
+  ccbPhone?: string;
+  ccbEmail?: string;
+  ccbAddress1?: string;
+  ccbCity?: string;
+  ccbState?: string;
+  ccbZip?: string;
   residenceLat?: number | null;
   residenceLng?: number | null;
   allergies?: string;
@@ -910,6 +946,13 @@ export interface ClientFileMeta {
   notes?: string;
 }
 
+/** Sends one file to an upload route: the bytes as the body, the record as the query string. */
+async function uploadFile(path: string, file: File, meta: Partial<ClientFileMeta>): Promise<{ file: ClientFile }> {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(meta)) if (value !== undefined && value !== "") params.set(key, String(value));
+  return sendRaw<{ file: ClientFile }>("POST", `/api${path}?${params}`, file);
+}
+
 export const clientsApi = {
   list: (filters: { status?: ClientStatus } = {}) => apiFetch<{ clients: ClientRecord[] }>(`/clients${query(filters)}`),
   get: (id: string) => apiFetch<{ client: ClientRecord }>(`/clients/${id}`),
@@ -947,35 +990,65 @@ export const clientsApi = {
   files: {
     list: (clientId: string) => apiFetch<ClientFilesResponse>(`/clients/${clientId}/files`),
     /** The bytes go as the body and the record as the query string; see the API route. */
-    upload: async (clientId: string, file: File, meta: ClientFileMeta): Promise<{ file: ClientFile }> => {
-      const params = new URLSearchParams();
-      for (const [key, value] of Object.entries(meta)) if (value !== undefined && value !== "") params.set(key, String(value));
-      const res = await fetch(`/api/clients/${clientId}/files?${params}`, {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "content-type": file.type || "application/octet-stream", accept: "application/json" },
-        body: file,
-      });
-      const text = await res.text();
-      let body: unknown = null;
-      try {
-        body = text ? JSON.parse(text) : null;
-      } catch {
-        body = text;
-      }
-      if (!res.ok) {
-        const err = (body as { error?: { code?: string; message?: string } } | null)?.error;
-        throw new ApiClientError(res.status, err?.code ?? "SERVER_ERROR", err?.message ?? (res.status === 413 ? "That file is too large." : `Upload failed (${res.status}).`));
-      }
-      return body as { file: ClientFile };
-    },
+    upload: (clientId: string, file: File, meta: ClientFileMeta) => uploadFile(`/clients/${clientId}/files`, file, meta),
     update: (clientId: string, id: string, patch: Partial<ClientFileMeta>) =>
       apiFetch<{ file: ClientFile }>(`/clients/${clientId}/files/${id}`, { method: "PATCH", json: patch }),
     remove: (clientId: string, id: string) => apiFetch<{ ok: true }>(`/clients/${clientId}/files/${id}`, { method: "DELETE" }),
     /** A download, so it goes through the browser rather than fetch. */
     contentUrl: (clientId: string, id: string) => `/api/clients/${clientId}/files/${id}/content`,
   },
+
+  /** The one photo on the client's face sheet. */
+  photo: {
+    /** The image's bytes as the body; replaces any photo already on file. */
+    upload: (clientId: string, file: File) => sendRaw<{ client: ClientRecord }>("PUT", `/api/clients/${clientId}/photo`, file),
+    remove: (clientId: string) => apiFetch<{ client: ClientRecord }>(`/clients/${clientId}/photo`, { method: "DELETE" }),
+    /** For an <img src>; the stamp changes the URL whenever the photo does, so a browser never shows a stale one. */
+    url: (clientId: string, photoUpdatedAt: string) => `/api/clients/${clientId}/photo?v=${encodeURIComponent(photoUpdatedAt)}`,
+  },
+
+  /** The guardian's paperwork, filed under "Guardianship papers"; available with the record itself. */
+  guardianshipPapers: {
+    list: (clientId: string) =>
+      apiFetch<{ files: ClientFile[]; maxBytes: number; contentTypes: string[] }>(`/clients/${clientId}/guardianship-papers`),
+    upload: (clientId: string, file: File, meta: { fileName: string; startDate?: string; endDate?: string; notes?: string }) =>
+      uploadFile(`/clients/${clientId}/guardianship-papers`, file, meta),
+    remove: (clientId: string, id: string) => apiFetch<{ ok: true }>(`/clients/${clientId}/guardianship-papers/${id}`, { method: "DELETE" }),
+    contentUrl: (clientId: string, id: string) => `/api/clients/${clientId}/guardianship-papers/${id}/content`,
+  },
+
+  /** The rep payee's paperwork, uploaded from the Rep payee part of the record; rides the record, not clients.paperwork. */
+  repPayeePapers: {
+    list: (clientId: string) =>
+      apiFetch<{ files: ClientFile[]; maxBytes: number; contentTypes: string[] }>(`/clients/${clientId}/rep-payee-papers`),
+    upload: (clientId: string, file: File, meta: { fileName: string; startDate?: string; endDate?: string; notes?: string }) =>
+      uploadFile(`/clients/${clientId}/rep-payee-papers`, file, meta),
+    remove: (clientId: string, id: string) => apiFetch<{ ok: true }>(`/clients/${clientId}/rep-payee-papers/${id}`, { method: "DELETE" }),
+    contentUrl: (clientId: string, id: string) => `/api/clients/${clientId}/rep-payee-papers/${id}/content`,
+  },
 };
+
+/** A browser upload with the file as the raw body, answered with JSON (the paperwork folder and the photo). */
+async function sendRaw<T>(method: "POST" | "PUT", url: string, file: File): Promise<T> {
+  const res = await fetch(url, {
+    method,
+    credentials: "same-origin",
+    headers: { "content-type": file.type || "application/octet-stream", accept: "application/json" },
+    body: file,
+  });
+  const text = await res.text();
+  let body: unknown = null;
+  try {
+    body = text ? JSON.parse(text) : null;
+  } catch {
+    body = text;
+  }
+  if (!res.ok) {
+    const err = (body as { error?: { code?: string; message?: string } } | null)?.error;
+    throw new ApiClientError(res.status, err?.code ?? "SERVER_ERROR", err?.message ?? (res.status === 413 ? "That file is too large." : `Upload failed (${res.status}).`));
+  }
+  return body as T;
+}
 
 // ── billing: payers, the fee schedule, the claim ledger ────────────────────
 // Mirrors artifacts/api-server/src/routes/billing.ts.
