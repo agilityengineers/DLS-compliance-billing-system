@@ -1,5 +1,5 @@
 {
-  "id": "dd8bbe26-613a-4e5f-bb46-ffe904dcf568",
+  "id": "0c583da6-0333-49ec-9861-6097f51a9ac1",
   "prevId": "13e5569f-d64e-4bbd-846a-e4cae5ac108c",
   "version": "7",
   "dialect": "postgresql",
@@ -2006,18 +2006,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "phone_work": {
-          "name": "phone_work",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "phone_cell": {
-          "name": "phone_cell",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "email": {
           "name": "email",
           "type": "text",
@@ -2064,12 +2052,6 @@
         "notes": {
           "name": "notes",
           "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "start_date": {
-          "name": "start_date",
-          "type": "date",
           "primaryKey": false,
           "notNull": false
         },
@@ -2139,7 +2121,7 @@
       "checkConstraints": {
         "client_contacts_kind_check": {
           "name": "client_contacts_kind_check",
-          "value": "\"client_contacts\".\"kind\" in ('responsible_party', 'guardian', 'emergency', 'physician', 'case_manager', 'external_provider', 'other')"
+          "value": "\"client_contacts\".\"kind\" in ('responsible_party', 'guardian', 'emergency', 'physician', 'case_manager', 'other')"
         }
       },
       "isRLSEnabled": false
@@ -2576,6 +2558,60 @@
         },
         "guardianship_status": {
           "name": "guardianship_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "guardian_name": {
+          "name": "guardian_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "guardian_relationship": {
+          "name": "guardian_relationship",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "guardian_email": {
+          "name": "guardian_email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "guardian_phone": {
+          "name": "guardian_phone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "guardian_address1": {
+          "name": "guardian_address1",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "guardian_address2": {
+          "name": "guardian_address2",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "guardian_city": {
+          "name": "guardian_city",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "guardian_state": {
+          "name": "guardian_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "guardian_zip": {
+          "name": "guardian_zip",
           "type": "text",
           "primaryKey": false,
           "notNull": false
