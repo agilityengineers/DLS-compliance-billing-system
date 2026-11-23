@@ -70,6 +70,12 @@ type Draft = {
   authorizedEiHoursPerWeek: number;
   caseManagerName: string;
   ccbName: string;
+  ccbPhone: string;
+  ccbEmail: string;
+  ccbAddress1: string;
+  ccbCity: string;
+  ccbState: string;
+  ccbZip: string;
   status: ClientStatus;
 };
 
@@ -118,6 +124,12 @@ function draftOf(c: ClientRecord): Draft {
     authorizedEiHoursPerWeek: c.authorizedEiHoursPerWeek,
     caseManagerName: c.caseManagerName ?? "",
     ccbName: c.ccbName ?? "",
+    ccbPhone: c.ccbPhone ?? "",
+    ccbEmail: c.ccbEmail ?? "",
+    ccbAddress1: c.ccbAddress1 ?? "",
+    ccbCity: c.ccbCity ?? "",
+    ccbState: c.ccbState ?? "",
+    ccbZip: c.ccbZip ?? "",
     status: c.status,
   };
 }
@@ -292,7 +304,13 @@ export function ClientRecordForm({
         <h2 className="border-b border-border px-4 py-3 font-medium">Care team &amp; weekly authorizations</h2>
         <div className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3">
           {text("caseManagerName", "Case manager")}
-          {text("ccbName", "CCB")}
+          {text("ccbName", "Case Management Agency (CCB)")}
+          {text("ccbPhone", "CCB phone", "tel")}
+          {text("ccbEmail", "CCB email", "email")}
+          {text("ccbAddress1", "CCB address")}
+          {text("ccbCity", "CCB city")}
+          {text("ccbState", "CCB state", "text", { maxLength: 2, placeholder: "CO" })}
+          {text("ccbZip", "CCB ZIP", "text", { maxLength: 10 })}
           {text("insuranceProvider", "Insurance provider (summary)")}
           {text("authorizedSccHoursPerWeek", "SCC hrs / week", "number", { min: 0, step: 0.25 })}
           {text("authorizedJcHoursPerWeek", "Job Coaching hrs / week", "number", { min: 0, step: 0.25 })}

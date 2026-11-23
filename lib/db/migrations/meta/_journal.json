@@ -99,6 +99,13 @@
       "when": 1795446028839,
       "tag": "0013_client_photo",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1795448335255,
+      "tag": "0014_client_ccb_contact",
+      "breakpoints": true
     }
   ]
 }
