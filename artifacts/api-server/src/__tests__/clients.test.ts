@@ -65,6 +65,12 @@ describe.skipIf(!TEST_URL)("client records", () => {
     return { status: res.status, body: text ? JSON.parse(text) : null, cookie: null, headers: res.headers };
   }
 
+  async function putPhoto(path: string, bytes: Uint8Array, contentType: string, cookie: string): Promise<ApiResponse> {
+    const res = await fetch(base + path, { method: "PUT", headers: { "content-type": contentType, cookie }, body: bytes });
+    const text = await res.text();
+    return { status: res.status, body: text ? JSON.parse(text) : null, cookie: null, headers: res.headers };
+  }
+
   async function createAndSignIn(org: string, email: string, role: string): Promise<string> {
     const created = await api("POST", "/api/platform/users", { orgId: org, email, fullName: "Someone", role }, superCookie);
     expect(created.status).toBe(201);
@@ -187,6 +193,86 @@ describe.skipIf(!TEST_URL)("client records", () => {
     expect(refused.status).toBe(400);
   });
 
+  it("keeps the Case Management Agency's own phone, email and address with its name", async () => {
+    const created = await api(
+      "POST",
+      "/api/clients",
+      {
+        firstName: "Cora",
+        lastName: "Lindqvist",
+        ccbName: "Weld County CMA",
+        ccbPhone: "970-555-0199",
+        ccbEmail: "Intake@WeldCMA.example.test",
+        ccbAddress1: "800 8th Ave",
+        ccbCity: "Greeley",
+        ccbState: "co",
+        ccbZip: "80631",
+      },
+      adminCookie
+    );
+    expect(created.status).toBe(201);
+    expect(created.body.client).toMatchObject({
+      ccbName: "Weld County CMA",
+      ccbPhone: "970-555-0199",
+      ccbEmail: "intake@weldcma.example.test",
+      ccbAddress1: "800 8th Ave",
+      ccbCity: "Greeley",
+      ccbState: "CO",
+      ccbZip: "80631",
+    });
+    const id = created.body.client.id as string;
+
+    // An edit touches only what it sends; an empty string clears a field.
+    const edited = await api("PATCH", `/api/clients/${id}`, { ccbPhone: "970-555-0123", ccbZip: "" }, schedulerCookie);
+    expect(edited.status).toBe(200);
+    expect(edited.body.client).toMatchObject({ ccbPhone: "970-555-0123", ccbZip: null, ccbCity: "Greeley", ccbEmail: "intake@weldcma.example.test" });
+
+    const badEmail = await api("PATCH", `/api/clients/${id}`, { ccbEmail: "not-an-email" }, adminCookie);
+    expect(badEmail.status).toBe(400);
+
+    // A client entered without them just has none.
+    const plain = await api("POST", "/api/clients", { firstName: "Dev", lastName: "Patel" }, adminCookie);
+    expect(plain.status).toBe(201);
+    expect(plain.body.client).toMatchObject({ ccbPhone: null, ccbEmail: null, ccbAddress1: null, ccbCity: null, ccbState: null, ccbZip: null });
+  });
+
+  it("requires the guardian's name, phone and email when guardianship is set to a guardian", async () => {
+    const missing = await api("PATCH", `/api/clients/${clientId}`, { guardianshipStatus: "Court appointed", guardianName: "Maria Reyes" }, schedulerCookie);
+    expect(missing.status).toBe(400);
+    expect(missing.body.error.message).toContain("phone number, email address");
+
+    const ok = await api(
+      "PATCH",
+      `/api/clients/${clientId}`,
+      {
+        guardianshipStatus: "Court appointed",
+        guardianName: "Maria Reyes",
+        guardianRelationship: "Mother",
+        guardianPhone: "970-555-0102",
+        guardianEmail: "Maria@Example.test",
+        guardianAddress1: "45 Elm St",
+        guardianCity: "Greeley",
+        guardianState: "co",
+        guardianZip: "80631",
+      },
+      schedulerCookie
+    );
+    expect(ok.status).toBe(200);
+    expect(ok.body.client).toMatchObject({
+      guardianshipStatus: "Court appointed",
+      guardianName: "Maria Reyes",
+      guardianEmail: "maria@example.test",
+      guardianState: "CO",
+      guardianZip: "80631",
+    });
+
+    // Already on file: re-saving the status alone is fine; clearing a required detail is not.
+    expect((await api("PATCH", `/api/clients/${clientId}`, { guardianshipStatus: "Guardian" }, schedulerCookie)).status).toBe(200);
+    expect((await api("PATCH", `/api/clients/${clientId}`, { guardianshipStatus: "Guardian", guardianPhone: "" }, schedulerCookie)).status).toBe(400);
+    // No guardian, nothing required.
+    expect((await api("PATCH", `/api/clients/${clientId}`, { guardianshipStatus: "Not applicable" }, schedulerCookie)).status).toBe(200);
+  });
+
   it("lets only an Admin change the status, and audits it without the chart", async () => {
     const office = await api("PATCH", `/api/clients/${clientId}`, { status: "Inactive" }, schedulerCookie);
     expect(office.status).toBe(403);
@@ -277,6 +363,52 @@ describe.skipIf(!TEST_URL)("client records", () => {
       expect((await api("DELETE", `/api/clients/${clientId}/contacts/${physician.body.contact.id}`, undefined, adminCookie)).status).toBe(200);
       expect((await api("GET", `/api/clients/${clientId}/contacts`, undefined, adminCookie)).body.contacts).toHaveLength(1);
       expect((await api("DELETE", `/api/clients/${clientId}/contacts/${physician.body.contact.id}`, undefined, adminCookie)).status).toBe(404);
+    });
+
+    it("records a case manager and an external provider with work and cell phones and a start date", async () => {
+      const cm = await api(
+        "POST",
+        `/api/clients/${clientId}/contacts`,
+        {
+          kind: "case_manager",
+          name: "Jordan Lee",
+          relationship: "Larimer County CCB",
+          phoneWork: "970-555-0140",
+          phoneCell: "970-555-0141",
+          email: "jlee@ccb.example",
+          address1: "100 Main St",
+          city: "Fort Collins",
+          state: "co",
+          zip: "80521",
+          startDate: "2026-03-02",
+        },
+        schedulerCookie
+      );
+      expect(cm.status).toBe(201);
+      expect(cm.body.contact).toMatchObject({
+        kind: "case_manager",
+        phoneWork: "970-555-0140",
+        phoneCell: "970-555-0141",
+        state: "CO",
+        startDate: "2026-03-02",
+      });
+
+      const provider = await api("POST", `/api/clients/${clientId}/contacts`, { kind: "external_provider", name: "Sam Ortiz", relationship: "Speech therapist" }, adminCookie);
+      expect(provider.status).toBe(201);
+      expect(provider.body.contact).toMatchObject({ kind: "external_provider", startDate: null, phoneWork: null, phoneCell: null });
+
+      const badDate = await api("POST", `/api/clients/${clientId}/contacts`, { kind: "external_provider", name: "Bad Date", startDate: "03/02/2026" }, adminCookie);
+      expect(badDate.status).toBe(400);
+
+      const edited = await api("PATCH", `/api/clients/${clientId}/contacts/${provider.body.contact.id}`, { startDate: "2026-04-15", phoneCell: "970-555-0150" }, adminCookie);
+      expect(edited.status).toBe(200);
+      expect(edited.body.contact).toMatchObject({ startDate: "2026-04-15", phoneCell: "970-555-0150", name: "Sam Ortiz" });
+      const cleared = await api("PATCH", `/api/clients/${clientId}/contacts/${provider.body.contact.id}`, { startDate: "" }, adminCookie);
+      expect(cleared.body.contact.startDate).toBeNull();
+
+      for (const id of [cm.body.contact.id, provider.body.contact.id]) {
+        expect((await api("DELETE", `/api/clients/${clientId}/contacts/${id}`, undefined, adminCookie)).status).toBe(200);
+      }
     });
 
     it("closes when the provider withholds the capability, while the record stays open", async () => {
@@ -475,6 +607,177 @@ describe.skipIf(!TEST_URL)("client records", () => {
       expect((await fetch(`${base}/api/clients/${clientId}/files/${fileId}/content`, { headers: { cookie: adminCookie } })).status).toBe(404);
       expect((await api("GET", `/api/clients/${clientId}/files`, undefined, adminCookie)).body.files).toHaveLength(0);
     });
+  });
+
+  describe("face-sheet photo", () => {
+    // The smallest real PNG: a 1×1 transparent pixel.
+    const png = Uint8Array.from(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=", "base64"));
+    const jpeg = Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00]);
+
+    it("has none until one is uploaded", async () => {
+      const got = await api("GET", `/api/clients/${clientId}`, undefined, adminCookie);
+      expect(got.body.client.photoUpdatedAt).toBeNull();
+      expect((await fetch(`${base}/api/clients/${clientId}/photo`, { headers: { cookie: adminCookie } })).status).toBe(404);
+    });
+
+    it("stores a photo, stamps the record, and serves it inline as the image it is", async () => {
+      const res = await putPhoto(`/api/clients/${clientId}/photo`, png, "image/png", schedulerCookie);
+      expect(res.status).toBe(200);
+      expect(res.body.client.photoUpdatedAt).toEqual(expect.any(String));
+
+      const photo = await fetch(`${base}/api/clients/${clientId}/photo`, { headers: { cookie: adminCookie } });
+      expect(photo.status).toBe(200);
+      expect(photo.headers.get("content-type")).toBe("image/png");
+      expect(photo.headers.get("x-content-type-options")).toBe("nosniff");
+      expect(photo.headers.get("content-security-policy")).toBe("sandbox");
+      expect(new Uint8Array(await photo.arrayBuffer())).toEqual(png);
+
+      const audit = await api("GET", "/api/org/audit?limit=10", undefined, adminCookie);
+      const entry = (audit.body.entries as any[]).find((e) => e.action === "client.photo_added");
+      expect(entry.details).toEqual({ sizeBytes: png.length });
+    });
+
+    it("replaces the photo rather than keeping two", async () => {
+      const res = await putPhoto(`/api/clients/${clientId}/photo`, jpeg, "image/jpeg", adminCookie);
+      expect(res.status).toBe(200);
+      const photo = await fetch(`${base}/api/clients/${clientId}/photo`, { headers: { cookie: adminCookie } });
+      expect(photo.headers.get("content-type")).toBe("image/jpeg");
+      expect(new Uint8Array(await photo.arrayBuffer())).toEqual(jpeg);
+      const audit = await api("GET", "/api/org/audit?limit=10", undefined, adminCookie);
+      expect((audit.body.entries as any[]).some((e) => e.action === "client.photo_replaced")).toBe(true);
+    });
+
+    it("refuses anything that is not a JPEG, PNG or WebP, and anything mislabelled as one", async () => {
+      const html = new TextEncoder().encode("<html><script>alert(1)</script></html>");
+      expect((await putPhoto(`/api/clients/${clientId}/photo`, html, "text/html", adminCookie)).status).toBe(400);
+      expect((await putPhoto(`/api/clients/${clientId}/photo`, html, "image/png", adminCookie)).status).toBe(400);
+      expect((await putPhoto(`/api/clients/${clientId}/photo`, new TextEncoder().encode("<svg/>"), "image/svg+xml", adminCookie)).status).toBe(400);
+      expect((await putPhoto(`/api/clients/${clientId}/photo`, new Uint8Array(0), "image/png", adminCookie)).status).toBe(400);
+    });
+
+    it("stays inside the organization", async () => {
+      expect((await fetch(`${base}/api/clients/${clientId}/photo`, { headers: { cookie: otherAdminCookie } })).status).toBe(404);
+      expect((await putPhoto(`/api/clients/${clientId}/photo`, png, "image/png", otherAdminCookie)).status).toBe(404);
+    });
+
+    it("removes the photo and clears the stamp", async () => {
+      const res = await api("DELETE", `/api/clients/${clientId}/photo`, undefined, adminCookie);
+      expect(res.status).toBe(200);
+      expect(res.body.client.photoUpdatedAt).toBeNull();
+      expect((await fetch(`${base}/api/clients/${clientId}/photo`, { headers: { cookie: adminCookie } })).status).toBe(404);
+    });
+  });
+
+  it("takes guardianship papers from the record even with the Files tab off, and reaches nothing else", async () => {
+    const pdf = new TextEncoder().encode("%PDF-1.4 letters of guardianship");
+    // Something else in the folder, put there while the Files tab is on.
+    const other = await upload(`/api/clients/${clientId}/files?${new URLSearchParams({ fileName: "id.pdf", category: "Photo ID" })}`, pdf, "application/pdf", adminCookie);
+    expect(other.status).toBe(201);
+
+    expect((await api("PUT", "/api/org/features/clients.paperwork", { enabled: false }, adminCookie)).status).toBe(200);
+    try {
+      expect((await api("GET", `/api/clients/${clientId}/files`, undefined, schedulerCookie)).status).toBe(403);
+
+      // The category is fixed by the route, whatever the query string says.
+      const q = new URLSearchParams({ fileName: "letters.pdf", category: "Photo ID", endDate: "2027-06-30" });
+      const added = await upload(`/api/clients/${clientId}/guardianship-papers?${q}`, pdf, "application/pdf", schedulerCookie);
+      expect(added.status).toBe(201);
+      expect(added.body.file).toMatchObject({ category: "Guardianship papers", fileName: "letters.pdf", endDate: "2027-06-30" });
+      const paperId = added.body.file.id as string;
+
+      const listed = await api("GET", `/api/clients/${clientId}/guardianship-papers`, undefined, schedulerCookie);
+      expect(listed.status).toBe(200);
+      expect(listed.body.files.map((f: any) => f.id)).toEqual([paperId]);
+
+      const download = await fetch(`${base}/api/clients/${clientId}/guardianship-papers/${paperId}/content`, { headers: { cookie: schedulerCookie } });
+      expect(download.status).toBe(200);
+      expect(download.headers.get("content-disposition")).toContain("attachment");
+      expect(new Uint8Array(await download.arrayBuffer())).toEqual(pdf);
+
+      // The other document stays out of reach through these routes.
+      const otherId = other.body.file.id as string;
+      expect((await fetch(`${base}/api/clients/${clientId}/guardianship-papers/${otherId}/content`, { headers: { cookie: schedulerCookie } })).status).toBe(404);
+      expect((await api("DELETE", `/api/clients/${clientId}/guardianship-papers/${otherId}`, undefined, schedulerCookie)).status).toBe(404);
+      expect((await api("GET", `/api/clients/${clientId}/guardianship-papers`, undefined, otherAdminCookie)).status).toBe(404);
+
+      expect((await api("DELETE", `/api/clients/${clientId}/guardianship-papers/${paperId}`, undefined, schedulerCookie)).status).toBe(200);
+      expect((await api("GET", `/api/clients/${clientId}/guardianship-papers`, undefined, schedulerCookie)).body.files).toHaveLength(0);
+    } finally {
+      expect((await api("PUT", "/api/org/features/clients.paperwork", { enabled: true, roles: { Scheduler: true } }, adminCookie)).status).toBe(200);
+      await api("DELETE", `/api/clients/${clientId}/files/${other.body.file.id}`, undefined, adminCookie);
+    }
+  });
+
+  it("records a rep payee separately from guardianship, requires how to reach them, and clears them when no longer applicable", async () => {
+    const created = await api("POST", "/api/clients", { firstName: "Rosa", lastName: "Payne", guardianshipStatus: "Not applicable" }, adminCookie);
+    expect(created.status).toBe(201);
+    const id = created.body.client.id as string;
+    expect(created.body.client).toMatchObject({ repPayeeStatus: null, repPayeeName: null });
+
+    // Choosing "Rep payee" needs the name, phone and email.
+    const incomplete = await api("PATCH", `/api/clients/${id}`, { repPayeeStatus: "Rep payee", repPayeeName: "Marcus Payne" }, schedulerCookie);
+    expect(incomplete.status).toBe(400);
+    expect(incomplete.body.error.message).toContain("phone number, email address");
+
+    const set = await api(
+      "PATCH",
+      `/api/clients/${id}`,
+      {
+        repPayeeStatus: "Rep payee",
+        repPayeeName: "Marcus Payne",
+        repPayeeAddress1: "12 Elm St",
+        repPayeeCity: "Greeley",
+        repPayeeState: "co",
+        repPayeeZip: "80631",
+        repPayeePhone: "970-555-0144",
+        repPayeeEmail: "Marcus@Example.test",
+        repPayeeNumber: "SSA-445-21",
+      },
+      schedulerCookie
+    );
+    expect(set.status).toBe(200);
+    expect(set.body.client).toMatchObject({
+      guardianshipStatus: "Not applicable",
+      repPayeeStatus: "Rep payee",
+      repPayeeName: "Marcus Payne",
+      repPayeeState: "CO",
+      repPayeeEmail: "marcus@example.test",
+      repPayeeNumber: "SSA-445-21",
+    });
+    expect((await api("PATCH", `/api/clients/${id}`, { repPayeeStatus: "Someone" }, adminCookie)).status).toBe(400);
+    expect((await api("PATCH", `/api/clients/${id}`, { repPayeeEmail: "not-an-email" }, adminCookie)).status).toBe(400);
+
+    // Switching away clears the details but keeps the paperwork on file.
+    const cleared = await api("PATCH", `/api/clients/${id}`, { repPayeeStatus: "Not applicable" }, adminCookie);
+    expect(cleared.status).toBe(200);
+    expect(cleared.body.client).toMatchObject({ repPayeeStatus: "Not applicable", repPayeeName: null, repPayeeAddress1: null, repPayeeEmail: null, repPayeeNumber: null });
+  });
+
+  it("takes rep payee paperwork from the record even with the Files tab off, under its own category", async () => {
+    const pdf = new TextEncoder().encode("%PDF-1.4 payee appointment");
+    expect((await api("PUT", "/api/org/features/clients.paperwork", { enabled: false }, adminCookie)).status).toBe(200);
+    try {
+      const q = new URLSearchParams({ fileName: "appointment.pdf", category: "Photo ID" });
+      const added = await upload(`/api/clients/${clientId}/rep-payee-papers?${q}`, pdf, "application/pdf", schedulerCookie);
+      expect(added.status).toBe(201);
+      expect(added.body.file).toMatchObject({ category: "Rep payee paperwork", fileName: "appointment.pdf" });
+      const paperId = added.body.file.id as string;
+
+      const listed = await api("GET", `/api/clients/${clientId}/rep-payee-papers`, undefined, schedulerCookie);
+      expect(listed.body.files.map((f: any) => f.id)).toEqual([paperId]);
+      // The guardian's list does not see it, nor does another organization.
+      expect((await api("GET", `/api/clients/${clientId}/guardianship-papers`, undefined, schedulerCookie)).body.files).toHaveLength(0);
+      expect((await api("GET", `/api/clients/${clientId}/rep-payee-papers`, undefined, otherAdminCookie)).status).toBe(404);
+
+      const download = await fetch(`${base}/api/clients/${clientId}/rep-payee-papers/${paperId}/content`, { headers: { cookie: schedulerCookie } });
+      expect(download.status).toBe(200);
+      expect(new Uint8Array(await download.arrayBuffer())).toEqual(pdf);
+
+      expect((await api("DELETE", `/api/clients/${clientId}/rep-payee-papers/${paperId}`, undefined, schedulerCookie)).status).toBe(200);
+      expect((await api("GET", `/api/clients/${clientId}/rep-payee-papers`, undefined, schedulerCookie)).body.files).toHaveLength(0);
+    } finally {
+      expect((await api("PUT", "/api/org/features/clients.paperwork", { enabled: true, roles: { Scheduler: true } }, adminCookie)).status).toBe(200);
+    }
   });
 
   it("keeps everything inside one organization", async () => {

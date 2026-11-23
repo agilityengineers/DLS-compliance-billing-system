@@ -9,6 +9,8 @@ import {
   CLIENT_GENDERS,
   CLIENT_STATUSES,
   GUARDIANSHIP_STATUSES,
+  GUARDIAN_REQUIRED_STATUSES,
+  REP_PAYEE_STATUSES,
   MARITAL_STATUSES,
   clientsApi,
   type ClientDiagnosis,
@@ -24,6 +26,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DiagnosisEntry, type DiagnosisEntryHandle } from "./diagnosis-entry";
 import { selectClass } from "./format";
+import { ClientCareTeam } from "./client-care-team";
+import { GuardianshipPapers, RepPayeePapers } from "./guardianship-papers";
 
 type Draft = {
   firstName: string;
@@ -41,6 +45,25 @@ type Draft = {
   ethnicity: string;
   race: string;
   guardianshipStatus: string;
+  guardianName: string;
+  guardianRelationship: string;
+  guardianEmail: string;
+  guardianPhone: string;
+  guardianAddress1: string;
+  guardianAddress2: string;
+  guardianCity: string;
+  guardianState: string;
+  guardianZip: string;
+  repPayeeStatus: string;
+  repPayeeName: string;
+  repPayeeAddress1: string;
+  repPayeeAddress2: string;
+  repPayeeCity: string;
+  repPayeeState: string;
+  repPayeeZip: string;
+  repPayeePhone: string;
+  repPayeeEmail: string;
+  repPayeeNumber: string;
   accountCode: string;
   admissionDate: string;
   dischargeDate: string;
@@ -60,6 +83,12 @@ type Draft = {
   authorizedEiHoursPerWeek: number;
   caseManagerName: string;
   ccbName: string;
+  ccbPhone: string;
+  ccbEmail: string;
+  ccbAddress1: string;
+  ccbCity: string;
+  ccbState: string;
+  ccbZip: string;
   status: ClientStatus;
 };
 
@@ -80,6 +109,25 @@ function draftOf(c: ClientRecord): Draft {
     ethnicity: c.ethnicity ?? "",
     race: c.race ?? "",
     guardianshipStatus: c.guardianshipStatus ?? "",
+    guardianName: c.guardianName ?? "",
+    guardianRelationship: c.guardianRelationship ?? "",
+    guardianEmail: c.guardianEmail ?? "",
+    guardianPhone: c.guardianPhone ?? "",
+    guardianAddress1: c.guardianAddress1 ?? "",
+    guardianAddress2: c.guardianAddress2 ?? "",
+    guardianCity: c.guardianCity ?? "",
+    guardianState: c.guardianState ?? "",
+    guardianZip: c.guardianZip ?? "",
+    repPayeeStatus: c.repPayeeStatus ?? "",
+    repPayeeName: c.repPayeeName ?? "",
+    repPayeeAddress1: c.repPayeeAddress1 ?? "",
+    repPayeeAddress2: c.repPayeeAddress2 ?? "",
+    repPayeeCity: c.repPayeeCity ?? "",
+    repPayeeState: c.repPayeeState ?? "",
+    repPayeeZip: c.repPayeeZip ?? "",
+    repPayeePhone: c.repPayeePhone ?? "",
+    repPayeeEmail: c.repPayeeEmail ?? "",
+    repPayeeNumber: c.repPayeeNumber ?? "",
     accountCode: c.accountCode ?? "",
     admissionDate: c.admissionDate ?? "",
     dischargeDate: c.dischargeDate ?? "",
@@ -99,6 +147,12 @@ function draftOf(c: ClientRecord): Draft {
     authorizedEiHoursPerWeek: c.authorizedEiHoursPerWeek,
     caseManagerName: c.caseManagerName ?? "",
     ccbName: c.ccbName ?? "",
+    ccbPhone: c.ccbPhone ?? "",
+    ccbEmail: c.ccbEmail ?? "",
+    ccbAddress1: c.ccbAddress1 ?? "",
+    ccbCity: c.ccbCity ?? "",
+    ccbState: c.ccbState ?? "",
+    ccbZip: c.ccbZip ?? "",
     status: c.status,
   };
 }
@@ -115,11 +169,17 @@ function Field({ id, label, children, className }: { id: string; label: string; 
 export function ClientRecordForm({
   client,
   isAdmin,
+  today,
   onSaved,
+  careTeam = false,
 }: {
   client: ClientRecord;
   isAdmin: boolean;
+  /** The agency's today (YYYY-MM-DD), for spotting lapsed guardianship papers. */
+  today: string;
   onSaved: (client: ClientRecord) => void;
+  /** Show the case manager / external provider drop-down (needs clients.contacts). */
+  careTeam?: boolean;
 }) {
   const [draft, setDraft] = useState<Draft>(() => draftOf(client));
   const [diagnoses, setDiagnoses] = useState<ClientDiagnosis[]>(client.activeDiagnoses);
@@ -127,11 +187,14 @@ export function ClientRecordForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [caseManagerNote, setCaseManagerNote] = useState<string | null>(null);
 
   const set = <K extends keyof Draft>(key: K) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setSaved(false);
     setDraft((d) => ({ ...d, [key]: e.target.type === "number" ? Number(e.target.value) : e.target.value }));
   };
+  const needsGuardian = GUARDIAN_REQUIRED_STATUSES.includes(draft.guardianshipStatus);
+  const isRepPayee = draft.repPayeeStatus === "Rep payee";
   const text = (id: keyof Draft, label: string, type = "text", extra: Partial<React.InputHTMLAttributes<HTMLInputElement>> = {}) => (
     <Field id={`client-${id}`} label={label}>
       <Input id={`client-${id}`} type={type} value={String(draft[id])} onChange={set(id)} {...extra} />
@@ -159,6 +222,7 @@ export function ClientRecordForm({
       setDraft(draftOf(res.client));
       setDiagnoses(res.client.activeDiagnoses);
       setSaved(true);
+      setCaseManagerNote(null);
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -212,6 +276,62 @@ export function ClientRecordForm({
         </div>
       </section>
 
+      {needsGuardian && (
+        <section className="rounded-card border border-border bg-card" aria-labelledby="client-guardian-heading">
+          <h2 id="client-guardian-heading" className="border-b border-border px-4 py-3 font-medium">Guardian</h2>
+          <p className="px-4 pt-3 text-sm text-muted-foreground">
+            Who decides for {draft.firstName || "this client"} and how to reach them. Name, phone and email are required while guardianship is
+            “{draft.guardianshipStatus}”. Upload the guardianship papers below.
+          </p>
+          <div className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3">
+            {text("guardianName", "Guardian name", "text", { required: true, autoComplete: "off" })}
+            {text("guardianRelationship", "Relationship to client", "text", { placeholder: "Mother, brother, public guardian…" })}
+            {text("guardianPhone", "Guardian phone", "tel", { required: true })}
+            {text("guardianEmail", "Guardian email", "email", { required: true })}
+            {text("guardianAddress1", "Guardian address", "text")}
+            {text("guardianAddress2", "Address line 2")}
+            {text("guardianCity", "City")}
+            {text("guardianState", "State", "text", { maxLength: 2, placeholder: "CO" })}
+            {text("guardianZip", "ZIP", "text", { maxLength: 10 })}
+          </div>
+          <GuardianshipPapers clientId={client.id} today={today} />
+        </section>
+      )}
+
+      <section className="rounded-card border border-border bg-card" aria-labelledby="client-rep-payee-heading">
+        <h2 id="client-rep-payee-heading" className="border-b border-border px-4 py-3 font-medium">Rep payee</h2>
+        <div className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3">
+          <Field id="client-repPayeeStatus" label="Rep payee">
+            <select id="client-repPayeeStatus" className={selectClass} value={draft.repPayeeStatus} onChange={set("repPayeeStatus")}>
+              <option value="">Not recorded</option>
+              {REP_PAYEE_STATUSES.map((g) => (
+                <option key={g} value={g}>{g}</option>
+              ))}
+            </select>
+          </Field>
+        </div>
+        {isRepPayee && (
+          <>
+            <p className="px-4 text-sm text-muted-foreground">
+              Who receives and manages {draft.firstName ? `${draft.firstName}’s` : "the client’s"} benefits. Name, phone and email are required; add the
+              payee or account number when the arrangement has one. Upload the paperwork below.
+            </p>
+            <div className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3">
+              {text("repPayeeName", "Rep payee name", "text", { required: true, autoComplete: "off" })}
+              {text("repPayeeNumber", "Payee / account number")}
+              {text("repPayeePhone", "Rep payee phone", "tel", { required: true })}
+              {text("repPayeeEmail", "Rep payee email", "email", { required: true })}
+              {text("repPayeeAddress1", "Rep payee address")}
+              {text("repPayeeAddress2", "Address line 2")}
+              {text("repPayeeCity", "City")}
+              {text("repPayeeState", "State", "text", { maxLength: 2, placeholder: "CO" })}
+              {text("repPayeeZip", "ZIP", "text", { maxLength: 10 })}
+            </div>
+            <RepPayeePapers clientId={client.id} today={today} />
+          </>
+        )}
+      </section>
+
       <section className="rounded-card border border-border bg-card">
         <h2 className="border-b border-border px-4 py-3 font-medium">Status &amp; dates</h2>
         <div className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -256,7 +376,13 @@ export function ClientRecordForm({
         <h2 className="border-b border-border px-4 py-3 font-medium">Care team &amp; weekly authorizations</h2>
         <div className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3">
           {text("caseManagerName", "Case manager")}
-          {text("ccbName", "CCB")}
+          {text("ccbName", "Case Management Agency (CCB)")}
+          {text("ccbPhone", "CCB phone", "tel")}
+          {text("ccbEmail", "CCB email", "email")}
+          {text("ccbAddress1", "CCB address")}
+          {text("ccbCity", "CCB city")}
+          {text("ccbState", "CCB state", "text", { maxLength: 2, placeholder: "CO" })}
+          {text("ccbZip", "CCB ZIP", "text", { maxLength: 10 })}
           {text("insuranceProvider", "Insurance provider (summary)")}
           {text("authorizedSccHoursPerWeek", "SCC hrs / week", "number", { min: 0, step: 0.25 })}
           {text("authorizedJcHoursPerWeek", "Job Coaching hrs / week", "number", { min: 0, step: 0.25 })}
@@ -264,9 +390,21 @@ export function ClientRecordForm({
           {text("authorizedEiHoursPerWeek", "Early Intervention hrs / week", "number", { min: 0, step: 0.25 })}
           {text("authorizedNmtTripsPerWeek", "NMT trips / week", "number", { min: 0, step: 1 })}
         </div>
+        {caseManagerNote && <p className="px-4 pb-2 text-xs text-foreground" role="status">{caseManagerNote}</p>}
         <p className="px-4 pb-4 text-xs text-muted-foreground">
           Claim readiness still reads these weekly caps. Record the authorization itself, with its number and period, on the Authorizations tab.
         </p>
+        {careTeam && (
+          <ClientCareTeam
+            clientId={client.id}
+            onCaseManagerChanged={(name) => {
+              if (name === draft.caseManagerName) return;
+              setSaved(false);
+              setDraft((d) => ({ ...d, caseManagerName: name }));
+              setCaseManagerNote(`Case manager set to ${name}, the most recent on file. Save the record to keep it.`);
+            }}
+          />
+        )}
       </section>
 
       <section className="rounded-card border border-border bg-card">

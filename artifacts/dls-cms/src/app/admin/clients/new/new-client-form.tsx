@@ -1,12 +1,16 @@
 // app/admin/clients/new/page.tsx — intake form with live age + diagnosis count
+// and the face-sheet photo, which is uploaded once the record exists.
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { clientsApi } from "@/lib/api/admin";
+import { errorMessage } from "@/lib/api/client";
+import { PHOTO_ACCEPT, PhotoFrame, photoProblem } from "@/components/admin/clients/client-photo";
 import { DiagnosisEntry, type DiagnosisDraft, type DiagnosisEntryHandle } from "@/components/admin/clients/diagnosis-entry";
 import { createClientRecord } from "../actions";
 
@@ -21,7 +25,7 @@ export interface IntakePrefill {
   phone: string;
 }
 
-export function NewClientForm({ prefill }: { prefill?: IntakePrefill } = {}) {
+export function NewClientForm({ prefill, photoEnabled = false }: { prefill?: IntakePrefill; photoEnabled?: boolean } = {}) {
   const router = useRouter();
   const [form, setForm] = useState({
     first_name: prefill?.first_name ?? "", middle_name: "", last_name: prefill?.last_name ?? "",
@@ -30,12 +34,24 @@ export function NewClientForm({ prefill }: { prefill?: IntakePrefill } = {}) {
     medicaid_id: "", date_of_birth: "",
     insurance_provider: "", service_plan_start: "", service_plan_end: "",
     authorized_scc_hours_per_week: 0, authorized_nmt_trips_per_week: 0,
-    case_manager_name: "", ccb_name: ""
+    case_manager_name: "", ccb_name: "",
+    ccb_phone: "", ccb_email: "", ccb_address1: "", ccb_city: "", ccb_state: "", ccb_zip: ""
   });
   const [diagnoses, setDiagnoses] = useState<Dx[]>([]);
   const dxEntry = useRef<DiagnosisEntryHandle>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  /** Set when the client was created but the photo did not save: where to go on from here. */
+  const [createdAt, setCreatedAt] = useState<string | null>(null);
+  const photoInput = useRef<HTMLInputElement>(null);
+
+  // A local preview of the picked photo, released when it changes or the form goes away.
+  const preview = useMemo(() => (photo ? URL.createObjectURL(photo) : null), [photo]);
+  useEffect(() => () => {
+    if (preview) URL.revokeObjectURL(preview);
+  }, [preview]);
 
   const age = useMemo(() => {
     if (!form.date_of_birth) return null;
@@ -63,9 +79,22 @@ export function NewClientForm({ prefill }: { prefill?: IntakePrefill } = {}) {
     if (pending.status === "ok") setDiagnoses(allDiagnoses);
     setSaving(true);
     const res = await createClientRecord({ ...form, active_diagnoses: allDiagnoses, source_lead_id: prefill?.lead_id });
+    if (!res.ok) { setSaving(false); setError(res.error ?? "Failed to save."); return; }
+    const next = prefill ? `/admin/leads/${prefill.lead_id}` : res.id ? `/admin/clients/${res.id}` : "/admin/clients";
+    // The photo needs the record to hang on, so it goes up second. If it
+    // fails the client still exists: say so rather than lose the intake.
+    if (photo && res.id) {
+      try {
+        await clientsApi.photo.upload(res.id, photo);
+      } catch (e) {
+        setSaving(false);
+        setCreatedAt(`/admin/clients/${res.id}`);
+        setError(`The client was created, but the photo did not save: ${errorMessage(e)} You can add it from the client's record.`);
+        return;
+      }
+    }
     setSaving(false);
-    if (!res.ok) { setError(res.error ?? "Failed to save."); return; }
-    router.push(prefill ? `/admin/leads/${prefill.lead_id}` : res.id ? `/admin/clients/${res.id}` : "/admin/clients");
+    router.push(next);
   }
 
   return (
@@ -77,6 +106,42 @@ export function NewClientForm({ prefill }: { prefill?: IntakePrefill } = {}) {
         </p>
       )}
       <form onSubmit={onSubmit} className="space-y-5">
+        {photoEnabled && (
+          <fieldset className="flex flex-wrap items-center gap-4 rounded-lg border border-border p-4">
+            <legend className="px-1 text-sm font-medium">Client photo</legend>
+            <PhotoFrame
+              src={preview}
+              initials={`${form.first_name.charAt(0)}${form.last_name.charAt(0)}`.toUpperCase() || "?"}
+              size="md"
+            />
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted-foreground">Shown on the client&apos;s face sheet so staff can recognise them. JPEG, PNG or WebP, up to 5 MB. Optional.</p>
+              <input
+                ref={photoInput}
+                type="file"
+                accept={PHOTO_ACCEPT}
+                className="sr-only"
+                aria-label="Client photo"
+                onChange={(e) => {
+                  const file = e.target.files?.[0] ?? null;
+                  e.target.value = "";
+                  if (!file) return;
+                  const problem = photoProblem(file);
+                  setPhotoError(problem);
+                  if (!problem) setPhoto(file);
+                }}
+              />
+              <div className="flex gap-2">
+                <Button type="button" size="sm" variant="outline" onClick={() => photoInput.current?.click()}>
+                  {photo ? "Choose a different photo" : "Upload photo"}
+                </Button>
+                {photo && <Button type="button" size="sm" variant="ghost" onClick={() => setPhoto(null)}>Remove</Button>}
+              </div>
+              {photoError && <p className="text-xs text-destructive" role="alert">{photoError}</p>}
+            </div>
+          </fieldset>
+        )}
+
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1.5"><Label>First name</Label><Input required value={form.first_name} onChange={set("first_name")} /></div>
           <div className="space-y-1.5"><Label>Last name</Label><Input required value={form.last_name} onChange={set("last_name")} /></div>
@@ -114,7 +179,15 @@ export function NewClientForm({ prefill }: { prefill?: IntakePrefill } = {}) {
           <div className="space-y-1.5"><Label>Authorized SCC hrs/week</Label><Input type="number" min={0} step={0.25} value={form.authorized_scc_hours_per_week} onChange={set("authorized_scc_hours_per_week")} /></div>
           <div className="space-y-1.5"><Label>Authorized NMT trips/week</Label><Input type="number" min={0} value={form.authorized_nmt_trips_per_week} onChange={set("authorized_nmt_trips_per_week")} /></div>
           <div className="space-y-1.5"><Label>Case manager</Label><Input value={form.case_manager_name} onChange={set("case_manager_name")} /></div>
-          <div className="space-y-1.5"><Label>CCB</Label><Input value={form.ccb_name} onChange={set("ccb_name")} /></div>
+          <div className="space-y-1.5"><Label>Case Management Agency (CCB)</Label><Input value={form.ccb_name} onChange={set("ccb_name")} /></div>
+          <div className="space-y-1.5"><Label>CCB phone</Label><Input type="tel" value={form.ccb_phone} onChange={set("ccb_phone")} /></div>
+          <div className="space-y-1.5"><Label>CCB email</Label><Input type="email" value={form.ccb_email} onChange={set("ccb_email")} /></div>
+          <div className="space-y-1.5 col-span-2"><Label>CCB address</Label><Input value={form.ccb_address1} onChange={set("ccb_address1")} /></div>
+          <div className="space-y-1.5"><Label>CCB city</Label><Input value={form.ccb_city} onChange={set("ccb_city")} /></div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5"><Label>CCB state</Label><Input maxLength={2} placeholder="CO" value={form.ccb_state} onChange={set("ccb_state")} /></div>
+            <div className="space-y-1.5"><Label>CCB ZIP</Label><Input maxLength={10} value={form.ccb_zip} onChange={set("ccb_zip")} /></div>
+          </div>
         </div>
 
         <fieldset className="space-y-3 rounded-lg border border-border p-4">
@@ -142,8 +215,14 @@ export function NewClientForm({ prefill }: { prefill?: IntakePrefill } = {}) {
 
         {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
         <div className="flex gap-3">
-          <Button type="submit" disabled={saving}>{saving ? "Saving…" : "Create client"}</Button>
-          <Button type="button" variant="ghost" onClick={() => router.back()}>Cancel</Button>
+          {createdAt ? (
+            <Button type="button" onClick={() => router.push(createdAt)}>Go to the client</Button>
+          ) : (
+            <>
+              <Button type="submit" disabled={saving}>{saving ? "Saving…" : "Create client"}</Button>
+              <Button type="button" variant="ghost" onClick={() => router.back()}>Cancel</Button>
+            </>
+          )}
         </div>
       </form>
     </div>
