@@ -10,15 +10,19 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
-export function ClientHealthTab({ client, onSaved }: { client: ClientRecord; onSaved: (client: ClientRecord) => void }) {
-  const [form, setForm] = useState({
+function formOf(client: ClientRecord) {
+  return {
     allergies: client.allergies ?? "",
     medicalConcerns: client.medicalConcerns ?? "",
     supervisionRequirements: client.supervisionRequirements ?? "",
     generalInformation: client.generalInformation ?? "",
     hasBehaviorSupportPlan: client.hasBehaviorSupportPlan,
     behaviorSupportPlanNotes: client.behaviorSupportPlanNotes ?? "",
-  });
+  };
+}
+
+export function ClientHealthTab({ client, onSaved }: { client: ClientRecord; onSaved: (client: ClientRecord) => void }) {
+  const [form, setForm] = useState(() => formOf(client));
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,6 +54,7 @@ export function ClientHealthTab({ client, onSaved }: { client: ClientRecord; onS
           .update(client.id, form)
           .then((res) => {
             onSaved(res.client);
+            setForm(formOf(res.client));
             setSaved(true);
           })
           .catch((err) => setError(errorMessage(err)))
