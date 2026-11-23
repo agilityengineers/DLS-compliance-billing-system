@@ -1,10 +1,11 @@
 // components/admin/clients/client-contacts-tab.tsx — the people around the
-// client: responsible party, guardian, emergency contact, physician, case
-// manager. Rides clients.contacts.
+// client: responsible party, guardian, emergency contact, physician, and the
+// care team (case manager, other external providers). Rides clients.contacts.
+// ContactForm is shared with the record's "Care team" drop-down.
 "use client";
 
 import { useEffect, useState } from "react";
-import { CLIENT_CONTACT_KIND_LABELS, clientsApi, type ClientContact, type ClientContactInput, type ClientContactKind } from "@/lib/api/admin";
+import { CARE_TEAM_CONTACT_KINDS, CLIENT_CONTACT_KIND_LABELS, clientsApi, type ClientContact, type ClientContactInput, type ClientContactKind } from "@/lib/api/admin";
 import { errorMessage } from "@/lib/api/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,52 +16,190 @@ import { selectClass } from "./format";
 
 const KINDS = Object.keys(CLIENT_CONTACT_KIND_LABELS) as ClientContactKind[];
 
-const empty = (): ClientContactInput => ({ kind: "responsible_party", name: "", relationship: "", phone: "", email: "", address1: "", city: "", state: "", zip: "", npi: "", isPrimary: false, notes: "" });
+export const emptyContact = (kind: ClientContactKind = "responsible_party"): ClientContactInput => ({
+  kind,
+  name: "",
+  relationship: "",
+  phone: "",
+  phoneWork: "",
+  phoneCell: "",
+  email: "",
+  address1: "",
+  city: "",
+  state: "",
+  zip: "",
+  npi: "",
+  isPrimary: false,
+  notes: "",
+  startDate: "",
+});
 
-function ContactForm({ initial, onCancel, onSubmit, busy }: { initial: ClientContactInput; onCancel: () => void; onSubmit: (input: ClientContactInput) => void; busy: boolean }) {
+export const isCareTeam = (kind: ClientContactKind) => CARE_TEAM_CONTACT_KINDS.includes(kind);
+
+/**
+ * One contact's fields. `kinds` narrows the Role choices (the Care team
+ * drop-down offers only case manager and external provider). `nested` renders
+ * a plain group instead of a <form>, for use inside another form: Enter in a
+ * field then saves this contact rather than submitting the outer form.
+ */
+export function ContactForm({
+  initial,
+  onCancel,
+  onSubmit,
+  busy,
+  kinds = KINDS,
+  nested = false,
+  idPrefix = "contact",
+}: {
+  initial: ClientContactInput;
+  onCancel: () => void;
+  onSubmit: (input: ClientContactInput) => void;
+  busy: boolean;
+  kinds?: readonly ClientContactKind[];
+  nested?: boolean;
+  idPrefix?: string;
+}) {
   const [form, setForm] = useState<ClientContactInput>(initial);
   const set = (key: keyof ClientContactInput) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm((f) => ({ ...f, [key]: e.target.type === "checkbox" ? (e.target as HTMLInputElement).checked : e.target.value }));
-  return (
-    <form
-      className="space-y-3 rounded-md border border-border bg-muted/30 p-4"
-      onSubmit={(e) => {
-        e.preventDefault();
-        onSubmit(form);
-      }}
-    >
+  const id = (field: string) => `${idPrefix}-${field}`;
+  const careTeam = isCareTeam(form.kind);
+  const canSave = !busy && form.name.trim().length > 0;
+  const submit = () => {
+    if (canSave) onSubmit(form);
+  };
+
+  const fields = (
+    <>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <div className="space-y-1.5">
-          <Label htmlFor="contact-kind">Role</Label>
-          <select id="contact-kind" className={selectClass} value={form.kind} onChange={set("kind")}>
-            {KINDS.map((k) => (
+          <Label htmlFor={id("kind")}>Role</Label>
+          <select id={id("kind")} className={selectClass} value={form.kind} onChange={set("kind")}>
+            {kinds.map((k) => (
               <option key={k} value={k}>{CLIENT_CONTACT_KIND_LABELS[k]}</option>
             ))}
           </select>
         </div>
-        <div className="space-y-1.5"><Label htmlFor="contact-name">Name</Label><Input id="contact-name" required value={form.name} onChange={set("name")} /></div>
-        <div className="space-y-1.5"><Label htmlFor="contact-relationship">Relationship</Label><Input id="contact-relationship" value={form.relationship ?? ""} onChange={set("relationship")} placeholder="Mother, sister, friend…" /></div>
-        <div className="space-y-1.5"><Label htmlFor="contact-phone">Phone</Label><Input id="contact-phone" type="tel" value={form.phone ?? ""} onChange={set("phone")} /></div>
-        <div className="space-y-1.5"><Label htmlFor="contact-email">Email</Label><Input id="contact-email" type="email" value={form.email ?? ""} onChange={set("email")} /></div>
-        {form.kind === "physician" && (
-          <div className="space-y-1.5"><Label htmlFor="contact-npi">NPI</Label><Input id="contact-npi" inputMode="numeric" maxLength={10} value={form.npi ?? ""} onChange={set("npi")} placeholder="10 digits" /></div>
+        <div className="space-y-1.5"><Label htmlFor={id("name")}>Name</Label><Input id={id("name")} required value={form.name} onChange={set("name")} /></div>
+        {careTeam ? (
+          <div className="space-y-1.5">
+            <Label htmlFor={id("relationship")}>Agency / specialty</Label>
+            <Input
+              id={id("relationship")}
+              value={form.relationship ?? ""}
+              onChange={set("relationship")}
+              placeholder={form.kind === "case_manager" ? "Case management agency" : "Therapist, PCP, behaviorist…"}
+            />
+          </div>
+        ) : (
+          <div className="space-y-1.5"><Label htmlFor={id("relationship")}>Relationship</Label><Input id={id("relationship")} value={form.relationship ?? ""} onChange={set("relationship")} placeholder="Mother, sister, friend…" /></div>
         )}
-        <div className="space-y-1.5 lg:col-span-2"><Label htmlFor="contact-address1">Address</Label><Input id="contact-address1" value={form.address1 ?? ""} onChange={set("address1")} /></div>
-        <div className="space-y-1.5"><Label htmlFor="contact-city">City</Label><Input id="contact-city" value={form.city ?? ""} onChange={set("city")} /></div>
-        <div className="space-y-1.5"><Label htmlFor="contact-state">State</Label><Input id="contact-state" maxLength={2} value={form.state ?? ""} onChange={set("state")} /></div>
-        <div className="space-y-1.5"><Label htmlFor="contact-zip">ZIP</Label><Input id="contact-zip" maxLength={10} value={form.zip ?? ""} onChange={set("zip")} /></div>
-        <div className="space-y-1.5 sm:col-span-2 lg:col-span-3"><Label htmlFor="contact-notes">Notes</Label><Textarea id="contact-notes" rows={2} value={form.notes ?? ""} onChange={set("notes")} /></div>
+        {careTeam ? (
+          <>
+            <div className="space-y-1.5"><Label htmlFor={id("phoneWork")}>Work phone</Label><Input id={id("phoneWork")} type="tel" value={form.phoneWork ?? ""} onChange={set("phoneWork")} /></div>
+            <div className="space-y-1.5"><Label htmlFor={id("phoneCell")}>Cell phone</Label><Input id={id("phoneCell")} type="tel" value={form.phoneCell ?? ""} onChange={set("phoneCell")} /></div>
+          </>
+        ) : (
+          <div className="space-y-1.5"><Label htmlFor={id("phone")}>Phone</Label><Input id={id("phone")} type="tel" value={form.phone ?? ""} onChange={set("phone")} /></div>
+        )}
+        <div className="space-y-1.5"><Label htmlFor={id("email")}>Email</Label><Input id={id("email")} type="email" value={form.email ?? ""} onChange={set("email")} /></div>
+        {careTeam && (
+          <div className="space-y-1.5">
+            <Label htmlFor={id("startDate")}>{form.kind === "case_manager" ? "Became case manager on" : "Became provider on"}</Label>
+            <Input id={id("startDate")} type="date" value={form.startDate ?? ""} onChange={set("startDate")} />
+          </div>
+        )}
+        {(form.kind === "physician" || form.kind === "external_provider") && (
+          <div className="space-y-1.5"><Label htmlFor={id("npi")}>NPI</Label><Input id={id("npi")} inputMode="numeric" maxLength={10} value={form.npi ?? ""} onChange={set("npi")} placeholder="10 digits" /></div>
+        )}
+        <div className="space-y-1.5 lg:col-span-2"><Label htmlFor={id("address1")}>Address</Label><Input id={id("address1")} value={form.address1 ?? ""} onChange={set("address1")} /></div>
+        <div className="space-y-1.5"><Label htmlFor={id("city")}>City</Label><Input id={id("city")} value={form.city ?? ""} onChange={set("city")} /></div>
+        <div className="space-y-1.5"><Label htmlFor={id("state")}>State</Label><Input id={id("state")} maxLength={2} value={form.state ?? ""} onChange={set("state")} /></div>
+        <div className="space-y-1.5"><Label htmlFor={id("zip")}>ZIP</Label><Input id={id("zip")} maxLength={10} value={form.zip ?? ""} onChange={set("zip")} /></div>
+        <div className="space-y-1.5 sm:col-span-2 lg:col-span-3"><Label htmlFor={id("notes")}>Notes</Label><Textarea id={id("notes")} rows={2} value={form.notes ?? ""} onChange={set("notes")} /></div>
       </div>
       <label className="flex items-center gap-2 text-sm">
-        <input id="contact-primary" type="checkbox" className="h-4 w-4 accent-[#5F7161]" checked={form.isPrimary ?? false} onChange={set("isPrimary")} />
+        <input id={id("primary")} type="checkbox" className="h-4 w-4 accent-[#5F7161]" checked={form.isPrimary ?? false} onChange={set("isPrimary")} />
         Primary contact — call this person first
       </label>
       <div className="flex gap-2">
-        <Button type="submit" size="sm" disabled={busy || !form.name.trim()}>{busy ? "Saving…" : "Save contact"}</Button>
+        <Button type={nested ? "button" : "submit"} size="sm" disabled={!canSave} onClick={nested ? submit : undefined}>{busy ? "Saving…" : "Save contact"}</Button>
         <Button type="button" size="sm" variant="ghost" onClick={onCancel}>Cancel</Button>
       </div>
+    </>
+  );
+
+  const className = "space-y-3 rounded-md border border-border bg-muted/30 p-4";
+  if (nested) {
+    return (
+      <div
+        role="group"
+        aria-label="Contact details"
+        className={className}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && e.target instanceof HTMLInputElement && e.target.type !== "checkbox") {
+            e.preventDefault();
+            submit();
+          }
+        }}
+      >
+        {fields}
+      </div>
+    );
+  }
+  return (
+    <form
+      className={className}
+      onSubmit={(e) => {
+        e.preventDefault();
+        submit();
+      }}
+    >
+      {fields}
     </form>
   );
+}
+
+/** The one-line summary of how to reach a contact, shared with the Care team section. */
+export function ContactSummary({ c }: { c: ClientContact }) {
+  return (
+    <div className="flex flex-wrap gap-x-4 text-muted-foreground">
+      {c.phone && <span>{c.phone}</span>}
+      {c.phoneWork && <span>Work {c.phoneWork}</span>}
+      {c.phoneCell && <span>Cell {c.phoneCell}</span>}
+      {c.email && <span>{c.email}</span>}
+      {c.npi && <span>NPI {c.npi}</span>}
+      {c.startDate && <span>Since {formatIsoDate(c.startDate)}</span>}
+      {(c.address1 || c.city) && <span>{[c.address1, c.city, c.state, c.zip].filter(Boolean).join(", ")}</span>}
+    </div>
+  );
+}
+
+/** YYYY-MM-DD → "Mar 4, 2026", without a timezone shift. */
+export function formatIsoDate(iso: string) {
+  const [y, m, d] = iso.split("-").map(Number);
+  if (!y || !m || !d) return iso;
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+}
+
+export function contactToInput(c: ClientContact): ClientContactInput {
+  return {
+    kind: c.kind,
+    name: c.name,
+    relationship: c.relationship ?? "",
+    phone: c.phone ?? "",
+    phoneWork: c.phoneWork ?? "",
+    phoneCell: c.phoneCell ?? "",
+    email: c.email ?? "",
+    address1: c.address1 ?? "",
+    city: c.city ?? "",
+    state: c.state ?? "",
+    zip: c.zip ?? "",
+    npi: c.npi ?? "",
+    isPrimary: c.isPrimary,
+    notes: c.notes ?? "",
+    startDate: c.startDate ?? "",
+  };
 }
 
 export function ClientContactsTab({ clientId }: { clientId: string }) {
@@ -103,21 +242,6 @@ export function ClientContactsTab({ clientId }: { clientId: string }) {
   if (error && !contacts) return <p className="text-sm text-destructive" role="alert">{error}</p>;
   if (!contacts) return <p className="text-sm text-muted-foreground">Loading contacts…</p>;
 
-  const toInput = (c: ClientContact): ClientContactInput => ({
-    kind: c.kind,
-    name: c.name,
-    relationship: c.relationship ?? "",
-    phone: c.phone ?? "",
-    email: c.email ?? "",
-    address1: c.address1 ?? "",
-    city: c.city ?? "",
-    state: c.state ?? "",
-    zip: c.zip ?? "",
-    npi: c.npi ?? "",
-    isPrimary: c.isPrimary,
-    notes: c.notes ?? "",
-  });
-
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -127,7 +251,7 @@ export function ClientContactsTab({ clientId }: { clientId: string }) {
       {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
       {editing === "new" && (
         <ContactForm
-          initial={empty()}
+          initial={emptyContact()}
           busy={busy}
           onCancel={() => setEditing(null)}
           onSubmit={(input) =>
@@ -144,7 +268,7 @@ export function ClientContactsTab({ clientId }: { clientId: string }) {
           editing === c.id ? (
             <li key={c.id} className="p-2">
               <ContactForm
-                initial={toInput(c)}
+                initial={contactToInput(c)}
                 busy={busy}
                 onCancel={() => setEditing(null)}
                 onSubmit={(input) =>
@@ -165,12 +289,7 @@ export function ClientContactsTab({ clientId }: { clientId: string }) {
                   {c.isPrimary && <Badge variant="success">Primary</Badge>}
                   {c.relationship && <span className="text-muted-foreground">{c.relationship}</span>}
                 </div>
-                <div className="flex flex-wrap gap-x-4 text-muted-foreground">
-                  {c.phone && <span>{c.phone}</span>}
-                  {c.email && <span>{c.email}</span>}
-                  {c.npi && <span>NPI {c.npi}</span>}
-                  {(c.address1 || c.city) && <span>{[c.address1, c.city, c.state, c.zip].filter(Boolean).join(", ")}</span>}
-                </div>
+                <ContactSummary c={c} />
                 {c.notes && <p className="whitespace-pre-wrap text-muted-foreground">{c.notes}</p>}
               </div>
               <div className="flex shrink-0 gap-1">

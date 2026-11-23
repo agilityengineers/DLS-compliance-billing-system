@@ -6,7 +6,8 @@
 //                              and support notes staff read before a visit
 //   client_contacts            the people around the client: responsible
 //                              party, guardian, emergency contact, physician,
-//                              case manager
+//                              and the care team: case manager and other
+//                              external providers, with the date each began
 //   client_insurance_policies  primary / secondary coverage with the member
 //                              and group numbers a claim needs
 //   client_authorizations      prior authorizations as records of their own:
@@ -15,6 +16,10 @@
 //   client_files               the paperwork on file for the client, by
 //                              category, with the dates it covers, stored in
 //                              the database so nothing depends on a bucket
+//   client_photos              the one photo on the client's face sheet, so
+//                              staff can recognise the person they serve; kept
+//                              apart from the row so listing clients never
+//                              drags image bytes along
 //
 // The four weekly `authorized_*_per_week` columns stay on the client row for
 // now: claim readiness reads them, and the authorization records are the
@@ -48,11 +53,29 @@ export type ClientGender = (typeof CLIENT_GENDERS)[number];
 
 export const GUARDIANSHIP_STATUSES = ["Not applicable", "Guardian", "Court appointed"] as const;
 export type GuardianshipStatus = (typeof GUARDIANSHIP_STATUSES)[number];
+/** The statuses that mean someone else decides for the client, so the guardian's details are required. */
+export const GUARDIAN_REQUIRED_STATUSES: readonly GuardianshipStatus[] = ["Guardian", "Court appointed"];
+
+/**
+ * Whether someone else receives and manages the client's benefits (an SSA
+ * representative payee). Separate from guardianship: a client can have a
+ * guardian, a rep payee, both, or neither.
+ */
+export const REP_PAYEE_STATUSES = ["Not applicable", "Rep payee"] as const;
+export type RepPayeeStatus = (typeof REP_PAYEE_STATUSES)[number];
 
 export const MARITAL_STATUSES = ["Single", "Married", "Divorced", "Separated", "Widowed", "Other"] as const;
 export type MaritalStatus = (typeof MARITAL_STATUSES)[number];
 
-export const CLIENT_CONTACT_KINDS = ["responsible_party", "guardian", "emergency", "physician", "case_manager", "other"] as const;
+export const CLIENT_CONTACT_KINDS = [
+  "responsible_party",
+  "guardian",
+  "emergency",
+  "physician",
+  "case_manager",
+  "external_provider",
+  "other",
+] as const;
 export type ClientContactKind = (typeof CLIENT_CONTACT_KINDS)[number];
 
 export const POLICY_TYPES = ["primary", "secondary", "tertiary"] as const;
@@ -80,6 +103,7 @@ export const CLIENT_FILE_CATEGORIES = [
   "CSR / individualized plan",
   "DVR information",
   "Guardianship papers",
+  "Rep payee paperwork",
   "Insurance card",
   "Medicaid card",
   "Photo ID",
@@ -106,6 +130,16 @@ export const CLIENT_FILE_CONTENT_TYPES = [
   "text/plain",
   "text/csv",
 ] as const;
+
+/** The largest photo the face sheet accepts. */
+export const CLIENT_PHOTO_MAX_BYTES = 5 * 1024 * 1024;
+
+/**
+ * What the face sheet shows: formats every browser renders. No SVG (it can
+ * carry script) and no HEIC (most browsers cannot show it).
+ */
+export const CLIENT_PHOTO_CONTENT_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
+export type ClientPhotoContentType = (typeof CLIENT_PHOTO_CONTENT_TYPES)[number];
 
 export interface ClientDiagnosis {
   code: string;
@@ -149,6 +183,30 @@ export const clientsTable = pgTable(
     ethnicity: text("ethnicity"),
     race: text("race"),
     guardianshipStatus: text("guardianship_status").$type<GuardianshipStatus>(),
+    // ── the guardian, when guardianship is "Guardian" or "Court appointed" ──
+    // Kept on the record itself (not only as a client_contacts row) so it is
+    // captured whatever feature switches the organization has on.
+    guardianName: text("guardian_name"),
+    guardianRelationship: text("guardian_relationship"),
+    guardianEmail: text("guardian_email"),
+    guardianPhone: text("guardian_phone"),
+    guardianAddress1: text("guardian_address1"),
+    guardianAddress2: text("guardian_address2"),
+    guardianCity: text("guardian_city"),
+    guardianState: text("guardian_state"),
+    guardianZip: text("guardian_zip"),
+    // ── the representative payee, kept only while the status is "Rep payee" ──
+    repPayeeStatus: text("rep_payee_status").$type<RepPayeeStatus>(),
+    repPayeeName: text("rep_payee_name"),
+    repPayeeAddress1: text("rep_payee_address1"),
+    repPayeeAddress2: text("rep_payee_address2"),
+    repPayeeCity: text("rep_payee_city"),
+    repPayeeState: text("rep_payee_state"),
+    repPayeeZip: text("rep_payee_zip"),
+    repPayeePhone: text("rep_payee_phone"),
+    repPayeeEmail: text("rep_payee_email"),
+    /** Whatever identifying number the payee arrangement carries (an SSA payee or account number), when there is one. */
+    repPayeeNumber: text("rep_payee_number"),
     /** The agency's own reference for the client, if it keeps one. */
     accountCode: text("account_code"),
     admissionDate: date("admission_date"),
@@ -170,6 +228,13 @@ export const clientsTable = pgTable(
     authorizedEiHoursPerWeek: doublePrecision("authorized_ei_hours_per_week").notNull().default(0),
     caseManagerName: text("case_manager_name"),
     ccbName: text("ccb_name"),
+    /** The Case Management Agency's own contact details (not the case manager's). */
+    ccbPhone: text("ccb_phone"),
+    ccbEmail: text("ccb_email"),
+    ccbAddress1: text("ccb_address1"),
+    ccbCity: text("ccb_city"),
+    ccbState: text("ccb_state"),
+    ccbZip: text("ccb_zip"),
     residenceLat: doublePrecision("residence_lat"),
     residenceLng: doublePrecision("residence_lng"),
     // ── health and support, read before a visit ──────────────────────────
@@ -198,6 +263,12 @@ export const clientsTable = pgTable(
      * inside the organization, so a practice client is copied at most once.
      */
     sampleKey: text("sample_key"),
+    /**
+     * When the face-sheet photo was last set; null when there is none. The
+     * bytes live in client_photos; this stamp tells a reader there is one
+     * and doubles as the cache-buster for its URL.
+     */
+    photoUpdatedAt: timestamp("photo_updated_at", { withTimezone: true }),
     ...timestamps,
   },
   (t) => [
@@ -210,6 +281,10 @@ export const clientsTable = pgTable(
     check(
       "clients_guardianship_check",
       sql`${t.guardianshipStatus} is null or ${t.guardianshipStatus} in ('Not applicable', 'Guardian', 'Court appointed')`
+    ),
+    check(
+      "clients_rep_payee_check",
+      sql`${t.repPayeeStatus} is null or ${t.repPayeeStatus} in ('Not applicable', 'Rep payee')`
     ),
     check(
       "clients_marital_check",
@@ -232,6 +307,9 @@ export const clientContactsTable = pgTable(
     name: text("name").notNull(),
     relationship: text("relationship"),
     phone: text("phone"),
+    /** Separate work and cell numbers, mainly for case managers and external providers. */
+    phoneWork: text("phone_work"),
+    phoneCell: text("phone_cell"),
     email: text("email"),
     address1: text("address1"),
     city: text("city"),
@@ -241,13 +319,15 @@ export const clientContactsTable = pgTable(
     npi: text("npi"),
     isPrimary: boolean("is_primary").notNull().default(false),
     notes: text("notes"),
+    /** When this person took on the role for the client, e.g. the day a case manager was assigned. */
+    startDate: date("start_date"),
     ...timestamps,
   },
   (t) => [
     index("idx_client_contacts_client").on(t.clientId),
     check(
       "client_contacts_kind_check",
-      sql`${t.kind} in ('responsible_party', 'guardian', 'emergency', 'physician', 'case_manager', 'other')`
+      sql`${t.kind} in ('responsible_party', 'guardian', 'emergency', 'physician', 'case_manager', 'external_provider', 'other')`
     ),
   ]
 );
@@ -356,9 +436,33 @@ export const clientFilesTable = pgTable(
   ]
 );
 
+export const clientPhotosTable = pgTable(
+  "client_photos",
+  {
+    /** One photo per client: replacing it overwrites this row. */
+    clientId: uuid("client_id")
+      .primaryKey()
+      .references(() => clientsTable.id, { onDelete: "cascade" }),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizationsTable.id, { onDelete: "cascade" }),
+    contentType: text("content_type").$type<ClientPhotoContentType>().notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    content: bytea("content").notNull(),
+    uploadedByUserId: uuid("uploaded_by_user_id").references(() => usersTable.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (t) => [
+    index("idx_client_photos_org").on(t.orgId),
+    check("client_photos_size_check", sql`${t.sizeBytes} > 0 and ${t.sizeBytes} <= ${sql.raw(String(CLIENT_PHOTO_MAX_BYTES))}`),
+    check("client_photos_type_check", sql`${t.contentType} in ('image/jpeg', 'image/png', 'image/webp')`),
+  ]
+);
+
 export type ClientRow = typeof clientsTable.$inferSelect;
 export type ClientInsert = typeof clientsTable.$inferInsert;
 export type ClientContactRow = typeof clientContactsTable.$inferSelect;
 export type ClientInsurancePolicyRow = typeof clientInsurancePoliciesTable.$inferSelect;
 export type ClientAuthorizationRow = typeof clientAuthorizationsTable.$inferSelect;
 export type ClientFileRow = typeof clientFilesTable.$inferSelect;
+export type ClientPhotoRow = typeof clientPhotosTable.$inferSelect;
