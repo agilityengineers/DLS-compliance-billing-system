@@ -604,6 +604,7 @@ export const CLIENT_STATUSES: readonly ClientStatus[] = ["Active", "Inactive", "
 export type ClientGender = "Male" | "Female" | "Other" | "Unknown";
 export const CLIENT_GENDERS: readonly ClientGender[] = ["Male", "Female", "Other", "Unknown"];
 export const GUARDIANSHIP_STATUSES = ["Not applicable", "Guardian", "Court appointed"] as const;
+export const REP_PAYEE_STATUSES = ["Not applicable", "Rep payee"] as const;
 export const MARITAL_STATUSES = ["Single", "Married", "Divorced", "Separated", "Widowed", "Other"] as const;
 /** Guardianship statuses that need the guardian's details on the record. */
 export const GUARDIAN_REQUIRED_STATUSES: readonly string[] = ["Guardian", "Court appointed"];
@@ -668,6 +669,16 @@ export interface ClientRecord {
   guardianCity: string | null;
   guardianState: string | null;
   guardianZip: string | null;
+  repPayeeStatus: string | null;
+  repPayeeName: string | null;
+  repPayeeAddress1: string | null;
+  repPayeeAddress2: string | null;
+  repPayeeCity: string | null;
+  repPayeeState: string | null;
+  repPayeeZip: string | null;
+  repPayeePhone: string | null;
+  repPayeeEmail: string | null;
+  repPayeeNumber: string | null;
   accountCode: string | null;
   admissionDate: string | null;
   dischargeDate: string | null;
@@ -741,6 +752,16 @@ export interface ClientFieldsInput {
   guardianCity?: string;
   guardianState?: string;
   guardianZip?: string;
+  repPayeeStatus?: string;
+  repPayeeName?: string;
+  repPayeeAddress1?: string;
+  repPayeeAddress2?: string;
+  repPayeeCity?: string;
+  repPayeeState?: string;
+  repPayeeZip?: string;
+  repPayeePhone?: string;
+  repPayeeEmail?: string;
+  repPayeeNumber?: string;
   accountCode?: string;
   admissionDate?: string;
   dischargeDate?: string;
@@ -994,6 +1015,16 @@ export const clientsApi = {
       uploadFile(`/clients/${clientId}/guardianship-papers`, file, meta),
     remove: (clientId: string, id: string) => apiFetch<{ ok: true }>(`/clients/${clientId}/guardianship-papers/${id}`, { method: "DELETE" }),
     contentUrl: (clientId: string, id: string) => `/api/clients/${clientId}/guardianship-papers/${id}/content`,
+  },
+
+  /** The rep payee's paperwork, uploaded from the Rep payee part of the record; rides the record, not clients.paperwork. */
+  repPayeePapers: {
+    list: (clientId: string) =>
+      apiFetch<{ files: ClientFile[]; maxBytes: number; contentTypes: string[] }>(`/clients/${clientId}/rep-payee-papers`),
+    upload: (clientId: string, file: File, meta: { fileName: string; startDate?: string; endDate?: string; notes?: string }) =>
+      uploadFile(`/clients/${clientId}/rep-payee-papers`, file, meta),
+    remove: (clientId: string, id: string) => apiFetch<{ ok: true }>(`/clients/${clientId}/rep-payee-papers/${id}`, { method: "DELETE" }),
+    contentUrl: (clientId: string, id: string) => `/api/clients/${clientId}/rep-payee-papers/${id}/content`,
   },
 };
 

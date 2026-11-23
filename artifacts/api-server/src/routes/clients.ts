@@ -48,6 +48,7 @@ import {
   MARITAL_STATUSES,
   POLICY_STATUSES,
   POLICY_TYPES,
+  REP_PAYEE_STATUSES,
   clientAuthorizationsTable,
   clientContactsTable,
   clientFilesTable,
@@ -110,6 +111,16 @@ const ClientFields = z.object({
   guardianCity: optionalText(120),
   guardianState: optionalText(2),
   guardianZip: optionalText(10),
+  repPayeeStatus: optionalChoice(REP_PAYEE_STATUSES),
+  repPayeeName: optionalText(200),
+  repPayeeAddress1: optionalText(200),
+  repPayeeAddress2: optionalText(200),
+  repPayeeCity: optionalText(120),
+  repPayeeState: optionalText(2),
+  repPayeeZip: optionalText(10),
+  repPayeePhone: optionalText(40),
+  repPayeeEmail: z.union([z.literal(""), z.email().max(254)]).optional(),
+  repPayeeNumber: optionalText(60),
   accountCode: optionalText(40),
   admissionDate: optionalDate,
   dischargeDate: optionalDate,
@@ -248,6 +259,16 @@ export interface ClientJson {
   guardianCity: string | null;
   guardianState: string | null;
   guardianZip: string | null;
+  repPayeeStatus: string | null;
+  repPayeeName: string | null;
+  repPayeeAddress1: string | null;
+  repPayeeAddress2: string | null;
+  repPayeeCity: string | null;
+  repPayeeState: string | null;
+  repPayeeZip: string | null;
+  repPayeePhone: string | null;
+  repPayeeEmail: string | null;
+  repPayeeNumber: string | null;
   accountCode: string | null;
   admissionDate: string | null;
   dischargeDate: string | null;
@@ -320,6 +341,16 @@ export function toClientJson(c: ClientRow): ClientJson {
     guardianCity: c.guardianCity,
     guardianState: c.guardianState,
     guardianZip: c.guardianZip,
+    repPayeeStatus: c.repPayeeStatus,
+    repPayeeName: c.repPayeeName,
+    repPayeeAddress1: c.repPayeeAddress1,
+    repPayeeAddress2: c.repPayeeAddress2,
+    repPayeeCity: c.repPayeeCity,
+    repPayeeState: c.repPayeeState,
+    repPayeeZip: c.repPayeeZip,
+    repPayeePhone: c.repPayeePhone,
+    repPayeeEmail: c.repPayeeEmail,
+    repPayeeNumber: c.repPayeeNumber,
     accountCode: c.accountCode,
     admissionDate: c.admissionDate,
     dischargeDate: c.dischargeDate,
@@ -501,6 +532,7 @@ function fieldValues(body: z.infer<typeof ClientFields>, mode: "create" | "patch
     guardianState:
       body.guardianState === undefined ? (mode === "create" ? null : undefined) : body.guardianState === "" ? null : body.guardianState.toUpperCase(),
     guardianZip: text(body.guardianZip),
+    ...repPayeeValues(body, mode, text),
     accountCode: text(body.accountCode),
     admissionDate: text(body.admissionDate),
     dischargeDate: text(body.dischargeDate),
@@ -536,6 +568,56 @@ function fieldValues(body: z.infer<typeof ClientFields>, mode: "create" | "patch
     hasBehaviorSupportPlan: body.hasBehaviorSupportPlan ?? (mode === "create" ? false : undefined),
     behaviorSupportPlanNotes: text(body.behaviorSupportPlanNotes),
   };
+}
+
+/**
+ * The rep payee columns. Details are kept only alongside "Rep payee": a body
+ * that sets the status to anything else (or clears it) clears them too, so a
+ * hidden, stale payee never lingers on the record. Their paperwork stays on
+ * file.
+ */
+function repPayeeValues(
+  body: z.infer<typeof ClientFields>,
+  mode: "create" | "patch",
+  text: (v: string | undefined) => string | null | undefined
+) {
+  const clear = body.repPayeeStatus !== undefined && body.repPayeeStatus !== "Rep payee";
+  const unsent = mode === "create" ? null : undefined;
+  const detail = (v: string | undefined) => (clear ? null : text(v));
+  return {
+    repPayeeStatus: text(body.repPayeeStatus) as ClientRow["repPayeeStatus"] | undefined,
+    repPayeeName: detail(body.repPayeeName),
+    repPayeeAddress1: detail(body.repPayeeAddress1),
+    repPayeeAddress2: detail(body.repPayeeAddress2),
+    repPayeeCity: detail(body.repPayeeCity),
+    repPayeeState: clear ? null : body.repPayeeState === undefined ? unsent : body.repPayeeState === "" ? null : body.repPayeeState.toUpperCase(),
+    repPayeeZip: detail(body.repPayeeZip),
+    repPayeePhone: detail(body.repPayeePhone),
+    repPayeeEmail: clear ? null : body.repPayeeEmail === undefined ? unsent : body.repPayeeEmail === "" ? null : body.repPayeeEmail.toLowerCase(),
+    repPayeeNumber: detail(body.repPayeeNumber),
+  };
+}
+
+/**
+ * When an edit sets the rep payee status to "Rep payee", the record must say
+ * who the payee is and how to reach them — name, phone and email as they will
+ * stand after the edit — the same rule a guardian is held to.
+ */
+function requireRepPayeeDetails(
+  body: z.infer<typeof ClientFields>,
+  current: ClientRow,
+  values: Partial<Pick<ClientRow, "repPayeeName" | "repPayeePhone" | "repPayeeEmail">>
+) {
+  if (body.repPayeeStatus !== "Rep payee") return;
+  const after = (key: "repPayeeName" | "repPayeePhone" | "repPayeeEmail") => (key in values ? values[key] : current[key]);
+  const missing = [
+    !after("repPayeeName") && "name",
+    !after("repPayeePhone") && "phone number",
+    !after("repPayeeEmail") && "email address",
+  ].filter(Boolean);
+  if (missing.length > 0) {
+    throw badRequest(`A client with a rep payee needs the rep payee's ${missing.join(", ")}.`, { missing });
+  }
 }
 
 /**
@@ -803,6 +885,7 @@ export function clientsRouter(db: Db, _config: AppConfig, _deps: { mailer: Maile
     const { status, firstName, lastName, ...fields } = body;
     const values = definedOnly({ firstName, lastName, ...fieldValues(fields, "patch") });
     requireGuardianDetails(body, current, values);
+    requireRepPayeeDetails(body, current, values);
     const statusChange = status !== undefined && status !== current.status ? { from: current.status, to: status } : null;
     // Taking someone off the roster — or marking them deceased — is the
     // Admin's call; office staff edit the chart but do not change its status.
@@ -1331,6 +1414,26 @@ export function clientsRouter(db: Db, _config: AppConfig, _deps: { mailer: Maile
   router.post("/clients/:id/guardianship-papers", rawUpload, (req, res) => storeUpload(req, res, GUARDIANSHIP_PAPERS));
   router.get("/clients/:id/guardianship-papers/:fileId/content", (req, res) => sendContent(req, res, GUARDIANSHIP_PAPERS));
   router.delete("/clients/:id/guardianship-papers/:fileId", (req, res) => removeFile(req, res, GUARDIANSHIP_PAPERS));
+
+  // ── rep payee paperwork ──────────────────────────────────────────────
+  // The same arrangement for the representative payee: uploaded from the Rep
+  // payee part of the record, riding clients.core, held to its one category,
+  // and visible on the Files tab wherever that is switched on.
+  const REP_PAYEE_PAPERWORK: ClientFileCategory = "Rep payee paperwork";
+
+  router.get("/clients/:id/rep-payee-papers", async (req, res) => {
+    const orgId = requireOrgId(res);
+    const client = await loadClient(db, orgId, String(req.params.id));
+    const rows = await db
+      .select(fileColumns)
+      .from(clientFilesTable)
+      .where(and(eq(clientFilesTable.clientId, client.id), eq(clientFilesTable.category, REP_PAYEE_PAPERWORK)))
+      .orderBy(desc(clientFilesTable.createdAt));
+    res.json({ files: rows.map(toFileJson), maxBytes: CLIENT_FILE_MAX_BYTES, contentTypes: CLIENT_FILE_CONTENT_TYPES });
+  });
+  router.post("/clients/:id/rep-payee-papers", rawUpload, (req, res) => storeUpload(req, res, REP_PAYEE_PAPERWORK));
+  router.get("/clients/:id/rep-payee-papers/:fileId/content", (req, res) => sendContent(req, res, REP_PAYEE_PAPERWORK));
+  router.delete("/clients/:id/rep-payee-papers/:fileId", (req, res) => removeFile(req, res, REP_PAYEE_PAPERWORK));
 
   return router;
 }

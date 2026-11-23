@@ -57,6 +57,7 @@ export function clientRecordToClient(c: ClientRecord): Client {
     ethnicity: c.ethnicity,
     race: c.race,
     guardianship_status: c.guardianshipStatus,
+    rep_payee_status: c.repPayeeStatus ?? null,
     account_code: c.accountCode,
     admission_date: c.admissionDate,
     discharge_date: c.dischargeDate,

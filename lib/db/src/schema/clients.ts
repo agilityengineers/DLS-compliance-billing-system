@@ -55,6 +55,14 @@ export type GuardianshipStatus = (typeof GUARDIANSHIP_STATUSES)[number];
 /** The statuses that mean someone else decides for the client, so the guardian's details are required. */
 export const GUARDIAN_REQUIRED_STATUSES: readonly GuardianshipStatus[] = ["Guardian", "Court appointed"];
 
+/**
+ * Whether someone else receives and manages the client's benefits (an SSA
+ * representative payee). Separate from guardianship: a client can have a
+ * guardian, a rep payee, both, or neither.
+ */
+export const REP_PAYEE_STATUSES = ["Not applicable", "Rep payee"] as const;
+export type RepPayeeStatus = (typeof REP_PAYEE_STATUSES)[number];
+
 export const MARITAL_STATUSES = ["Single", "Married", "Divorced", "Separated", "Widowed", "Other"] as const;
 export type MaritalStatus = (typeof MARITAL_STATUSES)[number];
 
@@ -86,6 +94,7 @@ export const CLIENT_FILE_CATEGORIES = [
   "CSR / individualized plan",
   "DVR information",
   "Guardianship papers",
+  "Rep payee paperwork",
   "Insurance card",
   "Medicaid card",
   "Photo ID",
@@ -177,6 +186,18 @@ export const clientsTable = pgTable(
     guardianCity: text("guardian_city"),
     guardianState: text("guardian_state"),
     guardianZip: text("guardian_zip"),
+    // ── the representative payee, kept only while the status is "Rep payee" ──
+    repPayeeStatus: text("rep_payee_status").$type<RepPayeeStatus>(),
+    repPayeeName: text("rep_payee_name"),
+    repPayeeAddress1: text("rep_payee_address1"),
+    repPayeeAddress2: text("rep_payee_address2"),
+    repPayeeCity: text("rep_payee_city"),
+    repPayeeState: text("rep_payee_state"),
+    repPayeeZip: text("rep_payee_zip"),
+    repPayeePhone: text("rep_payee_phone"),
+    repPayeeEmail: text("rep_payee_email"),
+    /** Whatever identifying number the payee arrangement carries (an SSA payee or account number), when there is one. */
+    repPayeeNumber: text("rep_payee_number"),
     /** The agency's own reference for the client, if it keeps one. */
     accountCode: text("account_code"),
     admissionDate: date("admission_date"),
@@ -251,6 +272,10 @@ export const clientsTable = pgTable(
     check(
       "clients_guardianship_check",
       sql`${t.guardianshipStatus} is null or ${t.guardianshipStatus} in ('Not applicable', 'Guardian', 'Court appointed')`
+    ),
+    check(
+      "clients_rep_payee_check",
+      sql`${t.repPayeeStatus} is null or ${t.repPayeeStatus} in ('Not applicable', 'Rep payee')`
     ),
     check(
       "clients_marital_check",

@@ -1,8 +1,9 @@
 // components/admin/clients/guardianship-papers.tsx — the paperwork a
 // guardian's authority rests on (letters of guardianship, the court order),
-// uploaded from the Guardian part of the record. Rides the record itself, so
+// uploaded from the Guardian part of the record, and the same for a rep
+// payee's paperwork from the Rep payee part. Each rides the record itself, so
 // it works whether or not the Files tab is switched on; what is uploaded here
-// is filed under "Guardianship papers" and shows on that tab too.
+// is filed under its own category and shows on that tab too.
 //
 // It sits inside the record's <form>, so it is a plain block with buttons of
 // type="button": nothing here submits or is submitted with the record.
@@ -18,8 +19,51 @@ import { Label } from "@/components/ui/label";
 import { daysUntil, formatBytes, formatDate } from "./format";
 
 type Listing = { files: ClientFile[]; maxBytes: number; contentTypes: string[] };
+type PapersApi = typeof clientsApi.guardianshipPapers;
+
+/** What changes between the guardian's papers and the rep payee's. */
+interface PapersKind {
+  api: PapersApi;
+  idPrefix: string;
+  title: string;
+  description: string;
+  empty: string;
+}
 
 export function GuardianshipPapers({ clientId, today }: { clientId: string; today: string }) {
+  return (
+    <RecordPapers
+      clientId={clientId}
+      today={today}
+      kind={{
+        api: clientsApi.guardianshipPapers,
+        idPrefix: "guardian-papers",
+        title: "Guardianship papers",
+        description: "Letters of guardianship or the court order.",
+        empty: "No guardianship papers on file yet.",
+      }}
+    />
+  );
+}
+
+export function RepPayeePapers({ clientId, today }: { clientId: string; today: string }) {
+  return (
+    <RecordPapers
+      clientId={clientId}
+      today={today}
+      kind={{
+        api: clientsApi.repPayeePapers,
+        idPrefix: "rep-payee-papers",
+        title: "Rep payee paperwork",
+        description: "The payee appointment letter or other documents for the arrangement.",
+        empty: "No rep payee paperwork on file yet.",
+      }}
+    />
+  );
+}
+
+function RecordPapers({ clientId, today, kind }: { clientId: string; today: string; kind: PapersKind }) {
+  const { api } = kind;
   const [data, setData] = useState<Listing | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [picked, setPicked] = useState<File | null>(null);
@@ -29,7 +73,7 @@ export function GuardianshipPapers({ clientId, today }: { clientId: string; toda
 
   useEffect(() => {
     let cancelled = false;
-    clientsApi.guardianshipPapers
+    api
       .list(clientId)
       .then((r) => {
         if (!cancelled) setData(r);
@@ -40,14 +84,14 @@ export function GuardianshipPapers({ clientId, today }: { clientId: string; toda
     return () => {
       cancelled = true;
     };
-  }, [clientId]);
+  }, [clientId, api]);
 
   async function run(fn: () => Promise<void>) {
     setBusy(true);
     setError(null);
     try {
       await fn();
-      setData(await clientsApi.guardianshipPapers.list(clientId));
+      setData(await api.list(clientId));
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -60,9 +104,9 @@ export function GuardianshipPapers({ clientId, today }: { clientId: string; toda
   return (
     <div className="space-y-3 border-t border-border p-4">
       <div>
-        <h3 className="text-sm font-medium">Guardianship papers</h3>
+        <h3 className="text-sm font-medium">{kind.title}</h3>
         <p className="text-xs text-muted-foreground">
-          Letters of guardianship or the court order. Uploads save straight away{data ? `, up to ${formatBytes(data.maxBytes)} each` : ""}; you don’t need to press Save record for them.
+          {kind.description} Uploads save straight away{data ? `, up to ${formatBytes(data.maxBytes)} each` : ""}; you don’t need to press Save record for them.
         </p>
       </div>
 
@@ -75,7 +119,7 @@ export function GuardianshipPapers({ clientId, today }: { clientId: string; toda
             return (
               <li key={f.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
                 <span className="min-w-0 space-x-2">
-                  <a className="font-medium text-plum hover:underline" href={clientsApi.guardianshipPapers.contentUrl(clientId, f.id)}>{f.fileName}</a>
+                  <a className="font-medium text-plum hover:underline" href={api.contentUrl(clientId, f.id)}>{f.fileName}</a>
                   <span className="text-muted-foreground">{formatBytes(f.sizeBytes)} · added {formatDate(f.createdAt.slice(0, 10))}</span>
                   {f.endDate && left !== null && left < 0 && <Badge variant="destructive">Expired {formatDate(f.endDate)}</Badge>}
                   {f.endDate && left !== null && left >= 0 && <span className="text-muted-foreground">valid to {formatDate(f.endDate)}</span>}
@@ -85,22 +129,22 @@ export function GuardianshipPapers({ clientId, today }: { clientId: string; toda
                   size="sm"
                   variant="ghost"
                   disabled={busy}
-                  onClick={() => void run(() => clientsApi.guardianshipPapers.remove(clientId, f.id).then(() => undefined))}
+                  onClick={() => void run(() => api.remove(clientId, f.id).then(() => undefined))}
                 >
                   Remove
                 </Button>
               </li>
             );
           })}
-          {data.files.length === 0 && <li className="px-3 py-3 text-muted-foreground">No guardianship papers on file yet.</li>}
+          {data.files.length === 0 && <li className="px-3 py-3 text-muted-foreground">{kind.empty}</li>}
         </ul>
       )}
 
       <div className="flex flex-wrap items-end gap-3">
         <div className="min-w-56 flex-1 space-y-1.5">
-          <Label htmlFor="guardian-papers-file">Add a document</Label>
+          <Label htmlFor={`${kind.idPrefix}-file`}>Add a document</Label>
           <Input
-            id="guardian-papers-file"
+            id={`${kind.idPrefix}-file`}
             ref={fileInput}
             type="file"
             accept={data?.contentTypes.join(",")}
@@ -108,8 +152,8 @@ export function GuardianshipPapers({ clientId, today }: { clientId: string; toda
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="guardian-papers-end">Valid until (optional)</Label>
-          <Input id="guardian-papers-end" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+          <Label htmlFor={`${kind.idPrefix}-end`}>Valid until (optional)</Label>
+          <Input id={`${kind.idPrefix}-end`} type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
         </div>
         <Button
           type="button"
@@ -119,7 +163,7 @@ export function GuardianshipPapers({ clientId, today }: { clientId: string; toda
             if (!picked) return;
             const file = picked;
             void run(async () => {
-              await clientsApi.guardianshipPapers.upload(clientId, file, { fileName: file.name, endDate });
+              await api.upload(clientId, file, { fileName: file.name, endDate });
               setPicked(null);
               setEndDate("");
               if (fileInput.current) fileInput.current.value = "";

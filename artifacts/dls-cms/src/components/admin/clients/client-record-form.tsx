@@ -10,6 +10,7 @@ import {
   CLIENT_STATUSES,
   GUARDIANSHIP_STATUSES,
   GUARDIAN_REQUIRED_STATUSES,
+  REP_PAYEE_STATUSES,
   MARITAL_STATUSES,
   clientsApi,
   type ClientDiagnosis,
@@ -24,7 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { selectClass } from "./format";
-import { GuardianshipPapers } from "./guardianship-papers";
+import { GuardianshipPapers, RepPayeePapers } from "./guardianship-papers";
 
 type Draft = {
   firstName: string;
@@ -51,6 +52,16 @@ type Draft = {
   guardianCity: string;
   guardianState: string;
   guardianZip: string;
+  repPayeeStatus: string;
+  repPayeeName: string;
+  repPayeeAddress1: string;
+  repPayeeAddress2: string;
+  repPayeeCity: string;
+  repPayeeState: string;
+  repPayeeZip: string;
+  repPayeePhone: string;
+  repPayeeEmail: string;
+  repPayeeNumber: string;
   accountCode: string;
   admissionDate: string;
   dischargeDate: string;
@@ -105,6 +116,16 @@ function draftOf(c: ClientRecord): Draft {
     guardianCity: c.guardianCity ?? "",
     guardianState: c.guardianState ?? "",
     guardianZip: c.guardianZip ?? "",
+    repPayeeStatus: c.repPayeeStatus ?? "",
+    repPayeeName: c.repPayeeName ?? "",
+    repPayeeAddress1: c.repPayeeAddress1 ?? "",
+    repPayeeAddress2: c.repPayeeAddress2 ?? "",
+    repPayeeCity: c.repPayeeCity ?? "",
+    repPayeeState: c.repPayeeState ?? "",
+    repPayeeZip: c.repPayeeZip ?? "",
+    repPayeePhone: c.repPayeePhone ?? "",
+    repPayeeEmail: c.repPayeeEmail ?? "",
+    repPayeeNumber: c.repPayeeNumber ?? "",
     accountCode: c.accountCode ?? "",
     admissionDate: c.admissionDate ?? "",
     dischargeDate: c.dischargeDate ?? "",
@@ -167,6 +188,7 @@ export function ClientRecordForm({
     setDraft((d) => ({ ...d, [key]: e.target.type === "number" ? Number(e.target.value) : e.target.value }));
   };
   const needsGuardian = GUARDIAN_REQUIRED_STATUSES.includes(draft.guardianshipStatus);
+  const isRepPayee = draft.repPayeeStatus === "Rep payee";
   const text = (id: keyof Draft, label: string, type = "text", extra: Partial<React.InputHTMLAttributes<HTMLInputElement>> = {}) => (
     <Field id={`client-${id}`} label={label}>
       <Input id={`client-${id}`} type={type} value={String(draft[id])} onChange={set(id)} {...extra} />
@@ -259,6 +281,40 @@ export function ClientRecordForm({
           <GuardianshipPapers clientId={client.id} today={today} />
         </section>
       )}
+
+      <section className="rounded-card border border-border bg-card" aria-labelledby="client-rep-payee-heading">
+        <h2 id="client-rep-payee-heading" className="border-b border-border px-4 py-3 font-medium">Rep payee</h2>
+        <div className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3">
+          <Field id="client-repPayeeStatus" label="Rep payee">
+            <select id="client-repPayeeStatus" className={selectClass} value={draft.repPayeeStatus} onChange={set("repPayeeStatus")}>
+              <option value="">Not recorded</option>
+              {REP_PAYEE_STATUSES.map((g) => (
+                <option key={g} value={g}>{g}</option>
+              ))}
+            </select>
+          </Field>
+        </div>
+        {isRepPayee && (
+          <>
+            <p className="px-4 text-sm text-muted-foreground">
+              Who receives and manages {draft.firstName ? `${draft.firstName}’s` : "the client’s"} benefits. Name, phone and email are required; add the
+              payee or account number when the arrangement has one. Upload the paperwork below.
+            </p>
+            <div className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3">
+              {text("repPayeeName", "Rep payee name", "text", { required: true, autoComplete: "off" })}
+              {text("repPayeeNumber", "Payee / account number")}
+              {text("repPayeePhone", "Rep payee phone", "tel", { required: true })}
+              {text("repPayeeEmail", "Rep payee email", "email", { required: true })}
+              {text("repPayeeAddress1", "Rep payee address")}
+              {text("repPayeeAddress2", "Address line 2")}
+              {text("repPayeeCity", "City")}
+              {text("repPayeeState", "State", "text", { maxLength: 2, placeholder: "CO" })}
+              {text("repPayeeZip", "ZIP", "text", { maxLength: 10 })}
+            </div>
+            <RepPayeePapers clientId={client.id} today={today} />
+          </>
+        )}
+      </section>
 
       <section className="rounded-card border border-border bg-card">
         <h2 className="border-b border-border px-4 py-3 font-medium">Status &amp; dates</h2>
