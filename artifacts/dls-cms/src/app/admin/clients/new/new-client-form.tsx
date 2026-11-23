@@ -11,9 +11,10 @@ import { Badge } from "@/components/ui/badge";
 import { clientsApi } from "@/lib/api/admin";
 import { errorMessage } from "@/lib/api/client";
 import { PHOTO_ACCEPT, PhotoFrame, photoProblem } from "@/components/admin/clients/client-photo";
+import { DiagnosisEntry, type DiagnosisDraft, type DiagnosisEntryHandle } from "@/components/admin/clients/diagnosis-entry";
 import { createClientRecord } from "../actions";
 
-interface Dx { code: string; description: string }
+type Dx = DiagnosisDraft;
 
 /** What an inquiry hands to the intake when it is being converted. */
 export interface IntakePrefill {
@@ -37,7 +38,7 @@ export function NewClientForm({ prefill, photoEnabled = false }: { prefill?: Int
     ccb_phone: "", ccb_email: "", ccb_address1: "", ccb_city: "", ccb_state: "", ccb_zip: ""
   });
   const [diagnoses, setDiagnoses] = useState<Dx[]>([]);
-  const [dx, setDx] = useState<Dx>({ code: "", description: "" });
+  const dxEntry = useRef<DiagnosisEntryHandle>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [photo, setPhoto] = useState<File | null>(null);
@@ -67,8 +68,17 @@ export function NewClientForm({ prefill, photoEnabled = false }: { prefill?: Int
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setSaving(true); setError(null);
-    const res = await createClientRecord({ ...form, active_diagnoses: diagnoses, source_lead_id: prefill?.lead_id });
+    setError(null);
+    // A diagnosis typed but never added still counts; a bad one stops the save.
+    const pending = dxEntry.current?.takePending() ?? { status: "empty" as const };
+    if (pending.status === "invalid") {
+      setError(`Diagnosis not added: ${pending.error}`);
+      return;
+    }
+    const allDiagnoses = pending.status === "ok" ? [...diagnoses, pending.value] : diagnoses;
+    if (pending.status === "ok") setDiagnoses(allDiagnoses);
+    setSaving(true);
+    const res = await createClientRecord({ ...form, active_diagnoses: allDiagnoses, source_lead_id: prefill?.lead_id });
     if (!res.ok) { setSaving(false); setError(res.error ?? "Failed to save."); return; }
     const next = prefill ? `/admin/leads/${prefill.lead_id}` : res.id ? `/admin/clients/${res.id}` : "/admin/clients";
     // The photo needs the record to hang on, so it goes up second. If it
@@ -184,24 +194,22 @@ export function NewClientForm({ prefill, photoEnabled = false }: { prefill?: Int
           <legend className="px-1 text-sm font-medium">
             Active diagnoses <Badge variant="muted">{diagnoses.length}</Badge>
           </legend>
-          <div className="flex gap-2">
-            <Input placeholder="ICD-10 code" className="w-36" value={dx.code} onChange={(e) => setDx({ ...dx, code: e.target.value })} />
-            <Input placeholder="Description" value={dx.description} onChange={(e) => setDx({ ...dx, description: e.target.value })} />
-            <Button type="button" variant="outline" onClick={() => {
-              if (!dx.code) return;
-              setDiagnoses((d) => [...d, dx]); setDx({ code: "", description: "" });
-            }}>Add</Button>
-          </div>
-          <ul className="flex flex-wrap gap-2">
+          <DiagnosisEntry ref={dxEntry} existing={diagnoses} onAdd={(d) => setDiagnoses((list) => [...list, d])} />
+          <ul className="divide-y divide-border rounded-md border border-border text-sm">
             {diagnoses.map((d, i) => (
-              <li key={i}>
-                <button type="button" className="rounded-full bg-muted px-3 py-1 text-xs hover:bg-destructive/10"
-                  onClick={() => setDiagnoses((arr) => arr.filter((_, j) => j !== i))}
-                  title="Remove">
-                  {d.code} — {d.description} ✕
-                </button>
+              <li key={`${d.code}-${i}`} className="flex items-center justify-between gap-2 px-3 py-2">
+                <span>
+                  <span className="font-medium tabular-nums">{d.code}</span>
+                  {d.description && <span className="text-muted-foreground"> — {d.description}</span>}
+                </span>
+                <Button type="button" size="sm" variant="ghost"
+                  aria-label={`Remove ${d.code}`}
+                  onClick={() => setDiagnoses((arr) => arr.filter((_, j) => j !== i))}>
+                  Remove
+                </Button>
               </li>
             ))}
+            {diagnoses.length === 0 && <li className="px-3 py-3 text-muted-foreground">No diagnoses added yet.</li>}
           </ul>
         </fieldset>
 
